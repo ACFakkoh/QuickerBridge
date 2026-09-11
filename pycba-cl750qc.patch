@@ -1,0 +1,44 @@
+diff --git a/src/pycba/vehicle.py b/src/pycba/vehicle.py
+index f0796cd..f2fb304 100644
+--- a/src/pycba/vehicle.py
++++ b/src/pycba/vehicle.py
+@@ -661,6 +661,23 @@ class VehicleLibrary:
+     class CA:
+         """Canadian road loads: CSA S6."""
+ 
++        @staticmethod
++        def get_cl750qc() -> Vehicle:
++            """
++            Quebec CL-750-QC truck, MTQ Info-structures A2023-05 (2023-02-17).
++
++            Five axle loads: 50, 160, 160, 200, 180 kN (750 kN total), with
++            spacings 3.6, 1.2, 6.6, 6.6 m. These are nominal full-axle loads.
++            The separate lane case uses 12.6 kN/m plus 80% or 63% of these
++            loads, according to the effect and continuity specified in the
++            bulletin. No dynamic allowance or lane reduction is applied by
++            this getter. Assess CL-625 and CL-750-QC independently.
++            """
++            return Vehicle(
++                np.array([3.6, 1.2, 6.6, 6.6]),
++                np.array([50.0, 160.0, 160.0, 200.0, 180.0]),
++            )
++
+         @staticmethod
+         def get_cl625() -> Vehicle:
+             """
+--- /dev/null
++++ b/tests/test_cl750qc.py
+@@ -0,0 +1,13 @@
++import numpy as np
++
++from pycba import VehicleLibrary
++
++
++def test_quebec_truck_is_not_a_scaled_cl625():
++    vehicle = VehicleLibrary.CA.get_cl750qc()
++    np.testing.assert_array_equal(vehicle.axw, [50, 160, 160, 200, 180])
++    np.testing.assert_array_equal(vehicle.axs, [3.6, 1.2, 6.6, 6.6])
++    assert vehicle.W == 750
++    assert vehicle.L == 18
++    vehicle.axw[0] = 0
++    assert VehicleLibrary.CA.get_cl750qc().axw[0] == 50

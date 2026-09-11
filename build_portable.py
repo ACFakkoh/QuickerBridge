@@ -1,0 +1,227 @@
+"""Build browser assets, portable HTML, and deterministic release packages."""
+
+import argparse
+import base64
+from datetime import date
+import hashlib
+from io import BytesIO
+import json
+from pathlib import Path
+import runpy
+import shutil
+import zipfile
+
+
+ROOT = Path(__file__).resolve().parent
+DIST = ROOT / "dist"
+RELEASE = ROOT / "release"
+META = runpy.run_path(str(ROOT / "quickerbridge" / "version.py"))
+VERSION = META["APP_VERSION"]
+RELEASE_DATE = META["RELEASE_DATE"]
+AUTHOR = META["AUTHOR"]
+release_day = date.fromisoformat(RELEASE_DATE)
+ZIP_TIME = (release_day.year, release_day.month, release_day.day, 0, 0, 0)
+
+
+def zip_bytes(entries) -> bytes:
+    """Create a reproducible ZIP from `(path, archive-name)` entries."""
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for path, name in sorted(entries, key=lambda item: item[1]):
+            info = zipfile.ZipInfo(name.replace("\\", "/"), ZIP_TIME)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            archive.writestr(info, path.read_bytes())
+    return buffer.getvalue()
+
+
+def python_sources():
+    entries = []
+    for folder, prefix in (
+        (ROOT / "quickerbridge", "quickerbridge"),
+        (ROOT / "vendor/pycba/src/pycba", "pycba"),
+    ):
+        for path in folder.rglob("*.py"):
+            if path.name == "server.py":
+                continue
+            entries.append((path, f"{prefix}/{path.relative_to(folder).as_posix()}"))
+    return entries
+
+
+def source_entries():
+    entries = []
+    root_files = (
+        ".gitignore",
+        "README.md",
+        "THIRD_PARTY_NOTICES.md",
+        "VALIDATION.md",
+        "requirements.txt",
+        "build_portable.py",
+        "QuickerBridge.cmd",
+        "launch.py",
+        "pycba-cl750qc.patch",
+    )
+    for name in root_files:
+        entries.append((ROOT / name, name))
+    for pattern in (
+        "quickerbridge/*.py",
+        "tests/*.py",
+        "examples/*.quickerbridge.json",
+        ".github/workflows/*.yml",
+    ):
+        entries.extend(
+            (path, path.relative_to(ROOT).as_posix()) for path in ROOT.glob(pattern)
+        )
+    for name in (
+        "index.html",
+        "styles.css",
+        "app.js",
+        "browser-solver.js",
+        "version.js",
+        "solver-bundle.js",
+    ):
+        entries.append((DIST / name, f"dist/{name}"))
+    vendor_root = ROOT / "vendor/pycba"
+    for path in (vendor_root / "src/pycba").rglob("*.py"):
+        entries.append((path, path.relative_to(ROOT).as_posix()))
+    for name in (
+        ".gitattributes",
+        ".gitignore",
+        "CHANGELOG.md",
+        "LICENSE",
+        "README.md",
+        "pyproject.toml",
+        "setup.py",
+        "tests/test_cl750qc.py",
+        "tests/test_nonprismatic.py",
+    ):
+        entries.append((vendor_root / name, f"vendor/pycba/{name}"))
+    unique = {name: path for path, name in entries if path.is_file()}
+    return [(path, name) for name, path in unique.items()]
+
+
+def write_zip(path: Path, entries) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(zip_bytes(entries))
+
+
+def build_browser_assets() -> None:
+    source = (
+        "window.QB_SOURCE_ZIP="
+        + json.dumps(base64.b64encode(zip_bytes(python_sources())).decode())
+        + ";\n"
+    )
+    DIST.mkdir(exist_ok=True)
+    (DIST / "solver-bundle.js").write_text(source, encoding="utf-8")
+    version_js = (
+        "window.QB_META="
+        + json.dumps(
+            {"version": VERSION, "date": RELEASE_DATE, "author": AUTHOR},
+            ensure_ascii=False,
+        )
+        + ";\n"
+    )
+    (DIST / "version.js").write_text(version_js, encoding="utf-8")
+    (DIST / ".nojekyll").touch()
+
+    html = (DIST / "index.html").read_text(encoding="utf-8")
+    html = html.replace(
+        '<link rel="stylesheet" href="./styles.css">',
+        "<style>" + (DIST / "styles.css").read_text(encoding="utf-8") + "</style>",
+    )
+    script_names = ("version.js", "solver-bundle.js", "browser-solver.js", "app.js")
+    for filename in script_names:
+        html = html.replace(f'<script src="./{filename}" defer></script>', "")
+    scripts = "\n".join(
+        (DIST / filename).read_text(encoding="utf-8") for filename in script_names
+    )
+    html = html.replace(
+        "</body>",
+        "<script>" + scripts.replace("</script", "<\\/script") + "</script>\n</body>",
+    )
+    (ROOT / "QuickerBridge.html").write_text(html, encoding="utf-8")
+
+
+def clean_release_directory() -> Path:
+    resolved = RELEASE.resolve()
+    if resolved.parent != ROOT.resolve() or resolved.name != "release":
+        raise RuntimeError("Unsafe release path")
+    if RELEASE.exists():
+        shutil.rmtree(RELEASE)
+    RELEASE.mkdir()
+    stage = RELEASE / f"QuickerBridge-v{VERSION}-source"
+    stage.mkdir()
+    return stage
+
+
+def build_release() -> None:
+    entries = source_entries()
+    source_zip = DIST / "QuickerBridge-source.zip"
+    write_zip(source_zip, entries)
+
+    stage = clean_release_directory()
+    for path, name in entries:
+        destination = stage / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+
+    release_source = RELEASE / f"QuickerBridge-v{VERSION}-source.zip"
+    shutil.copy2(source_zip, release_source)
+    pages_entries = [
+        (path, path.relative_to(DIST).as_posix())
+        for path in DIST.iterdir()
+        if path.is_file()
+    ]
+    pages_zip = RELEASE / f"QuickerBridge-v{VERSION}-pages.zip"
+    write_zip(pages_zip, pages_entries)
+    portable_entries = [
+        (ROOT / "QuickerBridge.html", "QuickerBridge.html"),
+        (ROOT / "QuickerBridge.cmd", "QuickerBridge.cmd"),
+        (ROOT / "README.md", "README.md"),
+        (ROOT / "THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES.md"),
+        (ROOT / "vendor/pycba/LICENSE", "pycba-LICENSE.txt"),
+    ]
+    portable_entries += [
+        (path, f"examples/{path.name}")
+        for path in sorted((ROOT / "examples").glob("*"))
+    ]
+    portable_zip = RELEASE / f"QuickerBridge-v{VERSION}-portable.zip"
+    write_zip(portable_zip, portable_entries)
+
+    manifest_lines = [
+        f"QuickerBridge v{VERSION} · {RELEASE_DATE} · {AUTHOR}",
+        "",
+        "Source tree allowlist:",
+        *[name for _, name in sorted(entries, key=lambda item: item[1])],
+    ]
+    (RELEASE / "MANIFEST.txt").write_text(
+        "\n".join(manifest_lines) + "\n", encoding="utf-8"
+    )
+    checksum_lines = [
+        f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}"
+        for path in (portable_zip, pages_zip, release_source)
+    ]
+    (RELEASE / "SHA256SUMS.txt").write_text(
+        "\n".join(checksum_lines) + "\n", encoding="ascii"
+    )
+
+
+def build(with_release: bool = True) -> None:
+    build_browser_assets()
+    if with_release:
+        build_release()
+    else:
+        write_zip(DIST / "QuickerBridge-source.zip", source_entries())
+    suffix = ", and release packages." if with_release else "."
+    print(f"Built QuickerBridge v{VERSION}: portable HTML, static dist/{suffix}")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--no-release",
+        action="store_true",
+        help="Build browser assets without release/.",
+    )
+    args = parser.parse_args()
+    build(with_release=not args.no_release)
