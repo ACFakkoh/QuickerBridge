@@ -1,0 +1,91 @@
+--- a/src/pycba/beam.py
++++ b/src/pycba/beam.py
+@@ -2,12 +2,18 @@
+ PyCBA - Beam Class definition
+ """
+ from typing import Optional, Sequence, Union
++from functools import lru_cache
+ import numpy as np
+ from scipy import integrate
+ from .load import parse_LM, LoadType, LoadMatrix, LoadCNL, LoadIC
+ from .types import MemberType
+ from .section import SectionEI
+ from .utils import supports_to_R, SupportType
++
++
++@lru_cache(maxsize=16)
++def _legendre_rule(order):
++    return np.polynomial.legendre.leggauss(order)
+ 
+ 
+ class Beam:
+@@ -800,29 +806,48 @@
+         # for an imposed-curvature (initial-strain) load M = 0 and the free
+         # curvature kappa_imp(x) is the primary curvature instead.
+         #
+-        # The integral is split at the section breakpoints (segment joins and
+-        # pwl kinks) so that any EI discontinuity / kink is honoured exactly;
+-        # within each piece a fine Simpson grid captures the (possibly
+-        # non-polynomial, e.g. point-load-kinked) moment diagram.  For a single
+-        # constant segment this reproduces the prismatic get_ref.
+-        bps = EI.breakpoints
+-        edges = np.unique(np.concatenate([bps, [0.0, L]]))
+-        edges = edges[(edges >= -1e-12) & (edges <= L + 1e-12)]
+-        edges[0], edges[-1] = 0.0, L
+-        theta0 = np.zeros(2)
+-        for a, b in zip(edges[:-1], edges[1:]):
+-            if b <= a:
+-                continue
+-            n = 2001
+-            xx = np.linspace(a, b, n)
+-            M = load.get_mbr_results(xx, L).M
+-            curv = M / EI(xx)
++        # Split at EI steps/kinks AND load discontinuities. Gauss nodes never
++        # sample a shared endpoint, preserving the correct side of an EI step.
++        edges = list(EI.breakpoints) + [0.0, L]
++        if hasattr(load, "a"):
++            edges.append(load.a)
++            if hasattr(load, "c") and load.c is not None:
++                edges.append(load.a + load.c)
++        edges = np.unique(np.clip(edges, 0.0, L))
++        mids = (edges[1:] + edges[:-1]) / 2
++        halves = np.diff(edges) / 2
++
++        def integrand(xx):
++            # Load result routines reserve the first/last entries for the
++            # member ends and overwrite them. Protect all quadrature nodes
++            # with explicit endpoint sentinels, including scalar fallback.
++            moment = load.get_mbr_results(np.r_[0.0, xx, L], L).M[1:-1]
++            curv = moment / EI(xx)
+             if isinstance(load, LoadIC):
+                 curv = curv + load.kappa_imp(xx)
+-            mi = 1.0 - xx / L
+-            mj = -xx / L
+-            theta0[0] += integrate.simpson(mi * curv, x=xx)
+-            theta0[1] += integrate.simpson(mj * curv, x=xx)
++            return np.array([(1 - xx / L) * curv, -xx / L * curv])
++
++        previous = None
++        for order in (16, 32, 64, 128):
++            nodes, weights = _legendre_rule(order)
++            xx = (mids[:, None] + halves[:, None] * nodes).ravel()
++            ww = (halves[:, None] * weights).ravel()
++            theta0 = integrand(xx) @ ww
++            if previous is not None and np.allclose(
++                theta0, previous, rtol=1e-10, atol=1e-14
++            ):
++                break
++            previous = theta0
++        else:
++            # Extreme stiffness ratios or high-order imposed curvature retain
++            # adaptive integration rather than accepting an unconverged rule.
++            theta0, error, info = integrate.quad_vec(
++                lambda xx: integrand(np.array([xx]))[:, 0],
++                0.0, L, points=edges[1:-1], epsabs=1e-14, epsrel=1e-10,
++                full_output=True,
++            )
++            if not info.success:
++                raise ValueError("Non-prismatic load integration did not converge")
+ 
+         # Fixed-end moments (PyCBA nodal-moment sign convention)
+         Kth = self.k_theta(EI, L)

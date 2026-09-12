@@ -1,0 +1,20 @@
+{
+  "format": "QuickerBridgeProject",
+  "schema_version": 1,
+  "app_version": "0.3",
+  "name": "Mechanical two-span example",
+  "saved_at": "2026-09-11T00:00:00Z",
+  "model": {
+    "spans": [{"length": 24, "section": 0, "zones": []}, {"length": 30, "section": 0, "zones": []}],
+    "supports": ["pin", "roller", "roller"],
+    "sections": [{"name": "S1", "kind": "girder", "EI": 20000000, "E": 200, "depth": 1800, "top_width": 600, "top_thickness": 30, "web_thickness": 16, "bottom_width": 650, "bottom_thickness": 40}],
+    "nonprismatic": false,
+    "dead": [{"name": "Permanent load", "w": 12, "span": -1, "start": 0, "end": 1}],
+    "live": {"vehicle": "CL625", "weights": [50, 125, 125, 175, 150], "spacings": [3.6, 1.2, 6.6, 6.6], "case": "governing", "lane_fraction": 0.8, "lane_w": 9, "dynamic": true, "direction": "both"},
+    "thermal": {"delta_T": 15, "alpha_micro": 12, "depth": 1800},
+    "load_mode": "both",
+    "subdivisions": 10,
+    "precision": "standard"
+  }
+}
+

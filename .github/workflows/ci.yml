@@ -1,0 +1,21 @@
+name: Checks and build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - run: python -m black --check quickerbridge tests build_portable.py launch.py
+      - run: python -m pytest tests vendor/pycba/tests/test_nonprismatic.py -q
+      - run: python build_portable.py --no-release
+      - run: node --check dist/app.js
+

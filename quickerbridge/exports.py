@@ -1,0 +1,253 @@
+"""CSV and Excel exports from the same immutable result shown in the viewer."""
+
+import csv
+from io import BytesIO, StringIO
+import json
+
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+
+from .version import APP_VERSION, AUTHOR, RELEASE_DATE
+
+
+WARNING = {
+    "en": "Indicative preliminary values only — not a substitute for detailed design.",
+    "fr": "Valeurs préliminaires indicatives seulement — ne remplacent pas une conception détaillée.",
+}
+HEADERS = {
+    "en": [
+        "Span",
+        "Station",
+        "x (m)",
+        "Local x (m)",
+        "Side",
+        "V min (kN)",
+        "V max (kN)",
+        "M min (kN·m)",
+        "M max (kN·m)",
+        "Deflection min (mm, down +)",
+        "Deflection max (mm, down +)",
+        "R min (kN, up +)",
+        "R max (kN, up +)",
+    ],
+    "fr": [
+        "Travée",
+        "Station",
+        "x (m)",
+        "x local (m)",
+        "Côté",
+        "V min (kN)",
+        "V max (kN)",
+        "M min (kN·m)",
+        "M max (kN·m)",
+        "Flèche min (mm, bas +)",
+        "Flèche max (mm, bas +)",
+        "R min (kN, haut +)",
+        "R max (kN, haut +)",
+    ],
+}
+THERMAL_HEADERS = {
+    "en": [
+        "Span",
+        "Station",
+        "x (m)",
+        "Local x (m)",
+        "Side",
+        "V (kN)",
+        "M (kN·m)",
+        "Deflection (mm, down +)",
+        "R (kN, up +)",
+    ],
+    "fr": [
+        "Travée",
+        "Station",
+        "x (m)",
+        "x local (m)",
+        "Côté",
+        "V (kN)",
+        "M (kN·m)",
+        "Flèche (mm, bas +)",
+        "R (kN, haut +)",
+    ],
+}
+
+
+def rows(result, language):
+    seen = set()
+    for row in result["table"]:
+        values = list(row.values())
+        if language == "fr":
+            values[4] = {"left": "gauche", "right": "droite"}[values[4]]
+        reaction = next(
+            (r for r in result["reactions"] if abs(r["x"] - row["x"]) < 1e-8), None
+        )
+        if reaction and reaction["support"] not in seen:
+            values.extend([reaction["min"], reaction["max"]])
+            seen.add(reaction["support"])
+        else:
+            values.extend([None, None])
+        yield values
+
+
+def thermal_rows(result, language):
+    seen = set()
+    for row in result["table"]:
+        values = [
+            row[key]
+            for key in ("span", "station", "x", "local_x", "side", "V", "M", "D")
+        ]
+        if language == "fr":
+            values[4] = {"left": "gauche", "right": "droite"}[values[4]]
+        reaction = next(
+            (r for r in result["reactions"] if abs(r["x"] - row["x"]) < 1e-8), None
+        )
+        if reaction and reaction["support"] not in seen:
+            values.append(reaction["value"])
+            seen.add(reaction["support"])
+        else:
+            values.append(None)
+        yield values
+
+
+def csv_bytes(result, language="en"):
+    stream = StringIO(newline="")
+    writer = csv.writer(stream)
+    thermal = result.get("kind") == "thermal"
+    writer.writerow((THERMAL_HEADERS if thermal else HEADERS)[language])
+    writer.writerows((thermal_rows if thermal else rows)(result, language))
+    return stream.getvalue().encode("utf-8-sig")
+
+
+def excel_bytes(result, language="en"):
+    thermal = result.get("kind") == "thermal"
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Stations"
+    ws.append((THERMAL_HEADERS if thermal else HEADERS)[language])
+    for row in (thermal_rows if thermal else rows)(result, language):
+        ws.append(row)
+    rx = wb.create_sheet("Réactions" if language == "fr" else "Reactions")
+    rx.append(
+        [
+            "Appui" if language == "fr" else "Support",
+            "x (m)",
+            "R (kN)" if thermal else "R min (kN)",
+        ]
+    )
+    if not thermal:
+        rx.cell(1, 4, "R max (kN)")
+    for r in result["reactions"]:
+        rx.append(
+            [r["support"], r["x"], r["value"]]
+            if thermal
+            else [r["support"], r["x"], r["min"], r["max"]]
+        )
+    if not thermal:
+        cases = wb.create_sheet(
+            "Cas déterminants" if language == "fr" else "Governing cases"
+        )
+        cases.append(
+            [
+                "x (m)",
+                "Side / Côté",
+                "Effect / Effet",
+                "Min/Max",
+                "Value / Valeur",
+                "Case / Cas",
+                "Axles / Essieux",
+                "DLA factor / Facteur CMD",
+                "Front axle x / x essieu avant (m)",
+                "Direction",
+            ]
+        )
+        nx = len(result["x"])
+        for effect, offset in (("V", 0), ("M", nx), ("D", 2 * nx)):
+            for i, x in enumerate(result["x"]):
+                for sense in ("min", "max"):
+                    case = result["case_" + sense][offset + i]
+                    cases.append(
+                        [
+                            x,
+                            result["sides"][i],
+                            effect,
+                            sense,
+                            result[sense][effect][i],
+                            case["case"],
+                            "–".join(map(str, case["axles"])),
+                            case["factor"],
+                            case["position"],
+                            case["direction"],
+                        ]
+                    )
+    meta = wb.create_sheet("Modèle" if language == "fr" else "Model")
+    meta.append(["QuickerBridge", APP_VERSION])
+    meta.append(["Warning / Avertissement", WARNING[language]])
+    meta.append(["Version", f"QuickerBridge {APP_VERSION} · {RELEASE_DATE} · {AUTHOR}"])
+    if thermal:
+        thermal_input = result["model"]["thermal"]
+        meta.append(
+            ["Load case / Cas", "Thermal gradient only / Gradient thermique seulement"]
+        )
+        meta.append(["ΔT = Ttop − Tbottom (°C)", thermal_input["delta_T"]])
+        meta.append(["α (10⁻⁶/°C)", thermal_input["alpha_micro"]])
+        meta.append(["Thermal depth / Hauteur thermique (mm)", thermal_input["depth"]])
+        meta.append(
+            ["Imposed curvature / Courbure imposée (1/m)", result["meta"]["curvature"]]
+        )
+    else:
+        meta.append(["Dynamic allowance / CMD", "CAN/CSA S6-25 · 3.8.4.5.3"])
+    meta.append(
+        [
+            "Scope / Portée",
+            "1-D Euler–Bernoulli; one lane / une voie; gross homogeneous I-section / section en I homogène brute",
+        ]
+    )
+    if not thermal:
+        meta.append(
+            [
+                "Factors / Facteurs",
+                "Truck: 1.40 / 1.30 / 1.25 (1–2–3: 1.30); lane: no DLA. No ULS/SLS or RL modification.",
+            ]
+        )
+        meta.append(
+            [
+                "Lane / Voie",
+                "Adverse influence-line regions; reduced truck; separate from truck-only dynamic case.",
+            ]
+        )
+        meta.append(
+            [
+                "Envelope / Enveloppe",
+                "Each station/effect can have a different governing arrangement. Reactions are reported once per support.",
+            ]
+        )
+    meta.append(["PyCBA", result["meta"]["pycba"]])
+    if not thermal:
+        meta.append(["Travel step / Pas (m)", result["meta"]["travel_step"]])
+    meta.append(["Model JSON", json.dumps(result["model"], ensure_ascii=False)])
+    for sheet in wb:
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = sheet.dimensions
+        for cell in sheet[1]:
+            cell.fill = PatternFill("solid", fgColor="102D41")
+            cell.font = Font(color="FFFFFF", bold=True)
+            cell.alignment = Alignment(wrap_text=True, vertical="center")
+        sheet.row_dimensions[1].height = 32
+        for column in sheet.columns:
+            sheet.column_dimensions[column[0].column_letter].width = 20
+            for cell in column[1:]:
+                if isinstance(cell.value, (float, int)):
+                    cell.number_format = "0.000"
+                if isinstance(cell.value, str) and cell.value.startswith(
+                    ("=", "+", "-", "@")
+                ):
+                    cell.value = "'" + cell.value
+        sheet.sheet_view.showGridLines = False
+    meta.column_dimensions["A"].width = 30
+    meta.column_dimensions["B"].width = 100
+    for row in meta.iter_rows(min_row=2):
+        row[1].alignment = Alignment(wrap_text=True, vertical="top")
+        meta.row_dimensions[row[0].row].height = 48
+    buffer = BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()

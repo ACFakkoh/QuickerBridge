@@ -36,7 +36,7 @@ def zip_bytes(entries) -> bytes:
 
 
 def python_sources():
-    entries = []
+    entries = [(ROOT / "vendor/pycba/LICENSE", "pycba-LICENSE.txt")]
     for folder, prefix in (
         (ROOT / "quickerbridge", "quickerbridge"),
         (ROOT / "vendor/pycba/src/pycba", "pycba"),
@@ -53,6 +53,8 @@ def source_entries():
     root_files = (
         ".gitignore",
         "README.md",
+        "README_DEVELOPER.md",
+        "NONPRISMATIC.md",
         "THIRD_PARTY_NOTICES.md",
         "VALIDATION.md",
         "requirements.txt",
@@ -60,6 +62,7 @@ def source_entries():
         "QuickerBridge.cmd",
         "launch.py",
         "pycba-cl750qc.patch",
+        "pycba-nonprismatic-performance.patch",
     )
     for name in root_files:
         entries.append((ROOT / name, name))
@@ -168,9 +171,17 @@ def build_release() -> None:
     release_source = RELEASE / f"QuickerBridge-v{VERSION}-source.zip"
     shutil.copy2(source_zip, release_source)
     pages_entries = [
-        (path, path.relative_to(DIST).as_posix())
-        for path in DIST.iterdir()
-        if path.is_file()
+        (DIST / name, name)
+        for name in (
+            "index.html",
+            "styles.css",
+            "app.js",
+            "browser-solver.js",
+            "version.js",
+            "solver-bundle.js",
+            "QuickerBridge-source.zip",
+            ".nojekyll",
+        )
     ]
     pages_zip = RELEASE / f"QuickerBridge-v{VERSION}-pages.zip"
     write_zip(pages_zip, pages_entries)
@@ -178,6 +189,9 @@ def build_release() -> None:
         (ROOT / "QuickerBridge.html", "QuickerBridge.html"),
         (ROOT / "QuickerBridge.cmd", "QuickerBridge.cmd"),
         (ROOT / "README.md", "README.md"),
+        (ROOT / "README_DEVELOPER.md", "README_DEVELOPER.md"),
+        (ROOT / "NONPRISMATIC.md", "NONPRISMATIC.md"),
+        (ROOT / "VALIDATION.md", "VALIDATION.md"),
         (ROOT / "THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES.md"),
         (ROOT / "vendor/pycba/LICENSE", "pycba-LICENSE.txt"),
     ]
@@ -216,6 +230,23 @@ def build(with_release: bool = True) -> None:
     print(f"Built QuickerBridge v{VERSION}: portable HTML, static dist/{suffix}")
 
 
+def deliver(destination: Path) -> None:
+    """Copy generated deliverables into a personal distribution folder."""
+    destination = destination.resolve()
+    destination.mkdir(parents=True, exist_ok=True)
+    if destination != ROOT.resolve():
+        shutil.copy2(ROOT / "QuickerBridge.html", destination / "QuickerBridge.html")
+    public = destination / "GitHub"
+    public.mkdir(exist_ok=True)
+    for path in RELEASE.iterdir():
+        target = public / path.name
+        if path.is_dir():
+            shutil.copytree(path, target, dirs_exist_ok=True)
+        else:
+            shutil.copy2(path, target)
+    print(f"Delivered HTML and GitHub packages to {destination}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -223,5 +254,12 @@ if __name__ == "__main__":
         action="store_true",
         help="Build browser assets without release/.",
     )
+    parser.add_argument(
+        "--deliver", type=Path, help="Copy HTML and releases to this folder."
+    )
     args = parser.parse_args()
+    if args.no_release and args.deliver:
+        parser.error("--deliver requires a complete release build")
     build(with_release=not args.no_release)
+    if args.deliver:
+        deliver(args.deliver)

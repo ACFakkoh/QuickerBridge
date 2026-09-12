@@ -1,184 +1,141 @@
-# QuickerBridge 0.3
+# QuickerBridge 0.4
 
-**Anthony Chéruel · Mise à jour / Updated: 2026-09-11**
+**Anthony Chéruel · 2026-09-12 · Français / English**
 
-## Utilisation
+Un outil de calcul préliminaire de poutres continues de ponts, avec PyCBA dans le
+navigateur. Géométrie, charges et diagrammes restent réunis dans une interface
+compacte. Aucune installation de Python et aucun serveur local pour les utilisateurs.
 
-Ouvrez `QuickerBridge.html` dans un navigateur moderne (Edge ou Chrome conseillé).
-Aucune installation de Python et aucun serveur local ne sont nécessaires pour
-cette édition. Une connexion Internet est nécessaire au lancement pour charger
-Pyodide et les bibliothèques scientifiques. Les calculs et les données du pont
-restent dans le navigateur; ils ne sont pas envoyés à un service de calcul.
-Le cache du navigateur peut accélérer les ouvertures suivantes; le fonctionnement
-hors connexion n'est pas garanti.
+## Démarrer
 
-Le français est la langue initiale; le choix EN/FR est ensuite mémorisé. Saisissez
-les dimensions, les portées et les charges. Les résultats se mettent à jour après
-une courte pause. Cliquez sur une valeur extrême pour afficher sa disposition de
-charges compatible. L'export **Excel** contient les enveloppes aux stations, les
-réactions, les dispositions déterminantes et le modèle.
+- **Sur le web :** ouvrez le lien GitHub Pages fourni par l’auteur.
+- **Fichier reçu :** ouvrez `QuickerBridge.html` dans un navigateur moderne. Si vous
+  recevez l’archive portable, extrayez-la avant d’ouvrir le HTML.
+- Une connexion Internet est nécessaire au démarrage pour charger Pyodide et ses
+  bibliothèques. Le cache peut accélérer les ouvertures suivantes; cette édition
+  ne garantit pas un fonctionnement hors connexion.
+- FR est la langue initiale. Le bouton EN/FR en haut mémorise ensuite votre choix.
 
-Le bouton **Enregistrer** produit un fichier `.quickerbridge.json` qui contient
-toutes les données du modèle, mais aucun résultat calculé. **Ouvrir** valide le
-format et recalcule le projet; un fichier invalide ne remplace jamais le modèle
-affiché. Si le modèle actuel est modifié, l'interface propose de l'enregistrer,
-d'ignorer les modifications ou d'annuler avant d'ouvrir le fichier choisi.
+Les calculs s’exécutent dans un processus de travail du navigateur. Les données du
+pont ne sont pas envoyées à un serveur de calcul. Fermer l’onglet interrompt le calcul.
 
-Dans **Sections**, choisissez une poutre en I ou **EI constant (kN·m²)** pour
-chaque section. Un EI direct n'a pas d'aire ou d'inertie déduite. Des zones de
-rigidité constante peuvent être assemblées dans une poutre non prismatique; les
-variations dimensionnelles sont réservées aux sections définies par leur géométrie.
-Le dessin d'une section EI est schématique et n'indique pas sa hauteur réelle.
+## Saisir un modèle
 
-Le mode **Thermique** est un cas distinct. Il transforme le gradient linéaire
-`ΔT = Tdessus − Tdessous`, le coefficient `α` et la hauteur thermique `h` en une
-courbure libre uniforme `κ = −αΔT/h`. Il calcule V, M, la flèche et les réactions
-avec PyCBA, sans ajouter de charges permanentes ou routières. Un dessus plus chaud
-produit une courbure vers le haut, donc une flèche négative dans l'affichage.
+1. **Géométrie :** choisissez 1 à 5 travées, leurs longueurs en mètres et les appuis.
+   Les appuis articulés et à rouleaux bloquent le déplacement vertical, avec
+   continuité de la poutre aux appuis intérieurs.
+2. **Sections :** saisissez les dimensions des tôles en mm et E en GPa, ou une
+   rigidité EI constante directement en kN·m². La hauteur comprend les semelles.
+3. **Charges :** choisissez permanentes, routières, les deux, ou thermique seul.
+   Plusieurs charges uniformes sont possibles. CL-750QC à 80 % est le choix initial;
+   CL-625, le camion et le tandem AASHTO HL-93, le train Cooper E et un véhicule
+   personnalisé de 1 à 7 essieux sont disponibles.
+4. Attendez la fin du calcul, puis inspectez les diagrammes et le tableau.
+   L’augmentation du nombre de stations du tableau ne raffine pas le solveur.
 
-## English
+Le modèle initial comporte **2 × 34,8 m**, une poutre de **1200 mm** de hauteur,
+une semelle supérieure **350 × 25 mm**, une âme de **14 mm** et une semelle
+inférieure **600 × 50 mm**. E = 200 GPa; multiplicateur d’inertie M = 1.
+Ces valeurs sont des données de départ, pas une validation de ce pont.
 
-Open `QuickerBridge.html` in a modern browser. Users do not need Python or a local
-server. The first launch downloads the pinned Pyodide runtime and dependencies;
-an internet connection is required. Calculations run in a background browser
-worker using the same Python/PyCBA source as the native tests. No bridge inputs
-are uploaded. Browser caching helps subsequent launches but is not an offline
-installation guarantee.
+### Rigidité et zones non prismatiques
 
-Edit spans, sections and loads to update the diagrams. Click an extreme to inspect
-its compatible arrangement. Excel exports always contain the **envelope**, even
-when a single truck position is displayed. The station table includes support
-reactions once per support, with left/right shear limits preserved.
+Le multiplicateur d’inertie M agit sur **EI = E × I acier × M**. M = 4 quadruple
+la rigidité. L’inertie affichée reste celle de l’acier brut; EI inclut M. Ce moyen
+permet une hypothèse de rigidité effective, sans calculer une dalle transformée,
+son centre de gravité, les contraintes ou la résistance composite.
 
-**Save** downloads a validated `.quickerbridge.json` model file; **Open** validates
-and recalculates it. Computed results and temporary browser state are never stored.
-Invalid or unsupported files leave the current model intact, and modified work gets
-a Save/Discard/Cancel prompt before replacement.
+Les zones se suivent de 0 à 100 % de chaque travée. La section initiale d’une zone
+fournit ses tôles, E, M et sa hauteur initiale. La section finale fournit **seulement
+la hauteur cible**. La hauteur peut être constante, linéaire ou parabolique.
+Les semelles et l’épaisseur de l’âme restent constantes dans la zone; pour les
+changer, commencez une nouvelle zone. Le profil parabolique est tangent au côté
+le moins haut. [Détails et comparaison avec CSiBridge](NONPRISMATIC.md).
 
-**Thermal** is an exclusive load mode. The signed linear gradient
-`ΔT = Ttop − Tbottom`, editable expansion coefficient `α`, and reference depth `h`
-produce uniform free curvature `κ = −αΔT/h` on every span. PyCBA solves V, M,
-deflection, and reactions for that thermal case alone. Positive top heating bows
-upward and therefore appears as negative deflection under the downward-positive
-plot convention.
+### Enveloppes et thermique
 
-## Distribution: GitHub Pages
+Les deux lignes épaisses limitent les enveloppes min/max. Chaque extrême peut
+venir d’une disposition de charges différente. Cliquez sur un extrême pour voir
+la disposition compatible. Les flèches d’essieux et leurs nombres montrent les
+**charges nominales**; dans un cas de voie canadien, elles montrent seulement les
+charges réduites. Elles n’affichent jamais le CMD, même lorsque le calcul l’applique.
+Moment positif en travée, flèche positive vers le bas,
+réactions positives vers le haut.
 
-The `dist/` directory is a complete static site, with relative asset URLs suitable
-for a GitHub project subpath. It does not use a Python HTTP API. GitHub Pages serves
-the files; Pyodide runs PyCBA inside the visitor's browser.
+Le mode thermique applique seul un gradient linéaire : ΔT = Tdessus − Tdessous.
+Saisissez α en 10⁻⁶/°C et une hauteur thermique de référence en mm. Cette hauteur
+est indépendante de la géométrie des sections. Le même gradient et la même
+courbure libre sont appliqués à toutes les travées. Un dessus plus chaud courbe
+la poutre vers le haut. Le cas thermique ne se superpose pas aux autres charges.
 
-No repository has been created and nothing has been published. The prepared source
-tree includes `.github/workflows/ci.yml` and a manual
-`.github/workflows/pages.yml`. After placing the source in a repository, enable
-GitHub Pages with **GitHub Actions** as its source and run the **Publish GitHub
-Pages** workflow manually. Ordinary pushes do not deploy Pages.
+### Enregistrer, rouvrir et exporter
 
-Rebuild after any Python or UI edit:
+**Enregistrer** télécharge un fichier `.quickerbridge.json` avec les paramètres.
+**Ouvrir** vérifie le fichier et recalcule les résultats. Aucun diagramme ni résultat
+n’est sauvegardé dans le projet. Enregistrez avant de fermer le navigateur.
+Les anciens projets dont les tôles variaient continûment doivent être consultés
+avec v0.3 puis redéfinis explicitement en zones dans v0.4; l’application les signale.
 
-```powershell
-.venv\Scripts\python.exe build_portable.py
-```
+**Excel** exporte les enveloppes, les réactions et le modèle, même si une position
+particulière du camion est affichée. En mode thermique, il exporte ce cas unique.
+Les appuis partagés ont deux lignes pour les cisaillements gauche et droite.
 
-`QuickerBridge.html` is the single-file local edition; `QuickerBridge.cmd` simply
-opens it on Windows. A normal GitHub release build also creates:
+### Si le calcul paraît lent
 
-- `release/QuickerBridge-v0.3-source/`: clean GitHub-ready source tree;
-- `release/QuickerBridge-v0.3-source.zip`: matching source archive;
-- `release/QuickerBridge-v0.3-pages.zip`: static `dist/` artifact;
-- `release/QuickerBridge-v0.3-portable.zip`: portable HTML, opener, examples and notices;
-- `release/MANIFEST.txt` and `release/SHA256SUMS.txt`.
+Le premier démarrage télécharge le moteur. Ensuite, modifier la géométrie ou EI
+reconstruit les fonctions d’influence; modifier uniquement les charges peut les
+réutiliser. Les zones nombreuses, cinq travées et le mode Fin prennent plus de temps.
+Les calculs non prismatiques de v0.4 évitent de recalculer inutilement la rigidité.
+Si le moteur ne démarre pas, vérifiez la connexion et rechargez la page. Si une
+entrée est invalide, corrigez-la avant d’utiliser les résultats grisés.
 
-Automated file-URL navigation is blocked by this development environment's browser
-policy; its double-click launch requires a manual check on the target computer.
-The static HTTP edition is tested separately. For a guaranteed offline Windows
-edition, the next distribution option is a desktop executable with a bundled
-Python runtime and an embedded window, without an HTTP server. That executable
-is not part of v0.3.
+## English quick guide
 
-References: [GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site),
-[Pyodide workers](https://pyodide.org/en/0.27.7/usage/webworker.html),
-[PyInstaller packaging](https://pyinstaller.org/en/stable/operating-mode.html).
+Open the provided GitHub Pages link, or double-click the extracted
+`QuickerBridge.html`. **No Python installation or local server is needed.** Internet
+access is required to download the browser runtime; guaranteed offline use is not
+included. Calculations run locally in your browser. Use the top EN/FR toggle.
 
-## Calculation basis and limits
+Define 1–5 spans, supports, steel plates or direct constant EI, then select dead,
+live, combined, or thermal-only loading. An inertia modifier multiplies the gross
+steel I for stiffness only; it does not calculate composite section properties.
+In a non-prismatic zone, only height varies. Start-section plates, E and modifier
+stay fixed until the next zone; the end section supplies only its target height.
+See [depth versus EI interpolation](NONPRISMATIC.md).
 
-- One-lane, full axle loads; 1–5 continuous Euler–Bernoulli spans; pins and rollers
-  restrain vertical displacement and permit rotation. Interior supports preserve
-  continuity. No shear or axial deformation.
-- Gross homogeneous steel I-section: three nonoverlapping rectangles. Overall
-  depth includes both flanges. Web clear height is `h - t_top - t_bottom`.
-  `y_bar = sum(A_i y_i)/sum(A_i)` and
-  `I = sum(b_i h_i^3/12 + A_i (y_i-y_bar)^2)` about the horizontal centroidal axis.
-  Input mm → I in m⁴; E in GPa → EI in kN·m² by `EI = E * 10^6 * I`.
-  No composite slab, stiffeners, fillets, welds, cracking, prestress, or automatic
-  self-weight. Direct EI bypasses geometric property calculations.
-- Dimensions and E vary before calculating EI. A parabolic haunch is tangent at
-  its shallower end: shallow→deep uses `t²`; deep→shallow uses `1-(1-t)²`.
-  Variable EI uses 33/65 positive linear samples per zone (standard/fine).
-- CL-625: 50/125/125/175/150 kN. CL-750-QC: 50/160/160/200/180 kN.
-  Gaps: 3.6/1.2/6.6/6.6 m. CL-750-QC is an independent PyCBA vehicle extension.
-- **CAN/CSA S6-25, 3.8.4.5.3**, as supplied by the user: truck factors 1.40 for
-  one axle; 1.30 for two axles or original axles 1–2–3; 1.25 for other 3+ groups.
-  All nonempty subsets retain their original axle IDs and spacings. Custom
-  vehicle factors count individual axles; special-truck axle units are not inferred.
-- Lane case is a separate alternative: CL-625 80% truck + 9 kN/m; CL-750-QC
-  selected 80% or 63% truck + 12.6 kN/m. Neither lane component receives DLA.
-  The selected percentage applies to the whole lane result; the 63% qualifications
-  are shown in the UI. The lane UDL occupies adverse influence regions.
-- No ULS/SLS load factors, RL, transverse distribution, deck-joint allowance or
-  buried-structure rules. Results are instructional effects, not a code design check.
-- Standard/fine travel steps 0.25/0.10 m, augmented by axle/station crossings and
-  shear limits. Reaction/deflection influence samples 48/96 per span and EI
-  breakpoints; PyCBA deflection integration 480/960. Lane integration 240/480 per
-  span augmented at shear discontinuities. Deflections are corrected to zero at
-  supports. These remain sampled numerical envelopes, not analytical optimization.
-- V and M use section equilibrium. Sagging M is positive and drawn downward;
-  deflection is positive down (mm), reactions positive up (kN). Envelope extremes
-  are independent; a snapshot is one compatible arrangement.
-- Thermal curvature uses PyCBA's imposed-curvature load on every member. It is
-  uniform along the bridge and uses the user-entered thermal reference depth,
-  independent of the geometric section depth. The thermal mode is a single signed
-  case, not an envelope, and is never combined with dead or live loads.
+Both envelope limits are drawn in bold. Click an extreme to inspect its governing
+arrangement. Axle arrows show nominal loads, or Canadian lane-reduced loads in a
+lane case; they never show dynamic allowance. The solver applies the selected code
+factors. Save/Open exchanges model-only `.quickerbridge.json` files. Excel exports
+the envelope, or the single thermal case. Shared supports retain both shear limits.
 
-## Development and review
+## Portée / Scope
 
-Python is only needed to develop, rebuild after source changes, or run native
-regression tests. `QuickerBridge.cmd` now simply opens the portable HTML.
-The optional `launch.py` and FastAPI endpoints remain available for development,
-but are not required by the delivered browser app.
+PyCBA solves a linear elastic, 1-D Euler–Bernoulli continuous beam. One lane uses
+the selected standard vehicle. CAN/CSA S6-25 §3.8.4.5.3 dynamic allowance is applied
+to Canadian truck axle subsets; reduced-truck-plus-lane cases have no dynamic
+allowance. HL-93 envelopes its permitted 4.3–9.0 m rear-axle spacing and applies
+its 33% allowance to truck/tandem axles only, with a 9.3 kN/m companion UDL. Cooper
+uses PyCBA’s full E-series train and companion UDL. Truck and lane cases are
+alternatives. No automatic self-weight, load combinations, transverse
+load distribution, shear deformation, staged construction, prestress, cracking,
+resistance checks or code compliance verification is included. Numerical envelopes
+are sampled; compare Standard and Fine when assessing sensitivity.
 
-```powershell
-python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
-.venv\Scripts\python.exe -m pytest tests -q
-.venv\Scripts\python.exe -m black --check quickerbridge tests build_portable.py launch.py
-.venv\Scripts\python.exe build_portable.py
-```
+**Valeurs préliminaires indicatives seulement — ne remplacent pas une conception détaillée.**
 
-Use `build_portable.py --no-release` in CI when only the static and single-file
-assets are needed. Release metadata is maintained in `quickerbridge/version.py`.
+**Indicative preliminary values only — not a substitute for detailed design.**
 
-Core files: `quickerbridge/models.py`, `sections.py`, `loads.py`, `engine.py`,
-`thermal.py`, `projects.py`, `browser.py`, `exports.py`; UI: `dist/app.js`, `styles.css`, `index.html`;
-runtime adapter: `dist/browser-solver.js`; generated files: `dist/solver-bundle.js`
-and `QuickerBridge.html`. See `HANDOFF.md` for verification status and remaining
-manual checks. Do not edit generated files directly.
+Utilisation et responsabilité : bien que je considère ces outils exempts d’erreurs,
+je ne peux être tenu responsable de leurs résultats. Ils sont destinés à
+l’apprentissage et ne doivent pas servir à concevoir un pont.
 
-PyCBA source: upstream commit `89fb9323433308739e2da9f51f9a1023a21bbd2d`, v1.0.1,
-with the local CL-750-QC getter and tests. Its AGPL-3.0-or-later licence is preserved
-in `vendor/pycba/LICENSE` and in the embedded source archive. No upstream PR or
-release has been created. See [PyCBA docs](https://ccaprani.github.io/pycba/) and
-[repository](https://github.com/ccaprani/pycba). The supplied MTQ bulletin A2023-05
-and supplied S6-25 clause were used as calculation references.
+Use and liability: While I believe these tools to be free of error, I cannot be held
+liable for their results. They are to be used for instruction and should not be used
+to design a bridge.
 
-## Use and liability / Utilisation et responsabilité
+## Développement et publication
 
-Indicative preliminary values only — not a substitute for detailed design.
-
-While I believe these tools to be free of error, I cannot be held liable for their
-results. They are provided for instruction only and must not be used to design a bridge.
-
-Valeurs préliminaires indicatives seulement — ne remplacent pas une conception détaillée.
-Bien que je considère ces outils comme exempts d'erreurs, je ne peux être tenu
-responsable de leurs résultats. Ils sont fournis à des fins pédagogiques seulement
-et ne doivent pas servir à concevoir un pont.
+Pour installer les sources, tester, reconstruire les livrables ou publier sur
+GitHub Pages, consultez [le guide développeur](README_DEVELOPER.md).
+[Validation](VALIDATION.md) · [Notices des composants tiers](THIRD_PARTY_NOTICES.md).

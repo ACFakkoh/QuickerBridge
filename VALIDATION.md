@@ -1,62 +1,94 @@
-# QuickerBridge 0.3 validation — 2026-09-11
+# Validation — QuickerBridge v0.4
 
-## Automated checks
+2026-09-12. Numerical checks are software regressions, not certification for bridge design.
 
-- QuickerBridge application suite: **34 passed**. Two warnings come from the
-  optional FastAPI/Starlette test-client dependencies. Black 23.12.1 and Node
-  JavaScript syntax checks pass.
-- The earlier vendored PyCBA suite completed with **362 passed, 4 skipped**. No
-  PyCBA numerical code changed in v0.3.
-- Two identical release builds produced identical SHA-256 checksums.
-- The source ZIP was extracted to a clean directory and rebuilt with
-  `build_portable.py --no-release`. The portable HTML, source bundle, and source
-  disclosure ZIP were recreated without using project-relative imports or `.venv`.
-- The staged source contains no `.git`, `.venv`, `DOC-REF`, handoff/plan notes,
-  supplied PDF/XLS files, caches, or temporary data.
+## Tests executed
 
-## Thermal-gradient checks
+- Application suite: **39 passed**.
+- Application + vendored non-prismatic suite: **88 passed**.
+- Full vendored PyCBA suite: **362 passed, 4 skipped**. The 49 non-prismatic tests
+  above are included in this total, not additional tests.
+- Black formatting and JavaScript syntax checks completed.
+- Two existing project examples and the new 2 × 34.8 m reference example validate.
 
-The UI convention is `ΔT = Ttop − Tbottom`; PyCBA receives
-`κ = −αΔT/h`. Deflection is displayed positive downward.
+The regressions cover rectangle, symmetric and asymmetric steel-section inertia;
+analytical simple-span and continuous-beam responses; thermal signs, reversal and
+isolation; non-prismatic comparison with refined constant-EI meshes; truck factors;
+project validation; depth-only interpolation, plate steps, effective inertia and
+cache invalidation. The modified PyCBA integration also passes constant-section
+limits for UDL, point, partial UDL, moment and trapezoidal loads with end releases.
 
-- Simple 10 m span, EI = 180,000 kN·m², ΔT = 15 °C, α = 12×10⁻⁶/°C,
-  h = 1800 mm: κ = −1.0×10⁻⁴ 1/m; V, M, and R are zero; peak displayed
-  deflection is −1.25 mm. Changing EI alone does not change the free deflection.
-- Two equal 10 m spans at the same EI and curvature: interior restraint moment
-  is +27 kN·m after the UI sign mapping; reactions are +2.7, −5.4, +2.7 kN.
-- Zero-gradient, sign reversal, scaling, equilibrium, direct-EI, nonprismatic
-  parabolic-section, browser-dispatch, and thermal workbook cases pass.
-- Thermal results are unchanged by stored dead/live edits. Mechanical results are
-  unchanged by thermal-input edits. The thermal result has one signed V/M/δ/R
-  value and no governing truck arrangement.
+M = 4 retains gross steel I, A and centroid, quadruples EI and divides a simple-span
+load deflection by four. Direct EI is unchanged. Cached matrices are scoped to one
+immutable Basis; fixed-end-force caches are cleared for every new load matrix.
 
-## Project-file checks
+## Performance investigation
 
-- The schema round-trips a one-span constant-EI model, a five-span
-  nonprismatic/custom-seven-axle model, and a negative-gradient thermal model.
-- Malformed JSON, files over 1 MiB, wrong format, unsupported schema versions,
-  unknown fields, invalid geometry, and bad references are rejected before model
-  replacement.
-- Visible invalid numeric input blocks Save. Reopen increments the UI revision so
-  an older in-flight result cannot become current.
+The previous non-prismatic implementation used 2001 Simpson stations **per EI
+piece**, repeatedly rebuilt member stiffness, and scanned all EI pieces for each
+query. A three-zone span with two tapers produces 65 pieces in Standard mode.
+This explains the reported long first geometry calculation after engine startup.
 
-## Browser checks
+`tests/performance.py` uses two 30 m spans, 1200/1800 mm heights, two parabolic
+zones plus a constant zone in each span, and identical plates. Each span retains
+107 unit-load locations. On the development machine, separate native runs measured:
 
-The latest static build was inspected in French and English. French is the initial
-language when no preference is stored. Save/Open, v0.3, Anthony Chéruel, the date,
-thermal inputs, single thermal diagrams/reactions/table, warnings, and disclaimers
-are present. The default mechanical rounded values remain M+ 3664.4 kN·m,
-M− −3330.6 kN·m, |V| 795.3 kN, and |δ| 36.04 mm.
+| Wrapper / integration | Influence-basis build |
+| --- | --- |
+| Previous v0.3 | 252.12 s |
+| Corrected v0.4 | 0.58 s |
 
-A clean extracted site loaded successfully from `/dist/`, exercising relative
-asset URLs under a repository-style subpath. Pyodide loaded PyCBA and completed the
-default envelope. The thermal view completed with κ = −1.000×10⁻⁴ 1/m and the
-expected single-case results.
+These single measurements occurred during development and are not controlled
+hardware benchmarks or guaranteed browser times. They exclude runtime downloads
+and subsequent truck-envelope traversal. An earlier instrumented baseline was
+80.8 s, demonstrating the variability; do not advertise a fixed speedup ratio.
 
-The user previously confirmed Excel downloading and explicitly asked that it not
-be retested. The new thermal workbook structure was validated in memory only.
-Automated `file://` navigation is blocked by the development browser policy, so
-double-clicking `QuickerBridge.html` remains a manual target-browser check.
+The app now caches member stiffness, vectorizes EI lookup and integrates fixed-end
+forces with converged Gaussian quadrature, splitting at EI and load discontinuities.
+Endpoint sentinels preserve PyCBA load-result conventions. A quad_vec fallback
+handles cases not converged at the tested Gauss orders. The EI piece count, influence
+sample count and downstream diagram integration resolution are unchanged.
 
-Nothing was published, pushed, or created on GitHub.
+At four test axle coordinates, maximum absolute old/new differences normalized by
+the maximum new magnitude **within each response family** were V 0.0021%,
+M 0.0098%, deflection 0.0088%, R 0.0040%. Differences include correction of endpoint
+handling in the old piece-by-piece load integration. This comparison is not a
+universal error bound; the independent regressions provide the accuracy checks.
+The raw timing outputs are retained privately in `ref/source/tmp/timing-v03.json`
+and `timing-v04-final.json`.
 
+## Browser verification
+
+The rebuilt static site was exercised in the Codex in-app browser over a temporary
+loopback preview. Verified: French initial display, v0.4 author/date, 2 × 34.8 m,
+CL-750QC, 1200 mm girder and revised plates, both thick envelope boundaries, English
+translation, and M = 4 changing EI to 9,604,285 kN·m². The corresponding maximum
+load deflection changed from 239.61 to 59.90 mm.
+
+The first completed default calculation displayed 7.97 s. Switching to the generated
+two-span non-prismatic model completed in 7.96 s, excluding runtime initialization.
+This is one browser/hardware observation. The first-zone parabolic depth option was
+also exercised. The download of Excel was not retested; Anthony previously confirmed
+that it works. Backend workbook regressions remain in the application suite.
+
+Double-click/file-URL launching remains a manual target-browser check because the
+automation environment blocks file-URL navigation. The portable build embeds the same
+UI, worker and Python sources as the tested static page. Internet is still required
+for runtime libraries; a guaranteed offline distribution has not been built.
+
+## Reproduce locally
+
+From the source checkout, after installing requirements:
+
+```powershell
+$env:MPLCONFIGDIR = './tmp/mpl'
+.venv/Scripts/python.exe -m pytest tests vendor/pycba/tests/test_nonprismatic.py -q
+.venv/Scripts/python.exe -m black --check quickerbridge tests build_portable.py launch.py
+.venv/Scripts/python.exe tests/performance.py
+.venv/Scripts/python.exe build_portable.py
+```
+
+Open the generated HTML, check FR/EN and a representative non-prismatic model,
+inspect nominal axle labels and both min/max curves, then save and reopen a project.
+For public hosting, verify the deployed GitHub Pages URL after its workflow completes.
+No GitHub repository or website was published by this task.
