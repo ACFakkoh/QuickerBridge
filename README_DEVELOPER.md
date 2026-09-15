@@ -1,6 +1,6 @@
 # QuickerBridge — guide développeur
 
-Version 0.4 · Anthony Chéruel · 2026-09-12
+Version 0.4 · Anthony Chéruel · 2026-09-15
 
 ## Quel fichier utiliser ou envoyer ?
 
@@ -64,6 +64,7 @@ fichiers à chaque livraison, pas seulement le HTML.
 | `quickerbridge/models.py` | Entrées validées et valeurs initiales |
 | `quickerbridge/sections.py` | I acier, multiplicateur, zones de hauteur, EI |
 | `quickerbridge/engine.py` | Influences, groupes d’essieux, enveloppes, cache |
+| `quickerbridge/loads.py` | Véhicules, facteurs, charge de voie et charges permanentes |
 | `quickerbridge/thermal.py` | Courbure thermique indépendante |
 | `quickerbridge/projects.py` | Schéma de projet et compatibilité |
 | `quickerbridge/version.py` | Version, date, auteur |
@@ -125,12 +126,16 @@ entre profondeur géométrique et interpolation EI de CSI.
   `quad_vec` intervient si nécessaire. Les autres chemins PyCBA restent inchangés.
 - Les influences utilisent 48/96 intervalles par travée plus les points EI;
   EI a 33/65 points par zone variable; la flèche utilise 480/960 points.
+- Le passage du véhicule utilise un `linspace` symétrique dont l’espacement maximal
+  est 0,25/0,10 m; les deux sens ont ainsi des grilles miroir exactes.
 - Le calcul routier reste une enveloppe numérique discrète. Ne confondez pas
   résolution du tableau, influence, intégration et pas de déplacement du camion.
 - CL-625 et CL-750-QC vérifient les sous-ensembles d’essieux prescrits. HL-93
   vérifie le camion ou tandem complet et enveloppe l’espacement arrière du camion
   de 4,3 à 9,0 m; sa majoration de 33 % vise les essieux, pas la charge uniforme.
   Cooper emploie le train E complet et sa charge uniforme associée dans PyCBA.
+  Les charges uniformes associées des véhicules standards couvrent le pont complet.
+  Le véhicule d’entretien 24 + 56 kN à 2,0 m n’a ni charge de voie ni CMD.
 
 `python tests/performance.py` mesure un modèle défini de deux travées avec quatre
 zones paraboliques. `--baseline chemin/ancienne/source` permet une comparaison
@@ -142,7 +147,8 @@ runtime. Les mesures navigateur dépendent du matériel, du cache et du réseau.
 Le schéma 2 utilise la variation de hauteur seule. Les fichiers schéma 1 dont la
 signification est identique sont acceptés. Les tapers anciens qui interpolaient
 les tôles ou E sont refusés avec explication, afin d’éviter une modification
-silencieuse du modèle. La valeur M par défaut est 1 pour les projets qui l’omettent.
+silencieuse du modèle. La valeur M et les nouveaux facteurs de charge valent 1 par
+défaut pour les projets qui les omettent.
 Incrémentez la version dans `version.py`, mettez à jour la date et reconstruisez.
 
 Avant livraison : exécutez les tests pertinents, vérifiez FR/EN, les deux limites

@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .models import Model
-from .engine import analyse, snapshot
+from .engine import analyse, position_record, snapshot
 from .exports import csv_bytes, excel_bytes
 from .version import APP_VERSION
 
@@ -121,22 +121,7 @@ def get_snapshot(body: SnapshotRequest):
     if body.position is not None:
         if body.direction not in ("forward", "reverse") or abs(body.position) > 1200:
             raise HTTPException(422, "vehicle.position")
-        from .loads import vehicle_data, dynamic_factor
-
-        weights, _ = vehicle_data(model.live)
-        ids = list(range(1, len(weights) + 1))
-        record = {
-            "case": "truck",
-            "direction": body.direction,
-            "position": body.position,
-            "axles": ids,
-            "factor": dynamic_factor(
-                ids,
-                model.live.dynamic,
-                model.live.vehicle in {"CL625", "CL750QC"},
-                model.live.vehicle,
-            ),
-        }
+        record = position_record(model, body.position, body.direction)
     return worker.submit(snapshot, model, record, body.index, body.sense).result()
 
 

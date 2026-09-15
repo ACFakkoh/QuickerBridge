@@ -18,8 +18,10 @@ import pycba as cba
 from .models import Model
 from .sections import span_ei, properties
 from .loads import (
+    CANADIAN_VEHICLES,
     axle_groups,
     dead_intervals,
+    dynamic_factor,
     lane_axle_factor,
     lane_parameters,
     vehicle_data,
@@ -181,9 +183,8 @@ class Basis:
         """Response to a companion UDL covering the entire bridge deck.
 
         This is the lane-load arrangement used by PyCBA's
-        ``BridgeAnalysis.run_load_model(..., w_lane=...)`` for HL-93 and
-        Cooper.  Canadian/custom lanes use :meth:`lane` instead, so their UDL
-        can be patterned on adverse influence regions.
+        ``BridgeAnalysis.run_load_model(..., w_lane=...)``. Custom lanes alone
+        can use :meth:`lane` for adverse-region placement.
         """
         self.solve_loads(
             [[i + 1, 3, w, 0.0, length] for i, length in enumerate(self.lengths)]
@@ -227,6 +228,23 @@ def case_record(case, direction, position, axles, factor, **metadata):
     }
 
 
+def position_record(model: Model, position: float, direction: str):
+    """Full vehicle at a user-selected position in the selected load case."""
+    weights, _ = vehicle_data(model.live)
+    ids = list(range(1, len(weights) + 1))
+    _, _, lane_style = lane_parameters(model.live)
+    is_lane = model.live.case == "lane" and lane_style != "none"
+    factor = dynamic_factor(
+        ids,
+        model.live.dynamic,
+        model.live.vehicle in CANADIAN_VEHICLES,
+        model.live.vehicle,
+    )
+    if is_lane and model.live.vehicle in CANADIAN_VEHICLES:
+        factor = 1.0
+    return case_record("lane" if is_lane else "truck", direction, position, ids, factor)
+
+
 def analyse(model: Model):
     if model.load_mode == "thermal":
         from .thermal import analyse_thermal
@@ -252,9 +270,11 @@ def analyse(model: Model):
     steps = 0
     groups = axle_groups(model.live)
     lane_w, fraction, lane_style = lane_parameters(model.live)
+    include_lane = model.live.case != "truck" and lane_style != "none"
+    include_truck = model.live.case != "lane" or lane_style == "none"
     lane_lo = lane_hi = np.zeros(count)
     if model.load_mode != "dead":
-        if model.live.case != "truck":
+        if include_lane:
             if lane_style == "patterned":
                 lane_lo, lane_hi, _, _ = basis.lane(lane_w)
             else:
@@ -273,7 +293,7 @@ def analyse(model: Model):
                     if sign == -1
                     else (-offsets[-1], basis.length)
                 )
-                travel = np.arange(begin, end + step / 2, step)
+                travel = np.linspace(begin, end, int(np.ceil((end - begin) / step)) + 1)
                 # Exact axle/support crossings matter for reaction and shear peaks.
                 crossings = (basis.x[:, None] - sign * offsets[None, :]).ravel()
                 travel = np.unique(
@@ -290,13 +310,19 @@ def analyse(model: Model):
                         raw = np.einsum(
                             "a,apc->pc", group["mask"], effects, optimize=False
                         )
+                        axle_effect = raw * model.live.axle_factor
                         cases = []
-                        if model.live.case != "lane":
-                            amplified = raw * group["factor"]
+                        if include_truck:
+                            amplified = (
+                                axle_effect * group["factor"] * model.live.factor
+                            )
                             cases.append(
                                 ("truck", amplified, amplified, group["factor"])
                             )
-                        if model.live.case != "truck":
+                        if include_lane and (
+                            model.live.vehicle not in CANADIAN_VEHICLES
+                            or len(group["axles"]) == len(weights)
+                        ):
                             axle_factor = lane_axle_factor(model.live, group["factor"])
                             # The record factor reports dynamic allowance.  A
                             # Canadian lane reduction is deliberately not DLA.
@@ -308,8 +334,10 @@ def analyse(model: Model):
                             cases.append(
                                 (
                                     "lane",
-                                    raw * axle_factor + lane_lo,
-                                    raw * axle_factor + lane_hi,
+                                    (axle_effect * axle_factor + lane_lo)
+                                    * model.live.factor,
+                                    (axle_effect * axle_factor + lane_hi)
+                                    * model.live.factor,
                                     reported_factor,
                                 )
                             )
@@ -338,15 +366,16 @@ def analyse(model: Model):
                                         factor,
                                         **variant,
                                     )
-        # Include the lane case with its truck completely off the bridge.
-        for target, candidate, infos, sense in (
-            (low, lane_lo, info_low, -1),
-            (high, lane_hi, info_high, 1),
-        ):
-            changed = np.flatnonzero(sense * candidate > sense * target + 1e-10)
-            target[changed] = candidate[changed]
-            for j in changed:
-                infos[j] = case_record("lane", "forward", -1, [], 1)
+        if include_lane:
+            # Include the lane case with its truck completely off the bridge.
+            for target, candidate, infos, sense in (
+                (low, lane_lo * model.live.factor, info_low, -1),
+                (high, lane_hi * model.live.factor, info_high, 1),
+            ):
+                changed = np.flatnonzero(sense * candidate > sense * target + 1e-10)
+                target[changed] = candidate[changed]
+                for j in changed:
+                    infos[j] = case_record("lane", "forward", -1, [], 1)
     low += dead
     high += dead
     nx = basis.nx
@@ -467,7 +496,13 @@ def snapshot(model, record, target_index=None, sense="max"):
     if is_lane:
         factor = lane_axle_factor(model.live, factor)
     axles = [
-        {"id": i + 1, "x": float(p + sign * offset), "load": float(weights[i] * factor)}
+        {
+            "id": i + 1,
+            "x": float(p + sign * offset),
+            "load": float(
+                weights[i] * model.live.axle_factor * factor * model.live.factor
+            ),
+        }
         for i, offset in enumerate(offsets)
         if i + 1 in ids and 0 <= p + sign * offset <= basis.length
     ]
@@ -478,6 +513,7 @@ def snapshot(model, record, target_index=None, sense="max"):
     lane_q = np.array([])
     lane_mass = np.array([])
     if is_lane and model.load_mode != "dead":
+        lane_w *= model.live.factor
         if lane_style == "full":
             lane_intervals.append({"start": 0.0, "end": basis.length, "w": lane_w})
             values += basis.full_lane(lane_w)

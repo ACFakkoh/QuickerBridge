@@ -104,6 +104,16 @@ def test_thermal_supports_nonprismatic_girder_sections():
     assert len(result["table"]) == 2 * (model.subdivisions + 1)
 
 
+def test_thermal_deflection_is_symmetric_for_mirrored_tapers():
+    model = thermal_model(spans=(12, 12))
+    model.sections = [Section(depth=1200), Section(depth=2200)]
+    model.nonprismatic = True
+    model.spans[0].zones = [Zone(end=1, section=0, end_section=1, profile="linear")]
+    model.spans[1].zones = [Zone(end=1, section=1, end_section=0, profile="linear")]
+    deflection = np.asarray(analyse(model)["values"]["D"])
+    np.testing.assert_allclose(deflection, deflection[::-1], atol=1e-10)
+
+
 def test_project_round_trip_preserves_full_model_and_normalizes():
     model = thermal_model(spans=(12, 18), delta_T=-22, alpha_micro=10.8, depth=2400)
     project = create_project(
@@ -182,6 +192,38 @@ def test_browser_dispatch_validates_project_and_matches_native_thermal():
     np.testing.assert_allclose(
         browser_result["values"]["M"], analyse(model)["values"]["M"]
     )
+
+
+def test_browser_manual_position_keeps_selected_canadian_lane_case():
+    model = Model(load_mode="live")
+    model.live.case = "lane"
+    dispatch(
+        json.dumps(
+            {
+                "action": "analyse",
+                "data": {"job": "lane-test", "model": model.model_dump()},
+            }
+        )
+    )
+    view = json.loads(
+        dispatch(
+            json.dumps(
+                {
+                    "action": "snapshot",
+                    "data": {
+                        "job": "lane-test",
+                        "index": 0,
+                        "sense": "max",
+                        "position": 20,
+                        "direction": "forward",
+                    },
+                }
+            )
+        )
+    )
+    assert view["record"]["case"] == "lane"
+    assert [axle["load"] for axle in view["axles"]] == [40, 128, 128, 160, 144]
+    assert view["lane"] == [{"start": 0.0, "end": 69.6, "w": 12.6}]
 
 
 def test_thermal_workbook_is_one_case_with_input_metadata():

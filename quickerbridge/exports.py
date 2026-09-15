@@ -156,6 +156,8 @@ def excel_bytes(result, language="en"):
                 "Case / Cas",
                 "Axles / Essieux",
                 "DLA factor / Facteur CMD",
+                "Load factor / Facteur de charge",
+                "Axle factor / Facteur d’essieu",
                 "Front axle x / x essieu avant (m)",
                 "Direction",
             ]
@@ -175,6 +177,8 @@ def excel_bytes(result, language="en"):
                             case["case"],
                             "–".join(map(str, case["axles"])),
                             case["factor"],
+                            result["model"]["live"].get("factor", 1),
+                            result["model"]["live"].get("axle_factor", 1),
                             case["position"],
                             case["direction"],
                         ]
@@ -195,7 +199,33 @@ def excel_bytes(result, language="en"):
             ["Imposed curvature / Courbure imposée (1/m)", result["meta"]["curvature"]]
         )
     else:
-        meta.append(["Dynamic allowance / CMD", "CAN/CSA S6-25 · 3.8.4.5.3"])
+        vehicle = result["model"]["live"]["vehicle"]
+        dynamic_reference = (
+            "CAN/CSA S6-25 · 3.8.4.5.3"
+            if vehicle in ("CL625", "CL750QC")
+            else "AASHTO LRFD · 33% on axles"
+            if vehicle in ("HL93Truck", "HL93Tandem")
+            else "None / Aucun"
+            if vehicle in ("Cooper", "Maintenance")
+            else "User selection / Choix utilisateur"
+        )
+        meta.append(["Dynamic allowance / CMD", dynamic_reference])
+        meta.append(
+            [
+                "Live factors / Facteurs de surcharge",
+                f"load/charge = {result['model']['live'].get('factor', 1)}; "
+                f"axle/essieu = {result['model']['live'].get('axle_factor', 1)}",
+            ]
+        )
+        meta.append(
+            [
+                "Dead factors / Facteurs permanents",
+                "; ".join(
+                    f"{load['name']} = {load.get('factor', 1)}"
+                    for load in result["model"]["dead"]
+                ),
+            ]
+        )
     meta.append(
         [
             "Scope / Portée",
@@ -206,13 +236,13 @@ def excel_bytes(result, language="en"):
         meta.append(
             [
                 "Factors / Facteurs",
-                "Truck: 1.40 / 1.30 / 1.25 (1–2–3: 1.30); lane: no DLA. No ULS/SLS or RL modification.",
+                "Code dynamic/lane factors and the user load/axle factors are applied separately.",
             ]
         )
         meta.append(
             [
                 "Lane / Voie",
-                "Adverse influence-line regions; reduced truck; separate from truck-only dynamic case.",
+                "Standard vehicles: companion UDL over the full bridge. Custom vehicle: adverse regions.",
             ]
         )
         meta.append(

@@ -1,11 +1,11 @@
 # Validation — QuickerBridge v0.4
 
-2026-09-12. Numerical checks are software regressions, not certification for bridge design.
+2026-09-15. Numerical checks are software regressions, not certification for bridge design.
 
 ## Tests executed
 
-- Application suite: **39 passed**.
-- Application + vendored non-prismatic suite: **88 passed**.
+- Application suite: **45 passed**.
+- Application + vendored non-prismatic suite: **94 passed**.
 - Full vendored PyCBA suite: **362 passed, 4 skipped**. The 49 non-prismatic tests
   above are included in this total, not additional tests.
 - Black formatting and JavaScript syntax checks completed.
@@ -15,12 +15,31 @@ The regressions cover rectangle, symmetric and asymmetric steel-section inertia;
 analytical simple-span and continuous-beam responses; thermal signs, reversal and
 isolation; non-prismatic comparison with refined constant-EI meshes; truck factors;
 project validation; depth-only interpolation, plate steps, effective inertia and
-cache invalidation. The modified PyCBA integration also passes constant-section
+cache invalidation; dead/live/axle factors; maintenance-vehicle definition;
+full-deck Canadian lane loads; and mirrored travel grids. The modified PyCBA integration also passes constant-section
 limits for UDL, point, partial UDL, moment and trapezoidal loads with end releases.
 
 M = 4 retains gross steel I, A and centroid, quadruples EI and divides a simple-span
 load deflection by four. Direct EI is unchanged. Cached matrices are scoped to one
 immutable Basis; fixed-end-force caches are cleared for every new load matrix.
+
+## CL-750QC and symmetry investigation
+
+The MTQ A2023-05 truck diagram was checked visually: axle loads are 50, 160, 160,
+200 and 180 kN at gaps 3.6, 1.2, 6.6 and 6.6 m. Its 12.6 kN/m companion load is
+now applied over the full bridge with the complete reduced truck. Axle subsets remain
+available only to the truck-only S6 dynamic-allowance checks.
+
+Against direct PyCBA at 0.1 m travel spacing on the default 2 × 34.8 m bridge,
+QuickerBridge/PyCBA maximum moments were 4578.591/4578.399 kN·m for the ×1.25
+truck and 4002.012/4001.471 kN·m for the 80% truck plus lane load. Minimum moments
+matched to displayed precision (-2737.548 and -3659.419 kN·m respectively).
+
+The default standard live-load envelope is mirror-symmetric within 7e-12 kN·m for
+moment and 3e-13 mm for deflection. A single non-prismatic thermal span and mirrored
+two-span tapers are also symmetric within numerical precision. Repeating the same
+shallow-to-deep taper direction on both spans is not a mirrored stiffness model and
+correctly gives an asymmetric response.
 
 ## Performance investigation
 

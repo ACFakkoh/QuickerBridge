@@ -193,6 +193,52 @@ def test_lane_has_no_dynamic_amplification_and_fraction_matters():
     assert all(c["factor"] == 1 for c in rc["case_max"])
 
 
+def test_user_load_factors_and_maintenance_vehicle():
+    dead = simple(load_mode="dead", dead=[DeadLoad(w=10, factor=2)])
+    assert max(analyse(dead)["max"]["M"]) == pytest.approx(250)
+
+    base = simple(
+        length=10.13,
+        load_mode="live",
+        live=LiveLoad(vehicle="Maintenance", case="truck", direction="both"),
+    )
+    factored = base.model_copy(deep=True)
+    factored.live.factor = 2
+    factored.live.axle_factor = 3
+    a, b = analyse(base), analyse(factored)
+    for sense in ("min", "max"):
+        for effect in ("V", "M", "D", "R"):
+            np.testing.assert_allclose(b[sense][effect], 6 * np.array(a[sense][effect]))
+    np.testing.assert_allclose(vehicle_data(base.live)[0], [24, 56])
+    np.testing.assert_allclose(vehicle_data(base.live)[1], [0, 2])
+    assert lane_parameters(base.live) == (0, 1, "none")
+    assert axle_groups(base.live)[0]["factor"] == 1
+
+
+def test_canadian_lane_is_full_deck_and_standard_grid_is_symmetric():
+    live = LiveLoad(vehicle="CL750QC", case="lane", lane_fraction=0.8, factor=1.5)
+    assert lane_parameters(live) == (12.6, 0.8, "full")
+    model = simple(length=10.13, load_mode="live", live=live)
+    result = analyse(model)
+    view = snapshot(model, result["extrema"][0], result["extrema"][0]["index"], "max")
+    assert view["lane"] == [{"start": 0.0, "end": 10.13, "w": 18.9}]
+    assert all(
+        case["case"] != "lane" or not case["axles"] or case["axles"] == [1, 2, 3, 4, 5]
+        for case in result["case_min"] + result["case_max"]
+    )
+
+    maintenance = simple(
+        length=10.13,
+        load_mode="live",
+        live=LiveLoad(vehicle="Maintenance", case="truck", direction="both"),
+    )
+    envelope = analyse(maintenance)
+    for effect in ("M", "D"):
+        np.testing.assert_allclose(
+            envelope["max"][effect], envelope["max"][effect][::-1], atol=1e-10
+        )
+
+
 def test_governing_snapshot_reproduces_each_extreme():
     model = Model()
     r = analyse(model)

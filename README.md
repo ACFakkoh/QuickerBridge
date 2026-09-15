@@ -1,6 +1,6 @@
 # QuickerBridge 0.4
 
-**Anthony Chéruel · 2026-09-12 · Français / English**
+**Anthony Chéruel · 2026-09-15 · Français / English**
 
 Un outil de calcul préliminaire de poutres continues de ponts, avec PyCBA dans le
 navigateur. Géométrie, charges et diagrammes restent réunis dans une interface
@@ -28,8 +28,10 @@ pont ne sont pas envoyées à un serveur de calcul. Fermer l’onglet interrompt
    rigidité EI constante directement en kN·m². La hauteur comprend les semelles.
 3. **Charges :** choisissez permanentes, routières, les deux, ou thermique seul.
    Plusieurs charges uniformes sont possibles. CL-750QC à 80 % est le choix initial;
-   CL-625, le camion et le tandem AASHTO HL-93, le train Cooper E et un véhicule
-   personnalisé de 1 à 7 essieux sont disponibles.
+   CL-625, le camion et le tandem AASHTO HL-93, le train Cooper E, le véhicule
+   d’entretien 24 + 56 kN et un véhicule personnalisé de 1 à 7 essieux sont disponibles.
+   Chaque charge permanente a son facteur. Le facteur routier multiplie tout le cas
+   routier; le facteur d’essieu multiplie seulement les charges d’essieux.
 4. Attendez la fin du calcul, puis inspectez les diagrammes et le tableau.
    L’augmentation du nombre de stations du tableau ne raffine pas le solveur.
 
@@ -51,14 +53,17 @@ la hauteur cible**. La hauteur peut être constante, linéaire ou parabolique.
 Les semelles et l’épaisseur de l’âme restent constantes dans la zone; pour les
 changer, commencez une nouvelle zone. Le profil parabolique est tangent au côté
 le moins haut. [Détails et comparaison avec CSiBridge](NONPRISMATIC.md).
+Pour une géométrie miroir, inversez les sections initiale et finale dans la travée
+opposée; répéter le même taper orienté rend le pont non symétrique.
 
 ### Enveloppes et thermique
 
 Les deux lignes épaisses limitent les enveloppes min/max. Chaque extrême peut
 venir d’une disposition de charges différente. Cliquez sur un extrême pour voir
 la disposition compatible. Les flèches d’essieux et leurs nombres montrent les
-**charges nominales**; dans un cas de voie canadien, elles montrent seulement les
-charges réduites. Elles n’affichent jamais le CMD, même lorsque le calcul l’applique.
+ **charges nominales multipliées par le facteur d’essieu**; dans un cas de voie
+ canadien, elles incluent aussi la réduction de voie. Elles n’affichent jamais le
+ CMD ni le facteur routier global.
 Moment positif en travée, flèche positive vers le bas,
 réactions positives vers le haut.
 
@@ -67,6 +72,8 @@ Saisissez α en 10⁻⁶/°C et une hauteur thermique de référence en mm. Cett
 est indépendante de la géométrie des sections. Le même gradient et la même
 courbure libre sont appliqués à toutes les travées. Un dessus plus chaud courbe
 la poutre vers le haut. Le cas thermique ne se superpose pas aux autres charges.
+PyCBA reçoit une courbure imposée; il ne définit pas nativement un profil thermique
+bilinéaire dans la hauteur. Cette version conserve donc le gradient linéaire explicite.
 
 ### Enregistrer, rouvrir et exporter
 
@@ -79,6 +86,8 @@ avec v0.3 puis redéfinis explicitement en zones dans v0.4; l’application les 
 **Excel** exporte les enveloppes, les réactions et le modèle, même si une position
 particulière du camion est affichée. En mode thermique, il exporte ce cas unique.
 Les appuis partagés ont deux lignes pour les cisaillements gauche et droite.
+Le bouton **Agrandir les diagrammes** masque temporairement les entrées et agrandit
+les trois graphiques sans relancer le calcul.
 
 ### Si le calcul paraît lent
 
@@ -105,8 +114,9 @@ See [depth versus EI interpolation](NONPRISMATIC.md).
 
 Both envelope limits are drawn in bold. Click an extreme to inspect its governing
 arrangement. Axle arrows show nominal loads, or Canadian lane-reduced loads in a
-lane case; they never show dynamic allowance. The solver applies the selected code
-factors. Save/Open exchanges model-only `.quickerbridge.json` files. Excel exports
+lane case, multiplied by the user axle factor; they never show dynamic allowance or
+the overall live factor. The solver applies all selected factors. Save/Open exchanges
+model-only `.quickerbridge.json` files. Excel exports
 the envelope, or the single thermal case. Shared supports retain both shear limits.
 
 ## Portée / Scope
@@ -116,8 +126,10 @@ the selected standard vehicle. CAN/CSA S6-25 §3.8.4.5.3 dynamic allowance is ap
 to Canadian truck axle subsets; reduced-truck-plus-lane cases have no dynamic
 allowance. HL-93 envelopes its permitted 4.3–9.0 m rear-axle spacing and applies
 its 33% allowance to truck/tandem axles only, with a 9.3 kN/m companion UDL. Cooper
-uses PyCBA’s full E-series train and companion UDL. Truck and lane cases are
-alternatives. No automatic self-weight, load combinations, transverse
+uses PyCBA’s full E-series train and companion UDL. Standard companion UDLs cover
+the full bridge. The maintenance vehicle is 24 + 56 kN at 2.0 m, with no lane load
+or dynamic allowance. Truck and lane cases are alternatives. No automatic self-weight,
+load combinations, transverse
 load distribution, shear deformation, staged construction, prestress, cracking,
 resistance checks or code compliance verification is included. Numerical envelopes
 are sampled; compare Standard and Fine when assessing sensitivity.

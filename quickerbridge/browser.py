@@ -4,8 +4,7 @@ import base64
 import json
 
 from .models import Model
-from .engine import analyse, snapshot
-from .loads import vehicle_data, dynamic_factor
+from .engine import analyse, position_record, snapshot
 from .exports import excel_bytes
 from .projects import validate_project
 
@@ -47,20 +46,7 @@ def dispatch(raw: str) -> str:
                     "reverse",
                 ):
                     raise ValueError("vehicle.position")
-                weights, _ = vehicle_data(model.live)
-                ids = list(range(1, len(weights) + 1))
-                record = dict(
-                    case="truck",
-                    direction=direction,
-                    position=position,
-                    axles=ids,
-                    factor=dynamic_factor(
-                        ids,
-                        model.live.dynamic,
-                        model.live.vehicle in {"CL625", "CL750QC"},
-                        model.live.vehicle,
-                    ),
-                )
+                record = position_record(model, position, direction)
             value = snapshot(model, record, index, sense)
     else:
         raise ValueError("unknown.action")

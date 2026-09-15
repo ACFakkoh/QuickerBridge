@@ -10,6 +10,7 @@ from .models import LiveLoad
 
 CANADIAN_VEHICLES = {"CL625", "CL750QC"}
 HL93_VEHICLES = {"HL93Truck", "HL93Tandem"}
+FULL_VEHICLES = HL93_VEHICLES | {"Cooper", "Maintenance"}
 
 
 def vehicle_data(live: LiveLoad, rear_spacing: float | None = None):
@@ -28,6 +29,8 @@ def vehicle_data(live: LiveLoad, rear_spacing: float | None = None):
         veh = cba.VehicleLibrary.US.get_hl93_tandem()
     elif live.vehicle == "Cooper":
         veh = cba.VehicleLibrary.US.get_cooper(live.cooper_e)
+    elif live.vehicle == "Maintenance":
+        veh = cba.Vehicle([2.0], [24.0, 56.0])
     else:
         veh = cba.Vehicle(live.spacings, live.weights)
     return np.asarray(veh.axw, float), np.asarray(veh.axle_coords, float)
@@ -40,7 +43,7 @@ def dynamic_factor(ids, enabled=True, canadian=True, vehicle: str | None = None)
     if vehicle in HL93_VEHICLES:
         # AASHTO LRFD HL-93: IM = 33% on truck/tandem point loads only.
         return 1.33
-    if vehicle == "Cooper":
+    if vehicle in {"Cooper", "Maintenance"}:
         return 1.0
     if len(ids) == 1:
         return 1.4
@@ -51,7 +54,7 @@ def dynamic_factor(ids, enabled=True, canadian=True, vehicle: str | None = None)
 
 def axle_groups(live: LiveLoad):
     weights, offsets = vehicle_data(live)
-    if live.vehicle in HL93_VEHICLES | {"Cooper"}:
+    if live.vehicle in FULL_VEHICLES:
         ids = list(range(1, len(weights) + 1))
         return [
             {
@@ -90,18 +93,21 @@ def vehicle_variants(live: LiveLoad):
 def lane_parameters(live: LiveLoad):
     """Return the companion UDL and placement used by the selected model.
 
-    ``patterned`` is the Canadian/custom adverse-region lane treatment.  ``full``
-    matches PyCBA's ``run_load_model(..., w_lane=...)`` companion UDL behavior.
+    ``full`` matches PyCBA's ``run_load_model(..., w_lane=...)`` companion UDL
+    behavior. Only a user-defined custom vehicle retains optional adverse-region
+    placement.
     """
     if live.vehicle == "CL625":
-        return 9.0, 0.8, "patterned"
+        return 9.0, 0.8, "full"
     if live.vehicle == "CL750QC":
-        return 12.6, live.lane_fraction, "patterned"
+        return 12.6, live.lane_fraction, "full"
     if live.vehicle in HL93_VEHICLES:
         return 9.3, 1.0, "full"
     if live.vehicle == "Cooper":
         # PyCBA documents E/10 kip/ft, i.e. about 1.46 E kN/m.
         return live.cooper_e / 10 * 4.4482216 / 0.3048, 1.0, "full"
+    if live.vehicle == "Maintenance":
+        return 0.0, 1.0, "none"
     return live.lane_w, live.lane_fraction, "patterned"
 
 
@@ -126,7 +132,9 @@ def dead_intervals(model):
                         "b": b,
                         "start": starts[i] + a,
                         "end": starts[i] + b,
-                        "w": load.w,
+                        "w": load.w * load.factor,
+                        "input_w": load.w,
+                        "factor": load.factor,
                         "name": load.name,
                     }
                 )

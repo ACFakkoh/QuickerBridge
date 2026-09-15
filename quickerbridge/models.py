@@ -49,6 +49,7 @@ class Span(InputModel):
 class DeadLoad(InputModel):
     name: str = Field(default="Permanent load", max_length=80)
     w: float = Field(default=10, ge=0, le=10000)
+    factor: float = Field(default=1, ge=0, le=1000)
     span: int = Field(default=-1, ge=-1)  # -1 = all spans
     start: float = Field(default=0, ge=0, lt=1)
     end: float = Field(default=1, gt=0, le=1)
@@ -62,7 +63,13 @@ class DeadLoad(InputModel):
 
 class LiveLoad(InputModel):
     vehicle: Literal[
-        "CL625", "CL750QC", "HL93Truck", "HL93Tandem", "Cooper", "custom"
+        "CL625",
+        "CL750QC",
+        "HL93Truck",
+        "HL93Tandem",
+        "Cooper",
+        "Maintenance",
+        "custom",
     ] = "CL750QC"
     weights: list[float] = Field(
         default_factory=lambda: [50, 125, 125, 175, 150], min_length=1, max_length=7
@@ -74,6 +81,8 @@ class LiveLoad(InputModel):
     lane_fraction: Literal[0.63, 0.8] = 0.8
     lane_w: float = Field(default=9, ge=0, le=1000)  # custom vehicle only
     cooper_e: float = Field(default=80, ge=10, le=200)  # AREA / AREMA Cooper E
+    factor: float = Field(default=1, ge=0, le=1000)
+    axle_factor: float = Field(default=1, ge=0, le=1000)
     dynamic: bool = True
     direction: Literal["both", "forward", "reverse"] = "both"
 
