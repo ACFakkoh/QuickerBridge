@@ -55,6 +55,7 @@ def source_entries():
     root_files = (
         ".gitignore",
         "README.md",
+        "README.fr.md",
         "README_DEVELOPER.md",
         "NONPRISMATIC.md",
         "THIRD_PARTY_NOTICES.md",
@@ -72,6 +73,7 @@ def source_entries():
         "quickerbridge/*.py",
         "tests/*.py",
         "examples/*.quickerbridge.json",
+        "docs/screenshots/*",
         ".github/workflows/*.yml",
     ):
         entries.extend(
@@ -83,6 +85,7 @@ def source_entries():
         "app.js",
         "browser-solver.js",
         "version.js",
+        "default-result.js",
         "solver-bundle.js",
     ):
         entries.append((DIST / name, f"dist/{name}"))
@@ -110,6 +113,34 @@ def write_zip(path: Path, entries) -> None:
     path.write_bytes(zip_bytes(entries))
 
 
+def write_default_result() -> None:
+    """Pre-compute the default model so the first screen needs no Python.
+
+    The browser shows these results immediately while Pyodide, NumPy and SciPy
+    load in the background; the engine recomputes them silently once ready,
+    so snapshots, influence lines and exports use a live result.
+    """
+    import sys
+
+    sys.path.insert(0, str(ROOT))
+    from quickerbridge.engine import analyse
+    from quickerbridge.models import Model
+
+    model = Model()
+    payload = {
+        "version": VERSION,
+        "model": model.model_dump(),
+        "result": analyse(model),
+    }
+    payload["result"]["meta"]["elapsed"] = 0.0
+    (DIST / "default-result.js").write_text(
+        "window.QB_DEFAULT="
+        + json.dumps(payload, separators=(",", ":"), allow_nan=False)
+        + ";\n",
+        encoding="utf-8",
+    )
+
+
 def build_browser_assets() -> None:
     source = (
         "window.QB_SOURCE_ZIP="
@@ -127,6 +158,7 @@ def build_browser_assets() -> None:
         + ";\n"
     )
     (DIST / "version.js").write_text(version_js, encoding="utf-8")
+    write_default_result()
     (DIST / ".nojekyll").touch()
 
     html = (DIST / "index.html").read_text(encoding="utf-8")
@@ -134,7 +166,13 @@ def build_browser_assets() -> None:
         '<link rel="stylesheet" href="./styles.css">',
         "<style>" + (DIST / "styles.css").read_text(encoding="utf-8") + "</style>",
     )
-    script_names = ("version.js", "solver-bundle.js", "browser-solver.js", "app.js")
+    script_names = (
+        "version.js",
+        "default-result.js",
+        "solver-bundle.js",
+        "browser-solver.js",
+        "app.js",
+    )
     for filename in script_names:
         html = html.replace(f'<script src="./{filename}" defer></script>', "")
     scripts = "\n".join(
@@ -187,6 +225,7 @@ def build_release() -> None:
             "app.js",
             "browser-solver.js",
             "version.js",
+            "default-result.js",
             "solver-bundle.js",
             "QuickerBridge-source.zip",
             ".nojekyll",

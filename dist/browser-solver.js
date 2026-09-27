@@ -16,46 +16,55 @@ function quickerBridgeWorker() {
           const progress = (value, detail='') => self.postMessage({progress:value, detail});
           const fail = (stage, detail) => {const e = Error(detail); e.qbStage = stage; throw e;};
           const indexURL = 'https://cdn.jsdelivr.net/pyodide/v0.27.7/full/';
+          // Start the large wheel downloads now, in parallel with the Python
+          // runtime start-up: loadPackage later finds them in the HTTP cache.
+          const wanted = ['numpy', 'pydantic', 'pydantic_core', 'typing-extensions', 'annotated-types'];
+          fetch(indexURL + 'pyodide-lock.json').then(r => r.json()).then(lock => {
+            wanted.forEach(name => { const pkg = lock.packages[name]; if (pkg) fetch(indexURL + pkg.file_name).catch(() => {}); });
+          }).catch(() => {});
           progress('Python / WebAssembly', 'pyodide.js');
           try { importScripts(indexURL + 'pyodide.js'); }
           catch (e) { fail('Python / WebAssembly', 'pyodide.js · cdn.jsdelivr.net · ' + e.message); }
           let py;
           try { py = await loadPyodide({indexURL}); }
           catch (e) { fail('Python / WebAssembly', 'pyodide.asm.wasm · cdn.jsdelivr.net · ' + e.message); }
-          progress('NumPy · SciPy · PyCBA');
+          progress('NumPy · PyCBA');
           // loadPackage reports a failed download through errorCallback and may
           // still resolve: collect those messages and verify the imports.
           const errors = [];
-          await py.loadPackage(['numpy', 'scipy', 'matplotlib', 'pydantic', 'micropip'], {
-            messageCallback: m => progress('NumPy · SciPy · PyCBA', String(m).slice(0, 120)),
+          // Only NumPy and pydantic are downloaded (≈5 MB instead of ≈40 MB):
+          // SciPy is replaced by a verified NumPy subset, matplotlib by a stub
+          // (PyCBA plotting is unused), and openpyxl comes on first Excel use.
+          await py.loadPackage(['numpy', 'pydantic'], {
+            messageCallback: m => progress('NumPy · PyCBA', String(m).slice(0, 120)),
             errorCallback: m => errors.push(String(m)),
           }).catch(e => errors.push(String(e && e.message || e)));
-          try { py.runPython('import numpy, scipy, matplotlib, pydantic'); }
+          try { py.runPython('import numpy, pydantic'); }
           catch (e) {
             const missing = (String(e).match(/No module named '([^']+)'/) || [])[1];
-            fail('NumPy · SciPy · PyCBA', (missing ? missing + ' · ' : '') + (errors[0] || String(e).split('\n').pop()));
-          }
-          // Excel export is optional: the analysis works without openpyxl.
-          progress('Excel');
-          let excel = true;
-          try {
-            await py.runPythonAsync("import micropip\nawait micropip.install(['et-xmlfile==2.0.0', 'openpyxl==3.1.5'])");
-          } catch (e) {
-            excel = false;
-            progress('Excel', 'unavailable: ' + String(e).split('\n').pop().slice(0, 120));
+            fail('NumPy · PyCBA', (missing ? missing + ' · ' : '') + (errors[0] || String(e).split('\n').pop()));
           }
           const archive = Uint8Array.from(atob(message.source), c => c.charCodeAt(0));
           py.unpackArchive(archive, 'zip', {extractDir:'/home/pyodide'});
           progress('QuickerBridge');
-          py.runPython('from quickerbridge.browser import dispatch');
-          py.qbExcel = excel;
+          py.runPython('from quickerbridge import _mpl_stub, _scipy_lite\n_mpl_stub.install()\n_scipy_lite.install()\nfrom quickerbridge.browser import dispatch');
           return py;
         })();
         const py = await ready;
-        self.postMessage({id:message.id, value:{excel:py.qbExcel}});
+        self.postMessage({id:message.id, value:{}});
         return;
       }
       const py = await ready;
+      if (message.action === 'excel' && py.qbExcel !== true) {
+        // Excel export is optional: openpyxl comes from PyPI on first use only,
+        // so a blocked pypi.org never delays or prevents the analysis.
+        if (py.qbExcel === false) throw Error('excel.unavailable');
+        try {
+          await py.loadPackage('micropip');
+          await py.runPythonAsync("import micropip\nawait micropip.install(['et-xmlfile==2.0.0', 'openpyxl==3.1.5'])");
+          py.qbExcel = true;
+        } catch (e) { py.qbExcel = false; throw Error('excel.unavailable · ' + String(e).split('\n').pop().slice(0, 160)); }
+      }
       py.globals.set('qb_request', JSON.stringify(message));
       const value = py.runPython('dispatch(qb_request)');
       self.postMessage({id:message.id, value:JSON.parse(value)});

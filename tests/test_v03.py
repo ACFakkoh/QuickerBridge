@@ -232,5 +232,5 @@ def test_thermal_workbook_is_one_case_with_input_metadata():
     assert workbook["Stations"]["F1"].value == "V (kN)"
     assert workbook["Réactions"]["C1"].value == "R (kN)"
     metadata = dict(workbook["Modèle"].iter_rows(values_only=True))
-    assert metadata["QuickerBridge"] == "0.6.1"
+    assert metadata["QuickerBridge"] == "0.7"
     assert metadata["ΔT = Ttop − Tbottom (°C)"] == 15
