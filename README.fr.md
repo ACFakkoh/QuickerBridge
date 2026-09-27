@@ -1,4 +1,4 @@
-# QuickerBridge 0.7 — guide en français
+# QuickerBridge 0.7.1 — guide en français
 
 [English README](README.md)
 
@@ -121,8 +121,7 @@ les trois graphiques sans relancer le calcul.
 ### Si le calcul paraît lent
 
 **Démarrage (v0.7) :** les résultats du modèle par défaut sont précalculés et
-s’affichent dès la fin de l’animation (≈ 3,6 s, ≈ 1,8 s si vous revenez dans les
-12 h). Le moteur se charge en arrière-plan : seulement NumPy et pydantic (≈ 5 Mo au
+s’affichent dès la fin de l’animation (≈ 3 s). Le moteur se charge en arrière-plan : seulement NumPy et pydantic (≈ 5 Mo au
 lieu de ≈ 40 Mo) ; SciPy est remplacé par un sous-ensemble NumPy vérifié et
 matplotlib n’est pas chargé. Le module Excel est téléchargé au premier export.
 

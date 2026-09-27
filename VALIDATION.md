@@ -172,7 +172,7 @@ Measured in headless Chromium with the real Pyodide 0.27.7 distribution served l
 
 | Milestone | v0.6.1 | v0.7 |
 | --- | --- | --- |
-| Results visible | 16.4 s | ≈ 4 s (end of the 3.6 s intro; pre-computed) |
+| Results visible | 16.4 s | ≈ 3.5 s (end of the 3 s intro; pre-computed) |
 | Engine ready | 13.9 s | 5.8 s |
 | Live analysis done | 16.3 s | 7.9 s |
 | Runtime downloaded | ≈ 40 MB | ≈ 16 MB (core + NumPy + pydantic) |
@@ -181,8 +181,7 @@ Changes: the default result is computed at build time (`dist/default-result.js`)
 recomputed silently once the engine is ready; SciPy (13.5 MB, ≈ 3 s of loading and
 import) is replaced by `quickerbridge/_scipy_lite.py`; matplotlib and its dependencies
 (≈ 11 MB) by `_mpl_stub.py`; openpyxl is installed on the first Excel export; wheel
-downloads start in parallel with the Python runtime; a returning visit within 12 h plays
-the intro at double speed. `tests/test_scipy_lite.py` compares every replacement with
+downloads start in parallel with the Python runtime; the intro always lasts about 3 s. `tests/test_scipy_lite.py` compares every replacement with
 SciPy (CubicSpline 2–97 knots, cumulative_trapezoid, simpson odd/even, quad_vec with
 breakpoints, generalized eigh) and the full application suite passes in the browser
 configuration (`QB_MPL_STUB=1 QB_SCIPY_LITE=1`, also run in CI). Totals: 468 passed and

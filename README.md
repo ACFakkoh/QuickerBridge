@@ -9,7 +9,7 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 
 ![QuickerBridge — envelopes of a two-span girder with rotational-spring abutments](docs/screenshots/envelopes.png)
 
-*Version 0.7 · 2026-09-27 · Anthony Chéruel · [Guide en français](README.fr.md)*
+*Version 0.7.1 · 2026-09-27 · Anthony Chéruel · [Guide en français](README.fr.md)*
 
 ---
 
@@ -44,7 +44,7 @@ running locally through WebAssembly. No installation, no server, no data leaves 
   needed the first time to download the Python runtime.
 
 Start-up is fast: the default model's results are pre-computed and shown as soon as the
-short opening animation ends (≈ 3.6 s, ≈ 1.8 s on a return visit — `Esc` skips it). The
+short opening animation ends (≈ 3 s — `Esc` skips it). The
 calculation engine keeps loading in the background — only NumPy and pydantic (≈ 5 MB);
 SciPy is replaced by a verified NumPy subset and matplotlib is not loaded. Excel support
 is downloaded on first export.
