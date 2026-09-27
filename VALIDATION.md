@@ -132,3 +132,16 @@ Full suites: **application 72 passed**; application + vendored PyCBA **437 passe
   individual snapshots (forward and reverse); lane cases include the full-deck UDL.
 - v0.4.1 audit fixes: influence-spline twin knots (equilibrium), refined non-prismatic
   deflection integration, and the related UI input fixes.
+
+## v0.6 additions (2026-09-27)
+
+Application suite **86 passed**; with vendored PyCBA **451 passed, 1 skipped**.
+`tests/test_v06.py` checks rotational-spring supports against the compatibility
+closed form M = θ₀ / (L/3EI + 1/k) (spring + pin, five stiffnesses) and
+M = θ₀ / (L/2EI + 1/k) (two springs); limits k → 0 (pinned) and k → ∞ (fixed);
+vertical/moment equilibrium of every unit load; mirror symmetry; snapshot
+equilibrium; an interior spring; thermal curvature with springs (uniform
+M = −κL/2 / (L/2EI + 1/k), between pinned and fixed); validation, project
+round-trip and the Excel spring label. Fixity is reported as k / (k + Σ3EI/L).
+The opening animation solves a 3-span beam with the three-moment equation in
+JavaScript; it is illustrative and never feeds the analysis.

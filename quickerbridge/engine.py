@@ -47,6 +47,48 @@ def stations(model):
     return np.array(xs), spans, sides
 
 
+def pycba_supports(model):
+    """PyCBA support list; a rotational spring is [vertical fixed, k]."""
+    out = []
+    for i, kind in enumerate(model.supports):
+        if kind == "spring":
+            out.append([-1, float(model.support_springs[i])])
+        else:
+            out.append(kind)
+    return out
+
+
+def support_fixity(model, eis=None):
+    """Degree of fixity k / (k + sum 3EI/L) of each support, 0 (pin) to 1.
+
+    The adjacent members are taken with their far ends pinned; it is an
+    indicator of how close a spring is to full fixity, not a code quantity.
+    """
+    eis = eis or [span_ei(model, i) for i in range(len(model.spans))]
+    lengths = [s.length for s in model.spans]
+    out = []
+    for i, kind in enumerate(model.supports):
+        if kind == "fixed":
+            out.append(1.0)
+            continue
+        if kind != "spring":
+            out.append(0.0)
+            continue
+        member = 0.0
+        for j, at in ((i - 1, lengths[i - 1] if i else None), (i, 0.0)):
+            if 0 <= j < len(lengths):
+                ei = eis[j]
+                value = (
+                    float(ei(at if at is not None else 0.0))
+                    if callable(ei)
+                    else float(ei)
+                )
+                member += 3 * value / lengths[j]
+        k = float(model.support_springs[i])
+        out.append(k / (k + member))
+    return out
+
+
 def node_reactions(ba):
     """Vertical (up +) and moment (counter-clockwise +) reaction per node.
 
@@ -54,9 +96,13 @@ def node_reactions(ba):
     abutment inserts a moment entry. Expand it back to one vertical and one
     moment value per support, whatever the support types.
     """
-    restraints = np.asarray(ba._beam.restraints)
+    restraints = np.asarray(ba._beam.restraints, float)
     full = np.zeros(len(restraints))
     full[restraints < 0] = np.asarray(ba.beam_results.R, float)
+    # Elastic (rotational spring) supports report their force in ``Rs``.
+    springs = np.asarray(getattr(ba.beam_results, "Rs", []), float)
+    if springs.size:
+        full[restraints > 0] = springs
     return np.r_[full[0::2], full[1::2]]
 
 
@@ -72,7 +118,9 @@ class Basis:
         # V, M, D at every station, then vertical and moment reactions.
         self.nresponse = 3 * self.nx + 2 * self.ns
         self.ei = [span_ei(model, i) for i in range(len(self.lengths))]
-        self.ba = cba.BeamAnalysis(self.lengths, self.ei, supports=model.supports)
+        self.ba = cba.BeamAnalysis(
+            self.lengths, self.ei, supports=pycba_supports(model)
+        )
         # A Basis has immutable geometry/EI; only its loads change. These small
         # per-instance caches must never be shared with another Basis.
         beam = self.ba._beam
@@ -447,6 +495,7 @@ def analyse(model: Model):
                     **info[j],
                 }
             )
+    fixity = support_fixity(model, basis.ei)
     reactions = [
         {
             "support": i + 1,
@@ -456,6 +505,12 @@ def analyse(model: Model):
             "min_case": info_low[3 * nx + i],
             "max_case": info_high[3 * nx + i],
             "type": model.supports[i],
+            "k": (
+                float(model.support_springs[i])
+                if model.supports[i] == "spring"
+                else None
+            ),
+            "fixity": fixity[i],
             "moment_min": float(low[3 * nx + ns + i]),
             "moment_max": float(high[3 * nx + ns + i]),
             "moment_index": 3 * nx + ns + i,
@@ -574,7 +629,7 @@ def influence(model, station, support=None, case_max=None, case_min=None):
         "side": basis.sides[station],
         "support": support + 1,
         "x_support": float(basis.support_x[support]),
-        "fixed": model.supports[support] == "fixed",
+        "fixed": model.supports[support] in ("fixed", "spring"),
         "V": u[:, station].tolist(),
         "M": u[:, nx + station].tolist(),
         "D": u[:, 2 * nx + station].tolist(),

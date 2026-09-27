@@ -1,4 +1,4 @@
-# QuickerBridge 0.5
+# QuickerBridge 0.6
 
 **Anthony Chéruel · 2026-09-27 · Français / English**
 
@@ -8,8 +8,8 @@ compacte. Aucune installation de Python et aucun serveur local pour les utilisat
 
 ## Démarrer
 
-- **Sur le web :** ouvrez le lien GitHub Pages fourni par l’auteur.
-- **Fichier reçu :** ouvrez `QuickerBridge.html` dans un navigateur moderne. Si vous
+- **Sur le web :** https://acfakkoh.github.io/QuickerBridge/ (GitHub Pages, publié à chaque mise à jour de `main`).
+- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.6-2026-09-27.html`) dans un navigateur moderne. Si vous
   recevez l’archive portable, extrayez-la avant d’ouvrir le HTML.
 - Une connexion Internet est nécessaire au démarrage pour charger Pyodide et ses
   bibliothèques. Le cache peut accélérer les ouvertures suivantes; cette édition
@@ -28,6 +28,10 @@ pont ne sont pas envoyées à un serveur de calcul. Fermer l’onglet interrompt
    C’est une borne supérieure : une vraie culée intégrale est partiellement retenue
    par ses pieux et le remblai; comparez avec des appuis articulés pour encadrer la
    réponse. Retenue axiale, poussée des terres et dilatation du tablier : non modélisées.
+   **Ressort de rotation k** (kN·m/rad) : déplacement vertical bloqué, rotation
+   retenue élastiquement (culée intégrale sur pieux, appui partiellement encastré).
+   L’application affiche la **fixité** k / (k + Σ3EI/L des travées adjacentes),
+   de 0 % (articulé) à 100 % (encastré); le k proposé par défaut donne 50 %.
 2. **Sections :** saisissez les dimensions des tôles en mm et E en GPa, ou une
    rigidité EI constante directement en kN·m². La hauteur comprend les semelles.
 3. **Charges :** choisissez permanentes, routières, les deux, ou thermique seul.
@@ -75,6 +79,9 @@ le diagramme EI(x) et l’alerte « Saut de rigidité » le signalent.
 - **Animation :** en « Position du camion », ▶ Animer rejoue 60 positions
   précalculées du véhicule complet; le curseur réutilise ces positions sans recalcul.
 - Axes Y gradués, quadrillage léger et valeurs des pics sur chaque diagramme.
+- **Écran d’ouverture (≈ 4 s)** pendant le chargement du moteur : une vraie poutre
+  continue à 3 travées résolue par l’équation des trois moments, un CL-750-QC qui
+  la traverse et l’enveloppe de M qui se construit. Échap ou › pour passer.
 
 ### Enveloppes et thermique
 
@@ -121,7 +128,7 @@ entrée est invalide, corrigez-la avant d’utiliser les résultats grisés.
 ## English quick guide
 
 Open the provided GitHub Pages link, or double-click the extracted
-`QuickerBridge.html`. **No Python installation or local server is needed.** Internet
+`QuickerBridge-v<version>-<date>.html`. **No Python installation or local server is needed.** Internet
 access is required to download the browser runtime; guaranteed offline use is not
 included. Calculations run locally in your browser. Use the top EN/FR toggle.
 

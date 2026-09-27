@@ -5,7 +5,7 @@ import time
 import numpy as np
 import pycba as cba
 
-from .engine import node_reactions, stations
+from .engine import node_reactions, pycba_supports, stations, support_fixity
 from .models import Model
 from .sections import member_deflection, stiffness_profile, properties, span_ei
 
@@ -26,7 +26,7 @@ def analyse_thermal(model: Model) -> dict:
     ba = cba.BeamAnalysis(
         lengths,
         eis,
-        supports=model.supports,
+        supports=pycba_supports(model),
     )
     kappa = thermal_curvature(model)
     for member in range(1, len(lengths) + 1):
@@ -72,6 +72,7 @@ def analyse_thermal(model: Model) -> dict:
                     "index": index,
                 }
             )
+    fixity = support_fixity(model, eis)
     reactions = [
         {
             "support": i + 1,
@@ -80,6 +81,12 @@ def analyse_thermal(model: Model) -> dict:
             "min": float(value),
             "max": float(value),
             "type": model.supports[i],
+            "k": (
+                float(model.support_springs[i])
+                if model.supports[i] == "spring"
+                else None
+            ),
+            "fixity": fixity[i],
             "moment": float(values["Mr"][i]),
             "moment_min": float(values["Mr"][i]),
             "moment_max": float(values["Mr"][i]),

@@ -4,7 +4,7 @@ Version 0.4 · Anthony Chéruel · 2026-09-15
 
 ## Quel fichier utiliser ou envoyer ?
 
-Pour utiliser l’outil, ouvrez le **QuickerBridge.html à la racine du dossier personnel**.
+Pour utiliser l’outil, ouvrez le **QuickerBridge-v<version>-<date>.html à la racine du dossier personnel**.
 Pour l’envoyer à quelqu’un, ce fichier HTML suffit au fonctionnement, avec une
 connexion Internet au démarrage. Pour une redistribution complète avec les guides,
 exemples et notices, envoyez l’archive `QuickerBridge-v0.4-portable.zip`.
@@ -12,7 +12,7 @@ exemples et notices, envoyez l’archive `QuickerBridge-v0.4-portable.zip`.
 Le dossier personnel est organisé ainsi :
 
 ```text
-QuickerBridge.html                  application actuelle
+QuickerBridge-v<version>-<date>.html                  application actuelle
 GitHub/                            livrables publics prêts à déposer
   QuickerBridge-v0.4-source/        contenu à mettre à la racine du dépôt GitHub
   QuickerBridge-v0.4-source.zip     même arbre, compressé
@@ -72,7 +72,7 @@ fichiers à chaque livraison, pas seulement le HTML.
 | `tests/` | Vérifications analytiques, régressions et mesures |
 | `build_portable.py` | Génération des HTML, bundles et archives |
 
-Ne modifiez pas à la main `solver-bundle.js`, `version.js` ou `QuickerBridge.html`.
+Ne modifiez pas à la main `solver-bundle.js`, `version.js` ou `QuickerBridge-v<version>-<date>.html`.
 Ils sont régénérés. Le ZIP de sources intégré au worker inclut la licence PyCBA.
 Les répertoires `release/` et `GitHub/` sont des livrables, pas les sources de travail.
 

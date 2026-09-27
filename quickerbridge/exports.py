@@ -136,7 +136,7 @@ def excel_bytes(result, language="en"):
     )
     if not thermal:
         rx.cell(1, 4, "R max (kN)")
-    fixed = any(r.get("type") == "fixed" for r in result["reactions"])
+    fixed = any(r.get("type") in ("fixed", "spring") for r in result["reactions"])
     if fixed:
         # Integral (fixed) abutments also carry a moment reaction, CCW +.
         column = 4 if thermal else 5
@@ -164,7 +164,10 @@ def excel_bytes(result, language="en"):
                 if thermal
                 else [r.get("moment_min", 0.0), r.get("moment_max", 0.0)]
             )
-            row.append(r.get("type", ""))
+            kind = r.get("type", "")
+            if kind == "spring":
+                kind = f"spring k={r['k']:,.0f} kN·m/rad ({100 * r['fixity']:.0f}%)"
+            row.append(kind)
         rx.append(row)
     if not thermal:
         cases = wb.create_sheet(

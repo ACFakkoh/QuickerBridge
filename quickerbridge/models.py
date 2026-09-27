@@ -120,9 +120,11 @@ class Model(InputModel):
     spans: list[Span] = Field(
         default_factory=lambda: [Span(), Span()], min_length=1, max_length=5
     )
-    supports: list[Literal["pin", "roller", "fixed"]] = Field(
+    supports: list[Literal["pin", "roller", "fixed", "spring"]] = Field(
         default_factory=lambda: ["roller", "pin", "roller"]
     )
+    # Rotational spring stiffness per support, kN·m/rad (used by "spring").
+    support_springs: list[float] = Field(default_factory=list, max_length=6)
     sections: list[Section] = Field(
         default_factory=lambda: [Section()], min_length=1, max_length=20
     )
@@ -138,6 +140,17 @@ class Model(InputModel):
     def consistency(self):
         if len(self.supports) != len(self.spans) + 1:
             raise ValueError("model.supports")
+        if "spring" in self.supports:
+            # One rotational stiffness per support (kN m/rad); only the
+            # "spring" entries are used, the others are ignored.
+            if len(self.support_springs) != len(self.supports):
+                raise ValueError("model.support_springs")
+            if any(
+                not 0 < k <= 1e13
+                for k, s in zip(self.support_springs, self.supports)
+                if s == "spring"
+            ):
+                raise ValueError("model.support_springs")
         for span in self.spans:
             if span.section >= len(self.sections):
                 raise ValueError("model.section")

@@ -4,6 +4,7 @@
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>QuickerBridge · Continuous beam analysis</title>
   <meta name="description" content="Local continuous bridge beam analysis powered by PyCBA.">
+  <meta property="og:title" content="QuickerBridge · Continuous bridge beam analysis"><meta property="og:description" content="Envelopes, influence lines and integral abutments for continuous bridge girders, computed in your browser with PyCBA."><meta name="theme-color" content="#102d41">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23102d41'/%3E%3Ctext x='12' y='47' font-size='48' fill='%2356e0bb' font-family='sans-serif'%3EQ%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="./styles.css">
   <script src="./version.js" defer></script>
@@ -12,6 +13,163 @@
   <script src="./app.js" defer></script>
 </head>
 <body>
+<div id="qb-splash" aria-hidden="true">
+  <svg id="qb-splash-svg" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <radialGradient id="sp-bg" cx="50%" cy="42%" r="75%"><stop offset="0" stop-color="#123a52"/><stop offset=".55" stop-color="#0b2436"/><stop offset="1" stop-color="#061520"/></radialGradient>
+      <pattern id="sp-grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#2c5b72" stroke-width=".5"/></pattern>
+      <pattern id="sp-grid-major" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M100 0H0V100" fill="none" stroke="#3a7390" stroke-width=".8"/></pattern>
+      <linearGradient id="sp-beam" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8ff3d6"/><stop offset=".5" stop-color="#2fb99a"/><stop offset="1" stop-color="#1b7f6c"/></linearGradient>
+      <linearGradient id="sp-sag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#56e0bb" stop-opacity=".05"/><stop offset="1" stop-color="#56e0bb" stop-opacity=".42"/></linearGradient>
+      <linearGradient id="sp-hog" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#f3b561" stop-opacity=".05"/><stop offset="1" stop-color="#f3b561" stop-opacity=".45"/></linearGradient>
+      <linearGradient id="sp-fade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".12" stop-color="#fff"/><stop offset=".88" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+      <mask id="sp-grid-mask"><rect width="1000" height="600" fill="url(#sp-fade)"/></mask>
+      <filter id="sp-glow" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <marker id="sp-arrow" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0 0L7 3.5L0 7Z" fill="#ffc978"/></marker>
+    </defs>
+    <rect width="1000" height="600" fill="url(#sp-bg)"/>
+    <g id="sp-grid-layer" mask="url(#sp-grid-mask)" opacity="0"><rect width="1000" height="600" fill="url(#sp-grid)"/><rect width="1000" height="600" fill="url(#sp-grid-major)"/></g>
+    <g id="sp-dims" opacity="0"></g>
+    <g id="sp-diagram">
+      <line id="sp-axis" x1="100" x2="900" y1="430" y2="430" stroke="#4f7d92" stroke-width="1" stroke-dasharray="3 4"/>
+      <path id="sp-live-sag" fill="url(#sp-sag)"/>
+      <path id="sp-live-hog" fill="url(#sp-hog)"/>
+      <path id="sp-env-max" fill="none" stroke="#56e0bb" stroke-width="2.2" filter="url(#sp-glow)"/>
+      <path id="sp-env-min" fill="none" stroke="#f3b561" stroke-width="2.2" filter="url(#sp-glow)"/>
+      <path id="sp-live" fill="none" stroke="#e8fff8" stroke-width="1.2" stroke-opacity=".8"/>
+      <text id="sp-mlabel" x="92" y="434" text-anchor="end" class="sp-small">M</text>
+    </g>
+    <g id="sp-supports"></g>
+    <path id="sp-beam-shadow" fill="none" stroke="#56e0bb" stroke-opacity=".18" stroke-width="16" stroke-linecap="round"/>
+    <path id="sp-beam" fill="none" stroke="url(#sp-beam)" stroke-width="7" stroke-linecap="round" filter="url(#sp-glow)"/>
+    <g id="sp-truck" opacity="0"></g>
+    <g id="sp-brand" opacity="0">
+      <text x="500" y="112" text-anchor="middle" class="sp-word"><tspan fill="#ffffff">Quicker</tspan><tspan fill="#56e0bb">Bridge</tspan></text>
+      <text id="sp-tagline" x="500" y="146" text-anchor="middle" class="sp-tag"></text>
+    </g>
+    <g id="sp-progress">
+      <rect x="360" y="524" width="280" height="3" rx="1.5" fill="#1d4458"/>
+      <rect id="sp-bar" x="360" y="524" width="0" height="3" rx="1.5" fill="#56e0bb" filter="url(#sp-glow)"/>
+      <text id="sp-stage" x="500" y="552" text-anchor="middle" class="sp-small"></text>
+      <text id="sp-version" x="500" y="574" text-anchor="middle" class="sp-small sp-dim"></text>
+    </g>
+  </svg>
+  <button id="qb-splash-skip" type="button" aria-label="Skip">›</button>
+</div>
+<script>
+/* QuickerBridge intro: a real 3-span continuous-beam solution (three-moment
+   equation, EI constant) driven by a CL-750-QC truck. The M envelope builds up
+   exactly as the application does it. Intro: 4.2 s; it then idles until the
+   Python engine and the first analysis are ready. */
+(function(){
+  "use strict";
+  var root=document.getElementById('qb-splash');if(!root)return;
+  var lang='fr';try{lang=localStorage.getItem('qb-language-v03')==='en'?'en':'fr';}catch(e){}
+  var T={fr:{tag:'Analyse de poutres continues de ponts · PyCBA',stages:{'Python / WebAssembly':'Démarrage de Python · WebAssembly','NumPy · SciPy · PyCBA':'Chargement NumPy · SciPy · PyCBA','Excel':'Module Excel','QuickerBridge':'Moteur QuickerBridge',engine:'Calcul des lignes d’influence',done:'Prêt'},start:'Préparation du modèle'},
+         en:{tag:'Continuous bridge beam analysis · PyCBA',stages:{'Python / WebAssembly':'Starting Python · WebAssembly','NumPy · SciPy · PyCBA':'Loading NumPy · SciPy · PyCBA','Excel':'Excel module','QuickerBridge':'QuickerBridge engine',engine:'Computing influence lines',done:'Ready'},start:'Preparing the model'}}[lang];
+  var $=function(id){return document.getElementById(id);};
+  var meta=window.QB_META||{};
+  $('sp-tagline').textContent=T.tag;$('sp-stage').textContent=T.start;
+  // --- geometry and truck -------------------------------------------------
+  var L=[30,40,30],X0=100,X1=900,LEN=100,S=(X1-X0)/LEN,Y=262,N=260;
+  var sup=[0,30,70,100];
+  var W=[50,160,160,200,180],OFF=[0,3.6,4.8,11.4,18.0];
+  var xs=[];for(var i=0;i<=N;i++)xs.push(LEN*i/N);
+  function solve(loads){
+    // Three-moment equation for the two interior support moments (hogging < 0).
+    var r=[0,0];
+    loads.forEach(function(l){var p=l[0],P=l[1];
+      for(var s=0;s<3;s++){var a=p-sup[s],Ls=L[s];if(a<0||a>Ls)continue;
+        if(s<2)r[s]-=P*a*(Ls*Ls-a*a)/Ls;          // span left of support s+1
+        if(s>0){var b=Ls-a;r[s-1]-=P*b*(Ls*Ls-b*b)/Ls;} // span right of support s
+      }});
+    var a11=2*(L[0]+L[1]),a12=L[1],a21=L[1],a22=2*(L[1]+L[2]),det=a11*a22-a12*a21;
+    var M1=(r[0]*a22-a12*r[1])/det,M2=(a11*r[1]-a21*r[0])/det,Ms=[0,M1,M2,0];
+    var M=xs.map(function(x){var s=x<30?0:x<70?1:2,a=x-sup[s],Ls=L[s],m=Ms[s]+(Ms[s+1]-Ms[s])*a/Ls;
+      loads.forEach(function(l){var p=l[0]-sup[s];if(p<0||p>Ls)return;m+=l[1]*(a<=p?a*(Ls-p)/Ls:p*(Ls-a)/Ls);});return m;});
+    // Deflection: double integration of M/EI per span, zero at every support.
+    var D=new Array(N+1).fill(0);
+    for(var s2=0;s2<3;s2++){var idx=[];for(var j=0;j<=N;j++)if(xs[j]>=sup[s2]-1e-9&&xs[j]<=sup[s2+1]+1e-9)idx.push(j);
+      var th=0,d=0,loc=[0];for(var k=1;k<idx.length;k++){var h=xs[idx[k]]-xs[idx[k-1]];var th2=th+h*(M[idx[k]]+M[idx[k-1]])/2;d+=h*(th+th2)/2;th=th2;loc.push(d);}
+      var last=loc[loc.length-1];for(var k2=0;k2<idx.length;k2++){var f=(xs[idx[k2]]-sup[s2])/L[s2];D[idx[k2]]=loc[k2]-f*last;}}
+    return {M:M,D:D};
+  }
+  function loadsAt(front){var out=[];for(var i=0;i<W.length;i++){var p=front-OFF[i];if(p>=0&&p<=LEN)out.push([p,W[i]]);}return out;}
+  // Scales from a quick pre-pass (cheap: 24 positions).
+  // Envelope pre-pass at 0.4 m truck steps (like the app's traverse), revealed
+  // progressively behind the truck so the curves stay smooth.
+  var mMax=1,dMax=1,pass=[];for(var q=-6;q<=LEN+OFF[4]+8;q+=0.4){var r0=solve(loadsAt(q));pass.push([q,r0.M]);r0.M.forEach(function(v){mMax=Math.max(mMax,Math.abs(v));});r0.D.forEach(function(v){dMax=Math.max(dMax,Math.abs(v));});}
+  var passIndex=0;
+  var mScale=78/mMax,dScale=22/dMax,envHi=xs.map(function(){return 0;}),envLo=envHi.slice();
+  // --- static drawing -------------------------------------------------------
+  var ns='http://www.w3.org/2000/svg';
+  function el(tag,attrs,parent){var e=document.createElementNS(ns,tag);for(var k in attrs)e.setAttribute(k,attrs[k]);(parent||$('qb-splash-svg')).appendChild(e);return e;}
+  var supG=$('sp-supports');sup.forEach(function(x,i){var g=el('g',{'class':'sp-support','style':'transition-delay:'+(180+i*110)+'ms','transform':'translate('+(X0+x*S)+' '+(Y+9)+')'},supG);
+    el('path',{d:'M0 0l-11 18h22Z',fill:'#cfe6ef',opacity:'.92'},g);el('line',{x1:-17,x2:17,y1:22,y2:22,stroke:'#6f98ab','stroke-width':1.4},g);
+    for(var h=-15;h<=12;h+=6)el('line',{x1:h,x2:h+5,y1:22,y2:28,stroke:'#46708a','stroke-width':1},g);
+    if(i>0){el('circle',{cx:-5,cy:20,r:2,fill:'#9fc3d2'},g);el('circle',{cx:5,cy:20,r:2,fill:'#9fc3d2'},g);}
+    el('text',{x:0,y:44,'text-anchor':'middle','class':'sp-small'},g).textContent='R'+(i+1);});
+  var dims=$('sp-dims');L.forEach(function(Ls,i){var a=X0+sup[i]*S,b=X0+sup[i+1]*S;el('path',{d:'M'+a+' 336v8M'+a+' 340H'+b+'M'+b+' 336v8',stroke:'#4f7d92',fill:'none'},dims);el('text',{x:(a+b)/2,y:334,'text-anchor':'middle','class':'sp-small'},dims).textContent=Ls.toFixed(1).replace('.',lang==='fr'?',':'.')+' m';});
+  var truck=$('sp-truck');var axles=W.map(function(w,i){var g=el('g',{},truck);var len=14+28*w/200;el('line',{x1:0,x2:0,y1:-len,y2:-5,stroke:'#ffc978','stroke-width':2,'marker-end':'url(#sp-arrow)'},g);
+    var t=el('text',{x:i===1?7:i===2?-7:0,y:-len-6,'text-anchor':'middle','class':'sp-axle'},g);t.textContent=w;return g;});
+  var bodyG=el('g',{},truck);
+  el('rect',{x:-OFF[4]*S-8,y:-66,width:OFF[4]*S+16,height:9,rx:3,fill:'#ffc978','fill-opacity':.08,stroke:'#ffc978','stroke-opacity':.5,'stroke-width':1.1},bodyG);
+  el('text',{x:-OFF[4]*S/2,y:-72,'text-anchor':'middle','class':'sp-small sp-amber'},bodyG).textContent='CL-750-QC';
+  // --- animation ------------------------------------------------------------
+  function path(vals,base,scale){return vals.map(function(v,i){return (i?'L':'M')+(X0+xs[i]*S).toFixed(1)+' '+(base+v*scale).toFixed(1);}).join('');}
+  function area(vals,base,scale,keep){return 'M'+X0+' '+base+vals.map(function(v,i){var w=keep(v)?v:0;return 'L'+(X0+xs[i]*S).toFixed(1)+' '+(base+w*scale).toFixed(1);}).join('')+'L'+X1+' '+base+'Z';}
+  var zero=xs.map(function(){return 0;});
+  var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var INTRO=4200,t0=performance.now(),ready=false,finished=false,progress=0,target=.04,loop=0,raf;
+  var ease=function(u){u=Math.max(0,Math.min(1,u));return u<.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2;};
+  function frame(now){
+    var t=reduce?INTRO:now-t0;
+    // 0-0.7 s: grid, beam drawn, supports.
+    $('sp-grid-layer').setAttribute('opacity',(.55*ease(t/700)).toFixed(3));
+    var draw=ease((t-100)/650);root.classList.toggle('sp-supports-in',t>150);
+    $('sp-dims').setAttribute('opacity',ease((t-500)/500).toFixed(3));
+    // 0.65-3.35 s: the truck crosses (then idles in a loop while loading).
+    var u=(t-650)/2700;if(t>INTRO){u=((t-INTRO)%5200)/5200;loop=Math.floor((t-INTRO)/5200)+1;}
+    var front=u*(LEN+OFF[4]+14)-6,onDeck=front>0&&front-OFF[4]<LEN,res=onDeck?solve(loadsAt(front)):{M:zero,D:zero};
+    var reach=loop>0||t>INTRO?Infinity:front;
+    while(passIndex<pass.length&&pass[passIndex][0]<=reach){var Mq=pass[passIndex][1];for(var i=0;i<=N;i++){if(Mq[i]>envHi[i])envHi[i]=Mq[i];if(Mq[i]<envLo[i])envLo[i]=Mq[i];}passIndex++;}
+    var beam=path(res.D,Y,-dScale),clip=X0+draw*(X1-X0);
+    $('sp-beam').setAttribute('d',beam);$('sp-beam-shadow').setAttribute('d',beam);
+    $('sp-beam').setAttribute('stroke-dasharray',(clip-X0)+' 2000');$('sp-beam-shadow').setAttribute('stroke-dasharray',(clip-X0)+' 2000');
+    $('sp-live-sag').setAttribute('d',area(res.M,430,mScale,function(v){return v>0;}));
+    $('sp-live-hog').setAttribute('d',area(res.M,430,mScale,function(v){return v<0;}));
+    $('sp-live').setAttribute('d',onDeck?path(res.M,430,mScale):'');
+    $('sp-env-max').setAttribute('d',path(envHi,430,mScale));$('sp-env-min').setAttribute('d',path(envLo,430,mScale));
+    $('sp-truck').setAttribute('opacity',onDeck?1:0);
+    axles.forEach(function(g,i){var p=front-OFF[i],x=X0+p*S,j=Math.max(0,Math.min(N,Math.round(p/LEN*N)));g.setAttribute('transform','translate('+x.toFixed(1)+' '+(Y-5-res.D[j]*dScale).toFixed(1)+')');g.setAttribute('opacity',p>=0&&p<=LEN?1:0);});
+    var mid=Math.max(0,Math.min(N,Math.round((front-OFF[4]/2)/LEN*N)));
+    bodyG.setAttribute('transform','translate('+(X0+front*S).toFixed(1)+' '+(Y-res.D[mid]*dScale).toFixed(1)+')');
+    // 3.1-4.2 s: the envelope glows, the brand appears.
+    var b=ease((t-3050)/900);$('sp-brand').setAttribute('opacity',b.toFixed(3));$('sp-brand').setAttribute('transform','translate(0 '+(10*(1-b)).toFixed(2)+')');
+    root.style.setProperty('--sp-letter',(0.35*(1-b)).toFixed(3)+'em');
+    // Progress: creep towards the next milestone so the bar never stalls.
+    progress+=(target-progress)*.045;$('sp-bar').setAttribute('width',(280*progress).toFixed(1));
+    if(ready&&t>=INTRO&&!finished){finish();return;}
+    raf=requestAnimationFrame(frame);
+  }
+  var MILESTONE={'Python / WebAssembly':.18,'NumPy · SciPy · PyCBA':.5,'Excel':.7,'QuickerBridge':.82,engine:.92};
+  function finish(){finished=true;target=progress=1;$('sp-bar').setAttribute('width',280);$('sp-stage').textContent=T.stages.done;
+    root.classList.add('sp-out');setTimeout(function(){cancelAnimationFrame(raf);root.remove();},650);}
+  window.QBSplash={
+    stage:function(s){if(MILESTONE[s])target=Math.max(target,MILESTONE[s]);$('sp-stage').textContent=T.stages[s]||s;},
+    done:function(){ready=true;target=1;},
+    fail:function(){ready=true;finish();}
+  };
+  $('sp-version').textContent=meta.version?('v'+meta.version+' · '+(meta.date||'')+' · '+(meta.author||'')):'';
+  $('qb-splash-skip').addEventListener('click',function(){finish();});
+  document.addEventListener('keydown',function k(e){if(e.key==='Escape'&&!finished){finish();document.removeEventListener('keydown',k);}});
+  document.addEventListener('DOMContentLoaded',function(){var m=window.QB_META;if(m)$('sp-version').textContent='v'+m.version+' · '+m.date+' · '+m.author;});
+  raf=requestAnimationFrame(frame);
+  // Safety net: never trap the user behind the intro.
+  setTimeout(function(){if(!finished)finish();},60000);
+})();
+</script>
+
   <header class="topbar">
     <div class="brand"><span class="brand-mark">Q<span>↗</span></span><div>Quicker<span>Bridge</span><small data-i18n="brandSub">CONTINUOUS BEAM WORKSPACE</small></div></div>
     <div class="header-right"><div class="release-info"><b id="release-version"></b><small id="release-date"></small></div><span class="local-label" data-i18n="local">PyCBA</span><div class="language" role="group" aria-label="Language / Langue"><button id="en">EN</button><button id="fr" class="selected">FR</button></div></div>

@@ -20,6 +20,8 @@ VERSION = META["APP_VERSION"]
 RELEASE_DATE = META["RELEASE_DATE"]
 AUTHOR = META["AUTHOR"]
 release_day = date.fromisoformat(RELEASE_DATE)
+# The portable application is always named with its version and release date.
+PORTABLE_NAME = f"QuickerBridge-v{VERSION}-{RELEASE_DATE}.html"
 ZIP_TIME = (release_day.year, release_day.month, release_day.day, 0, 0, 0)
 
 
@@ -142,7 +144,14 @@ def build_browser_assets() -> None:
         "</body>",
         "<script>" + scripts.replace("</script", "<\\/script") + "</script>\n</body>",
     )
-    (ROOT / "QuickerBridge.html").write_text(html, encoding="utf-8")
+    for stale in ROOT.glob("QuickerBridge*.html"):
+        if stale.name != PORTABLE_NAME:
+            stale.unlink()
+    (ROOT / PORTABLE_NAME).write_text(html, encoding="utf-8")
+    # Double-click launcher for the portable package, pointing at this build.
+    (ROOT / "QuickerBridge.cmd").write_text(
+        f'@echo off\r\nstart "" "%~dp0{PORTABLE_NAME}"\r\n', encoding="utf-8"
+    )
 
 
 def clean_release_directory() -> Path:
@@ -186,7 +195,7 @@ def build_release() -> None:
     pages_zip = RELEASE / f"QuickerBridge-v{VERSION}-pages.zip"
     write_zip(pages_zip, pages_entries)
     portable_entries = [
-        (ROOT / "QuickerBridge.html", "QuickerBridge.html"),
+        (ROOT / PORTABLE_NAME, PORTABLE_NAME),
         (ROOT / "QuickerBridge.cmd", "QuickerBridge.cmd"),
         (ROOT / "README.md", "README.md"),
         (ROOT / "README_DEVELOPER.md", "README_DEVELOPER.md"),
@@ -235,7 +244,7 @@ def deliver(destination: Path) -> None:
     destination = destination.resolve()
     destination.mkdir(parents=True, exist_ok=True)
     if destination != ROOT.resolve():
-        shutil.copy2(ROOT / "QuickerBridge.html", destination / "QuickerBridge.html")
+        shutil.copy2(ROOT / PORTABLE_NAME, destination / PORTABLE_NAME)
     public = destination / "GitHub"
     public.mkdir(exist_ok=True)
     for path in RELEASE.iterdir():
