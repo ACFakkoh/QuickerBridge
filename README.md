@@ -118,6 +118,12 @@ les trois graphiques sans relancer le calcul.
 
 ### Si le calcul paraît lent
 
+**Réseau d’entreprise :** si une bibliothèque (Pyodide, NumPy, SciPy…) ne se
+télécharge pas ou reste figée, QuickerBridge relance automatiquement le chargement
+jusqu’à 4 fois, puis affiche l’étape bloquée, la bibliothèque et le domaine en cause
+(cdn.jsdelivr.net ou pypi.org) avec un bouton « Réessayer ». Si seul le module Excel
+échoue, le calcul fonctionne et le bouton Excel explique pourquoi il est indisponible.
+
 Le premier démarrage télécharge le moteur. Ensuite, modifier la géométrie ou EI
 reconstruit les fonctions d’influence; modifier uniquement les charges peut les
 réutiliser. Les zones nombreuses, cinq travées et le mode Fin prennent plus de temps.

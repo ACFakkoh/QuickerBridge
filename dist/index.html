@@ -65,8 +65,8 @@
   "use strict";
   var root=document.getElementById('qb-splash');if(!root)return;
   var lang='fr';try{lang=localStorage.getItem('qb-language-v03')==='en'?'en':'fr';}catch(e){}
-  var T={fr:{tag:'Analyse de poutres continues de ponts · PyCBA',stages:{'Python / WebAssembly':'Démarrage de Python · WebAssembly','NumPy · SciPy · PyCBA':'Chargement NumPy · SciPy · PyCBA','Excel':'Module Excel','QuickerBridge':'Moteur QuickerBridge',engine:'Calcul des lignes d’influence',done:'Prêt'},start:'Préparation du modèle'},
-         en:{tag:'Continuous bridge beam analysis · PyCBA',stages:{'Python / WebAssembly':'Starting Python · WebAssembly','NumPy · SciPy · PyCBA':'Loading NumPy · SciPy · PyCBA','Excel':'Excel module','QuickerBridge':'QuickerBridge engine',engine:'Computing influence lines',done:'Ready'},start:'Preparing the model'}}[lang];
+  var T={fr:{tag:'Analyse de poutres continues de ponts · PyCBA',stages:{'Python / WebAssembly':'Démarrage de Python · WebAssembly','NumPy · SciPy · PyCBA':'Chargement NumPy · SciPy · PyCBA','Excel':'Module Excel','QuickerBridge':'Moteur QuickerBridge',engine:'Calcul des lignes d’influence',done:'Prêt'},start:'Préparation du modèle',retry:'Téléchargement échoué · nouvel essai',attempt:'essai',failed:'Échec du chargement du moteur',close:'Fermer'},
+         en:{tag:'Continuous bridge beam analysis · PyCBA',stages:{'Python / WebAssembly':'Starting Python · WebAssembly','NumPy · SciPy · PyCBA':'Loading NumPy · SciPy · PyCBA','Excel':'Excel module','QuickerBridge':'QuickerBridge engine',engine:'Computing influence lines',done:'Ready'},start:'Preparing the model',retry:'Download failed · retrying',attempt:'attempt',failed:'Engine download failed',close:'Close'}}[lang];
   var $=function(id){return document.getElementById(id);};
   var meta=window.QB_META||{};
   $('sp-tagline').textContent=T.tag;$('sp-stage').textContent=T.start;
@@ -155,18 +155,24 @@
   var MILESTONE={'Python / WebAssembly':.18,'NumPy · SciPy · PyCBA':.5,'Excel':.7,'QuickerBridge':.82,engine:.92};
   function finish(){finished=true;target=progress=1;$('sp-bar').setAttribute('width',280);$('sp-stage').textContent=T.stages.done;
     root.classList.add('sp-out');setTimeout(function(){cancelAnimationFrame(raf);root.remove();},650);}
+  var failed=false;
   window.QBSplash={
-    stage:function(s){if(MILESTONE[s])target=Math.max(target,MILESTONE[s]);$('sp-stage').textContent=T.stages[s]||s;},
+    stage:function(s,info){if(failed)return;info=info||{};if(MILESTONE[s])target=Math.max(target,MILESTONE[s]);
+      $('sp-stage').textContent=(T.stages[s]||s)+(info.attempt>1?' · '+T.attempt+' '+info.attempt+'/'+info.of:'');$('sp-stage').classList.remove('sp-warn');},
+    retry:function(info){if(failed)return;var what=info&&info.error&&info.error.stage?T.stages[info.error.stage]||info.error.stage:'';
+      $('sp-stage').textContent=T.retry+' '+info.attempt+'/'+info.of+(what?' · '+what:'');$('sp-stage').classList.add('sp-warn');target=Math.min(target,.12);progress=Math.min(progress,.12);},
     done:function(){ready=true;target=1;},
-    fail:function(){ready=true;finish();}
+    // A failed start-up keeps the intro on screen with an explicit, actionable message.
+    fail:function(e,html){failed=true;$('sp-stage').textContent=T.failed;$('sp-stage').classList.add('sp-warn');$('sp-bar').setAttribute('fill','#e2725b');
+      var box=document.createElement('div');box.className='sp-error';box.setAttribute('role','alert');box.innerHTML=html||T.failed;
+      var close=document.createElement('button');close.type='button';close.className='text-button sp-close';close.textContent=T.close;close.onclick=function(){finish();};box.appendChild(close);root.appendChild(box);root.setAttribute('aria-hidden','false');}
   };
   $('sp-version').textContent=meta.version?('v'+meta.version+' · '+(meta.date||'')+' · '+(meta.author||'')):'';
   $('qb-splash-skip').addEventListener('click',function(){finish();});
   document.addEventListener('keydown',function k(e){if(e.key==='Escape'&&!finished){finish();document.removeEventListener('keydown',k);}});
   document.addEventListener('DOMContentLoaded',function(){var m=window.QB_META;if(m)$('sp-version').textContent='v'+m.version+' · '+m.date+' · '+m.author;});
   raf=requestAnimationFrame(frame);
-  // Safety net: never trap the user behind the intro.
-  setTimeout(function(){if(!finished)finish();},60000);
+  // No blind timeout here: the solver's watchdog always ends in done() or fail().
 })();
 </script>
 

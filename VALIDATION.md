@@ -145,3 +145,22 @@ M = −κL/2 / (L/2EI + 1/k), between pinned and fixed); validation, project
 round-trip and the Excel spring label. Fixity is reported as k / (k + Σ3EI/L).
 The opening animation solves a 3-span beam with the three-moment equation in
 JavaScript; it is illustrative and never feeds the analysis.
+
+## v0.6.1 start-up robustness (2026-09-27)
+
+Every engine boot attempt runs in a fresh Web Worker watched by a stall timer
+(90 s without progress). A failed or stalled attempt is terminated and retried
+automatically, up to 4 attempts; the loading screen shows "retrying n/4" and,
+after the last attempt, an explicit error with the blocked stage, library and
+host, network advice and a Retry button. Pyodide's `loadPackage` errors are
+collected and the imports are verified, so a silently failed wheel can no longer
+leave the application hanging. Excel (openpyxl from PyPI) is optional: if it
+cannot be installed the analysis still starts and the Excel button explains why.
+
+Browser scenarios checked with a mocked Pyodide (Playwright): pyodide.js refused
+(error after 3 attempts), SciPy failing three times then succeeding on the fourth
+attempt (application starts), pyodide.js stalled (watchdog, error "download
+stalled"), package loading stalled once (automatic recovery), SciPy failing every
+time (error naming scipy and cdn.jsdelivr.net), and openpyxl unavailable (analysis
+runs, Excel explains). With the real CDN blocked, the error appears after 4 attempts
+in about 9 s. Application suite: 87 passed.

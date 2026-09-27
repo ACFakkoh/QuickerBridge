@@ -5,7 +5,6 @@ import json
 
 from .models import Model
 from .engine import analyse, influence, position_record, snapshot, traverse
-from .exports import excel_bytes
 from .projects import validate_project
 
 _results = {}
@@ -48,6 +47,10 @@ def dispatch(raw: str) -> str:
     elif action in ("snapshot", "excel"):
         result = _results[data["job"]]
         if action == "excel":
+            # Imported lazily: openpyxl is optional in the browser (a blocked
+            # PyPI download must not prevent the analysis from starting).
+            from .exports import excel_bytes
+
             language = data.get("lang", "fr")
             if language not in ("en", "fr"):
                 raise ValueError("language")

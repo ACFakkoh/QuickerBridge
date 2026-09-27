@@ -45,3 +45,9 @@ input[type=number]{appearance:textfield;-moz-appearance:textfield}
 #qb-splash-skip{position:absolute;right:22px;bottom:18px;border:1px solid #2c5b72;background:transparent;color:#8fb3c4;border-radius:50%;width:30px;height:30px;font-size:18px;line-height:1;cursor:pointer;opacity:.6}
 #qb-splash-skip:hover{opacity:1;border-color:#56e0bb;color:#56e0bb}
 @media (prefers-reduced-motion:reduce){#qb-splash{transition:opacity .2s}}
+#qb-splash .sp-warn{fill:#f3b561}
+#qb-splash .sp-error{position:absolute;left:50%;bottom:14%;transform:translateX(-50%);width:min(620px,calc(100% - 32px));background:rgba(40,16,14,.92);border:1px solid #e2725b;color:#ffe3dc;border-radius:10px;padding:16px 18px;font:14px/1.55 "Segoe UI",system-ui,sans-serif;box-shadow:0 18px 50px rgba(0,0,0,.45)}
+#qb-splash .sp-error small{color:#f4b3a6;word-break:break-word}
+#qb-splash .sp-error .text-button{color:#8ff3d6;font-weight:600;margin-top:10px;margin-right:18px;background:none;border:0;cursor:pointer;font-size:14px}
+#qb-splash .sp-error .sp-close{color:#c9dbe3}
+#excel.excel-off{opacity:.55;text-decoration:line-through}

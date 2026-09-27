@@ -139,3 +139,27 @@ def test_excel_lists_spring_stiffness():
     header = [c.value for c in sheet[1]]
     kind = sheet.cell(2, header.index("Type") + 1).value
     assert "spring" in kind and "450000" in kind.replace(",", "")
+
+
+def test_browser_dispatch_works_without_openpyxl():
+    # A blocked PyPI download must not stop the analysis: openpyxl is optional
+    # in the browser and is imported only when an Excel export is requested.
+    import subprocess
+    import sys
+
+    code = (
+        "import sys, json; sys.modules['openpyxl'] = None\n"
+        "from quickerbridge.browser import dispatch\n"
+        "from quickerbridge.models import Model\n"
+        "r = json.loads(dispatch(json.dumps({'action': 'analyse', 'data': "
+        "{'model': Model(load_mode='dead').model_dump(), 'job': 'x'}})))\n"
+        "assert r['kind'] == 'mechanical'\n"
+        "try:\n"
+        "    dispatch(json.dumps({'action': 'excel', 'data': {'job': 'x'}}))\n"
+        "except ImportError:\n"
+        "    print('excel-unavailable')\n"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert "excel-unavailable" in out.stdout
