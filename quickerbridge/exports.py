@@ -136,12 +136,36 @@ def excel_bytes(result, language="en"):
     )
     if not thermal:
         rx.cell(1, 4, "R max (kN)")
+    fixed = any(r.get("type") == "fixed" for r in result["reactions"])
+    if fixed:
+        # Integral (fixed) abutments also carry a moment reaction, CCW +.
+        column = 4 if thermal else 5
+        labels = (
+            ["Mr (kN·m, anti-horaire +)"] if language == "fr" else ["Mr (kN·m, CCW +)"]
+        )
+        if not thermal:
+            labels = [
+                label.replace("Mr", name)
+                for name in ("Mr min", "Mr max")
+                for label in labels
+            ]
+        for offset, label in enumerate(labels):
+            rx.cell(1, column + offset, label)
+        rx.cell(1, column + len(labels), "Type")
     for r in result["reactions"]:
-        rx.append(
+        row = (
             [r["support"], r["x"], r["value"]]
             if thermal
             else [r["support"], r["x"], r["min"], r["max"]]
         )
+        if fixed:
+            row += (
+                [r.get("moment", 0.0)]
+                if thermal
+                else [r.get("moment_min", 0.0), r.get("moment_max", 0.0)]
+            )
+            row.append(r.get("type", ""))
+        rx.append(row)
     if not thermal:
         cases = wb.create_sheet(
             "Cas déterminants" if language == "fr" else "Governing cases"

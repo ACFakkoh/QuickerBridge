@@ -122,7 +122,7 @@ def test_project_round_trip_preserves_full_model_and_normalizes():
     reopened = validate_project(json.dumps(project))
     assert reopened["name"] == "Thermal example"
     assert reopened["model"] == model.model_dump(mode="json")
-    assert reopened["schema_version"] == 2
+    assert reopened["schema_version"] == 3
 
 
 def test_project_round_trips_constant_ei_and_five_span_custom_nonprismatic():
@@ -150,7 +150,7 @@ def test_project_round_trips_constant_ei_and_five_span_custom_nonprismatic():
     "mutate",
     [
         lambda p: p.update(format="WrongFormat"),
-        lambda p: p.update(schema_version=3),
+        lambda p: p.update(schema_version=4),
         lambda p: p.update(unknown=True),
         lambda p: p["model"].update(unknown=True),
     ],
@@ -232,5 +232,5 @@ def test_thermal_workbook_is_one_case_with_input_metadata():
     assert workbook["Stations"]["F1"].value == "V (kN)"
     assert workbook["Réactions"]["C1"].value == "R (kN)"
     metadata = dict(workbook["Modèle"].iter_rows(values_only=True))
-    assert metadata["QuickerBridge"] == "0.4"
+    assert metadata["QuickerBridge"] == "0.5"
     assert metadata["ΔT = Ttop − Tbottom (°C)"] == 15

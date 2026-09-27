@@ -111,3 +111,24 @@ Open the generated HTML, check FR/EN and a representative non-prismatic model,
 inspect nominal axle labels and both min/max curves, then save and reopen a project.
 For public hosting, verify the deployed GitHub Pages URL after its workflow completes.
 No GitHub repository or website was published by this task.
+
+## v0.5 additions (2026-09-27)
+
+Full suites: **application 72 passed**; application + vendored PyCBA **437 passed,
+1 skipped**. New regressions in `tests/test_audit_2026_09.py` and `tests/test_v05.py`:
+
+- Fixed (integral) abutments against closed forms: fixed–fixed UDL (end −wL²/12,
+  midspan wL²/24, δ = wL⁴/384EI, Mr = ±wL²/12), propped cantilever (−wL²/8, 5wL/8,
+  3wL/8), fixed–fixed unit-load influence lines (−ab²/L², R = b²(L+2a)/L³), vertical
+  and moment equilibrium of every unit load including moment reactions, M(L) = Mr(L),
+  mirror symmetry of a fixed–pin–fixed bridge, reduced sagging and deflection versus
+  pinned abutments, snapshot equilibrium, and thermal fixed–fixed (uniform M = −EIκ,
+  zero deflection and vertical reactions).
+- Plate-source option: Deeper/Deeper and End/Start give mirrored EI(x) and envelopes;
+  Start/Start keeps the v0.4 asymmetric interpretation; flange fit validated with the
+  chosen plates. Schema 3 projects round-trip; schema 2 files open unchanged.
+- Influence lines equal the cached unit-load basis, satisfy Maxwell–Betti reciprocity,
+  and Σ η·P of the governing axles reproduces the envelope value. Traverse frames equal
+  individual snapshots (forward and reverse); lane cases include the full-deck UDL.
+- v0.4.1 audit fixes: influence-spline twin knots (equilibrium), refined non-prismatic
+  deflection integration, and the related UI input fixes.

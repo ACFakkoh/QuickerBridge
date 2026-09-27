@@ -16,7 +16,7 @@ from scipy.interpolate import CubicSpline
 import pycba as cba
 
 from .models import Model
-from .sections import span_ei, properties
+from .sections import member_deflection, stiffness_profile, span_ei, properties
 from .loads import (
     CANADIAN_VEHICLES,
     axle_groups,
@@ -47,6 +47,19 @@ def stations(model):
     return np.array(xs), spans, sides
 
 
+def node_reactions(ba):
+    """Vertical (up +) and moment (counter-clockwise +) reaction per node.
+
+    PyCBA compacts ``R`` to restrained DOFs only, so a fixed (integral)
+    abutment inserts a moment entry. Expand it back to one vertical and one
+    moment value per support, whatever the support types.
+    """
+    restraints = np.asarray(ba._beam.restraints)
+    full = np.zeros(len(restraints))
+    full[restraints < 0] = np.asarray(ba.beam_results.R, float)
+    return np.r_[full[0::2], full[1::2]]
+
+
 class Basis:
     def __init__(self, model):
         self.model = model
@@ -56,7 +69,8 @@ class Basis:
         self.x, self.span_ids, self.sides = stations(model)
         self.nx = len(self.x)
         self.ns = len(self.support_x)
-        self.nresponse = 3 * self.nx + self.ns
+        # V, M, D at every station, then vertical and moment reactions.
+        self.nresponse = 3 * self.nx + 2 * self.ns
         self.ei = [span_ei(model, i) for i in range(len(self.lengths))]
         self.ba = cba.BeamAnalysis(self.lengths, self.ei, supports=model.supports)
         # A Basis has immutable geometry/EI; only its loads change. These small
@@ -84,14 +98,18 @@ class Basis:
         start = 0.0
         for i, (length, result) in enumerate(zip(self.lengths, ba.beam_results.vRes)):
             local_x = result.x[1:-1] - start
-            local_d = result.D[1:-1].copy()
-            # Both end deflections are known to be zero. Correct the integration
-            # constant's small trapezoidal drift using the end boundary condition.
-            local_d -= local_d[0] + local_x / length * (local_d[-1] - local_d[0])
+            refined = member_deflection(local_x, result.M[1:-1], self.ei[i])
+            if refined is not None:
+                local_x, local_d = refined
+            else:
+                local_d = result.D[1:-1].copy()
+                # Both end deflections are known to be zero. Correct the
+                # integration constant's small trapezoidal drift.
+                local_d -= local_d[0] + local_x / length * (local_d[-1] - local_d[0])
             query = self.x[np.array(self.span_ids) == i] - start
             ds.extend(-1000 * np.interp(query, local_x, local_d))
             start += length
-        return np.asarray(ba.beam_results.R, float), np.array(ds)
+        return node_reactions(ba), np.array(ds)
 
     def build(self):
         samples = 48 if self.model.precision == "standard" else 96
@@ -100,13 +118,27 @@ class Basis:
             # Include section discontinuities in the load interpolation grid.
             if isinstance(self.ei[i], cba.SectionEI):
                 q = np.unique(np.r_[q, self.ei[i].breakpoints])
+                # Merge near-coincident knots (floating-point twins such as
+                # 1.0875 and 1.0875000000000001). A CubicSpline with knots
+                # 1e-16 m apart is ill-conditioned and silently breaks the
+                # equilibrium of the interpolated reactions.
+                tolerance = 1e-6 * length
+                keep = np.r_[True, np.diff(q) > tolerance]
+                if not keep[-1]:  # keep the exact span end, drop its twin
+                    keep[-1], keep[-2] = True, len(q) == 2
+                q = q[keep]
             values = []
             for a in q:
                 self.solve_loads([[i + 1, 2, 1.0, float(a), 0]])
                 reaction, deflection = self.read_result(self.ba)
+                vertical, moment = reaction[: self.ns], reaction[self.ns :]
                 err = max(
-                    abs(reaction.sum() - 1),
-                    abs(reaction @ self.support_x - (a + self.support_x[i]))
+                    abs(vertical.sum() - 1),
+                    abs(
+                        vertical @ self.support_x
+                        + moment.sum()
+                        - (a + self.support_x[i])
+                    )
                     / max(1, self.length),
                 )
                 self.max_equilibrium_error = max(self.max_equilibrium_error, float(err))
@@ -122,18 +154,23 @@ class Basis:
         self.ba.analyze()
 
     def unit(self, positions):
-        """Rows are point-load locations, columns V, M, downward D, reactions."""
+        """Rows are point-load locations; columns V, M, downward D, R, Mr."""
         p = np.atleast_1d(np.asarray(positions, float))
-        rd = np.zeros((len(p), self.ns + self.nx))
+        rd = np.zeros((len(p), 2 * self.ns + self.nx))
         for i, length in enumerate(self.lengths):
             mask = (p >= self.support_x[i]) & (p <= self.support_x[i + 1])
             if mask.any():
                 rd[mask] = self.interpolators[i](p[mask] - self.support_x[i])
-        r, d = rd[:, : self.ns], rd[:, self.ns :]
+        r, mr = rd[:, : self.ns], rd[:, self.ns : 2 * self.ns]
+        d = rd[:, 2 * self.ns :]
         on = (p >= 0) & (p <= self.length)
         v = r @ self.left - ((p[:, None] < self.cut) & on[:, None])
-        m = r @ self.lever - np.maximum(self.x[None, :] - p[:, None], 0) * on[:, None]
-        return np.c_[v, m, d, r]
+        m = (
+            r @ self.lever
+            - mr @ self.left
+            - np.maximum(self.x[None, :] - p[:, None], 0) * on[:, None]
+        )
+        return np.c_[v, m, d, r, mr]
 
     def static_dead(self):
         intervals = dead_intervals(self.model)
@@ -142,8 +179,9 @@ class Basis:
         self.solve_loads(
             [[v["span"] + 1, 3, v["w"], v["a"], v["b"] - v["a"]] for v in intervals]
         )
-        r, d = self.read_result(self.ba)
-        v, m = r @ self.left, r @ self.lever
+        reaction, d = self.read_result(self.ba)
+        r, mr = reaction[: self.ns], reaction[self.ns :]
+        v, m = r @ self.left, r @ self.lever - mr @ self.left
         for load in intervals:
             a, b, w = load["start"], load["end"], load["w"]
             v -= w * np.clip(self.x - a, 0, b - a)
@@ -152,7 +190,7 @@ class Basis:
                 / 2
                 * (np.maximum(self.x - a, 0) ** 2 - np.maximum(self.x - b, 0) ** 2)
             )
-        return np.r_[v, m, d, r], intervals
+        return np.r_[v, m, d, r, mr], intervals
 
     def lane(self, w):
         # Fixed grid augmented on BOTH sides of every response station: the
@@ -189,8 +227,9 @@ class Basis:
         self.solve_loads(
             [[i + 1, 3, w, 0.0, length] for i, length in enumerate(self.lengths)]
         )
-        r, d = self.read_result(self.ba)
-        v, m = r @ self.left, r @ self.lever
+        reaction, d = self.read_result(self.ba)
+        r, mr = reaction[: self.ns], reaction[self.ns :]
+        v, m = r @ self.left, r @ self.lever - mr @ self.left
         for start, length in zip(self.support_x[:-1], self.lengths):
             end = start + length
             v -= w * np.clip(self.x - start, 0, length)
@@ -202,7 +241,7 @@ class Basis:
                     - np.maximum(self.x - end, 0) ** 2
                 )
             )
-        return np.r_[v, m, d, r]
+        return np.r_[v, m, d, r, mr]
 
 
 def structure_key(model):
@@ -378,14 +417,15 @@ def analyse(model: Model):
                     infos[j] = case_record("lane", "forward", -1, [], 1)
     low += dead
     high += dead
-    nx = basis.nx
+    nx, ns = basis.nx, basis.ns
 
     def pack(values):
         return {
             "V": values[:nx].tolist(),
             "M": values[nx : 2 * nx].tolist(),
             "D": values[2 * nx : 3 * nx].tolist(),
-            "R": values[3 * nx :].tolist(),
+            "R": values[3 * nx : 3 * nx + ns].tolist(),
+            "Mr": values[3 * nx + ns :].tolist(),
         }
 
     extrema = []
@@ -415,6 +455,10 @@ def analyse(model: Model):
             "max": float(high[3 * nx + i]),
             "min_case": info_low[3 * nx + i],
             "max_case": info_high[3 * nx + i],
+            "type": model.supports[i],
+            "moment_min": float(low[3 * nx + ns + i]),
+            "moment_max": float(high[3 * nx + ns + i]),
+            "moment_index": 3 * nx + ns + i,
         }
         for i, x in enumerate(basis.support_x)
     ]
@@ -452,6 +496,7 @@ def analyse(model: Model):
         "table": table,
         "case_min": info_low,
         "case_max": info_high,
+        "stiffness": stiffness_profile(model),
         "sections": [properties(s) for s in model.sections],
         "vehicle": {
             "weights": weights.tolist(),
@@ -474,6 +519,135 @@ def analyse(model: Model):
     }
 
 
+def record_axles(model, record, length):
+    """Factored axle loads on the bridge for one governing/position record."""
+    weights, offsets = vehicle_data(model.live, record.get("rear_spacing"))
+    sign = -1 if record.get("direction") == "forward" else 1
+    p = record.get("position", 0)
+    ids = record.get("axles", list(range(1, len(weights) + 1)))
+    factor = record.get("factor", 1)
+    if model.load_mode == "dead" or record.get("case") == "unloaded":
+        ids = []
+    if record.get("case") == "lane":
+        factor = lane_axle_factor(model.live, factor)
+    return [
+        {
+            "id": i + 1,
+            "x": float(p + sign * offset),
+            "load": float(
+                weights[i] * model.live.axle_factor * factor * model.live.factor
+            ),
+        }
+        for i, offset in enumerate(offsets)
+        if i + 1 in ids and 0 <= p + sign * offset <= length
+    ]
+
+
+def influence(model, station, support=None, case_max=None, case_min=None):
+    """Unit-load influence lines (1 kN downward) for one station and support.
+
+    Columns come straight from the cached influence basis, so this costs one
+    vectorized interpolation. The governing arrangements of M at the station
+    are returned as axle positions to overlay the vehicle on the line.
+    """
+    basis = cached_basis(structure_key(model))
+    nx, ns = basis.nx, basis.ns
+    if not 0 <= station < nx:
+        raise ValueError("influence.station")
+    xi = float(basis.x[station])
+    if support is None:
+        support = int(np.abs(basis.support_x - xi).argmin())
+    if not 0 <= support < ns:
+        raise ValueError("influence.support")
+    grid = np.concatenate(
+        [
+            np.linspace(a, b, 161 if model.precision == "standard" else 321)
+            for a, b in zip(basis.support_x[:-1], basis.support_x[1:])
+        ]
+    )
+    q = np.unique(np.clip(np.r_[grid, xi - 1e-6, xi + 1e-6], 0, basis.length))
+    u = basis.unit(q)
+    out = {
+        "x": q.tolist(),
+        "station": int(station),
+        "x_station": xi,
+        "side": basis.sides[station],
+        "support": support + 1,
+        "x_support": float(basis.support_x[support]),
+        "fixed": model.supports[support] == "fixed",
+        "V": u[:, station].tolist(),
+        "M": u[:, nx + station].tolist(),
+        "D": u[:, 2 * nx + station].tolist(),
+        "R": u[:, 3 * nx + support].tolist(),
+        "Mr": u[:, 3 * nx + ns + support].tolist(),
+    }
+    for key, record in (("governing_max", case_max), ("governing_min", case_min)):
+        if record and record.get("case") != "unloaded":
+            out[key] = {
+                "record": record,
+                "axles": record_axles(model, record, basis.length),
+            }
+    return out
+
+
+def traverse(model, direction="forward", frames=60):
+    """Precompute a full-vehicle crossing for a cheap client-side animation.
+
+    Values are on the report stations. Dead load and a full-length companion
+    lane load are computed once; each frame only adds the axle influences.
+    """
+    frames = int(min(max(frames, 10), 150))
+    basis = cached_basis(structure_key(model))
+    nx, ns = basis.nx, basis.ns
+    _, offsets = vehicle_data(model.live)
+    begin, end = (
+        (0.0, basis.length + offsets[-1])
+        if direction == "forward"
+        else (-offsets[-1], basis.length)
+    )
+    first = position_record(model, begin, direction)
+    old = basis.model
+    basis.model = model
+    dead, _ = basis.static_dead()
+    basis.model = old
+    if model.load_mode == "live":
+        dead = dead * 0
+    lane_w, _, lane_style = lane_parameters(model.live)
+    base = dead.copy()
+    lane = []
+    patterned = first["case"] == "lane" and lane_style == "patterned"
+    if first["case"] == "lane" and lane_style == "full" and model.load_mode != "dead":
+        base += basis.full_lane(lane_w * model.live.factor)
+        lane = [{"start": 0.0, "end": basis.length, "w": lane_w * model.live.factor}]
+    out = []
+    for position in np.linspace(begin, end, frames):
+        record = position_record(model, float(position), direction)
+        if patterned:
+            snap = snapshot(model, record)
+            values = np.r_[snap["V"], snap["M"], snap["D"], snap["R"], snap["Mr"]]
+            axles, frame_lane = snap["axles"], snap["lane"]
+        else:
+            axles = record_axles(model, record, basis.length)
+            values = base.copy()
+            for axle in axles:
+                values += basis.unit([axle["x"]])[0] * axle["load"]
+            frame_lane = lane
+        out.append(
+            {
+                "position": float(position),
+                "axles": axles,
+                "lane": frame_lane,
+                "V": np.round(values[:nx], 4).tolist(),
+                "M": np.round(values[nx : 2 * nx], 4).tolist(),
+                "D": np.round(values[2 * nx : 3 * nx], 5).tolist(),
+                "R": np.round(values[3 * nx : 3 * nx + ns], 4).tolist(),
+                "Mr": np.round(values[3 * nx + ns :], 4).tolist(),
+                "record": record,
+            }
+        )
+    return {"direction": direction, "x": basis.x.tolist(), "frames": out}
+
+
 def snapshot(model, record, target_index=None, sense="max"):
     """Reconstruct one compatible load arrangement behind an envelope extreme."""
     basis = cached_basis(structure_key(model))
@@ -484,28 +658,9 @@ def snapshot(model, record, target_index=None, sense="max"):
     if model.load_mode == "live":
         dead *= 0
         intervals = []
-    weights, offsets = vehicle_data(model.live, record.get("rear_spacing"))
-    sign = -1 if record.get("direction") == "forward" else 1
-    p = record.get("position", 0)
-    ids = record.get("axles", list(range(1, len(weights) + 1)))
-    factor = record.get("factor", 1)
-    if model.load_mode == "dead" or record.get("case") == "unloaded":
-        ids = []
     is_lane = record.get("case") == "lane"
     lane_w, _, lane_style = lane_parameters(model.live)
-    if is_lane:
-        factor = lane_axle_factor(model.live, factor)
-    axles = [
-        {
-            "id": i + 1,
-            "x": float(p + sign * offset),
-            "load": float(
-                weights[i] * model.live.axle_factor * factor * model.live.factor
-            ),
-        }
-        for i, offset in enumerate(offsets)
-        if i + 1 in ids and 0 <= p + sign * offset <= basis.length
-    ]
+    axles = record_axles(model, record, basis.length)
     values = dead.copy()
     for axle in axles:
         values += basis.unit([axle["x"]])[0] * axle["load"]
@@ -554,7 +709,8 @@ def snapshot(model, record, target_index=None, sense="max"):
         else:
             total_load += lane_w * np.trapezoid(selected.astype(float), q)
             total_moment += lane_w * np.trapezoid(selected * q, q)
-    r = values[3 * nx :]
+    r = values[3 * nx : 3 * nx + basis.ns]
+    mr = values[3 * nx + basis.ns :]
     # Add both sides of every applied point load to the plotted snapshot. The
     # reporting grid stays unchanged; a diagonal connecting across an axle
     # would otherwise visually conceal its shear jump.
@@ -568,6 +724,7 @@ def snapshot(model, record, target_index=None, sense="max"):
     )
     gv = r @ (basis.support_x[:, None] < gc)
     gm = r @ np.maximum(gx[None, :] - basis.support_x[:, None], 0)
+    gm -= mr @ (basis.support_x[:, None] < gc)
     for axle in axles:
         gv -= axle["load"] * (axle["x"] < gc)
         gm -= axle["load"] * np.maximum(gx - axle["x"], 0)
@@ -601,6 +758,7 @@ def snapshot(model, record, target_index=None, sense="max"):
         "M": values[nx : 2 * nx].tolist(),
         "D": values[2 * nx : 3 * nx].tolist(),
         "R": r.tolist(),
+        "Mr": mr.tolist(),
         "plot": graph,
         "axles": axles,
         "lane": lane_intervals,
@@ -608,6 +766,6 @@ def snapshot(model, record, target_index=None, sense="max"):
         "record": record,
         "equilibrium": {
             "force": float(r.sum() - total_load),
-            "moment": float(r @ basis.support_x - total_moment),
+            "moment": float(r @ basis.support_x + mr.sum() - total_moment),
         },
     }

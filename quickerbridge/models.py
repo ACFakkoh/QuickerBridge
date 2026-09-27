@@ -38,6 +38,19 @@ class Zone(InputModel):
     section: int = Field(ge=0)
     end_section: int | None = Field(default=None, ge=0)
     profile: Literal["constant", "linear", "parabolic"] = "constant"
+    # Which section supplies plates, E and inertia modifier in a taper. Only
+    # the overall depth is interpolated. "start" is the v0.4 behaviour; "end"
+    # and "deep" make a haunch invariant when start/end sections are swapped.
+    plates: Literal["start", "end", "deep"] = "start"
+
+
+def plate_source(zone, a, b):
+    """Section providing plates/E/modifier for a zone between sections a, b."""
+    if zone.plates == "end":
+        return b
+    if zone.plates == "deep" and b.depth > a.depth:
+        return b
+    return a
 
 
 class Span(InputModel):
@@ -107,7 +120,7 @@ class Model(InputModel):
     spans: list[Span] = Field(
         default_factory=lambda: [Span(), Span()], min_length=1, max_length=5
     )
-    supports: list[Literal["pin", "roller"]] = Field(
+    supports: list[Literal["pin", "roller", "fixed"]] = Field(
         default_factory=lambda: ["roller", "pin", "roller"]
     )
     sections: list[Section] = Field(
@@ -153,7 +166,8 @@ class Model(InputModel):
                         if zone.end_section is not None
                         else zone.section
                     ]
-                    if min(a.depth, b.depth) <= a.top_thickness + a.bottom_thickness:
+                    p = plate_source(zone, a, b)
+                    if min(a.depth, b.depth) <= p.top_thickness + p.bottom_thickness:
                         raise ValueError("geometry.depth")
                 previous = zone.end
             if self.nonprismatic and span.zones and abs(previous - 1) > 1e-9:

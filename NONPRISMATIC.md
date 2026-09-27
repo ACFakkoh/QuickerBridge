@@ -6,10 +6,18 @@ QuickerBridge v0.4 · Research checked 2026-09-12
 
 **Constant / Linear depth / Parabolic depth** describe the actual overall girder
 height, including both flanges. They are not CSI's EI interpolation controls.
-The zone's start section supplies its flange widths and thicknesses, web
-thickness, E, inertia modifier and initial height. The end section supplies only
-the target height. To change plates, begin a new zone using the new plate section.
-Plate dimensions change abruptly there. No plate dimension or E is blended.
+The start section supplies the initial height and the end section the target
+height. The zone option **Plates, E and M from** selects which section supplies the
+flange widths and thicknesses, web thickness, E and inertia modifier:
+
+- **Start** (default, v0.4 behaviour): the start section's plates.
+- **End**: the end (target) section's plates.
+- **Deeper**: the plates of the deeper of the two sections (start on a tie).
+
+Deeper is invariant when the start and end sections are swapped, so a haunch drawn
+S1→S2 before a pier and S2→S1 after it is an exact mirror. With Start, the swap also
+swaps the plates and the bridge becomes asymmetric. To change plates, begin a new
+zone. Plate dimensions change abruptly there. No plate dimension or E is blended.
 
 For normalized position t from 0 to 1:
 

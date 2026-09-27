@@ -10,7 +10,7 @@ from .version import APP_VERSION
 
 
 FORMAT = "QuickerBridgeProject"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 MAX_PROJECT_BYTES = 1024 * 1024
 
 
@@ -78,6 +78,10 @@ def validate_project(text: str) -> dict:
                         )
                     ):
                         raise ValueError("project.legacy_taper")
+        raw["schema_version"] = SCHEMA_VERSION
+    elif version == 2:
+        # v0.4 files: zones without ``plates`` keep the start-section
+        # convention, which is the default. Pin/roller supports are unchanged.
         raw["schema_version"] = SCHEMA_VERSION
     elif version != SCHEMA_VERSION:
         raise ValueError("project.version")

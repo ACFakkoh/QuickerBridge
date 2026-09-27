@@ -22,3 +22,11 @@ input[type=number]{appearance:textfield;-moz-appearance:textfield}
 /* Manual vehicle-position slider */
 .position-controls input[type=number]{width:85px;min-height:29px;padding:3px 6px}.position-controls input[type=range]{width:clamp(110px,18vw,220px);min-height:22px;padding:0;accent-color:var(--teal)}
 .focus-results .inputs{display:none}.focus-results .workspace{grid-template-columns:minmax(0,1fr);max-width:1900px}.focus-results .plot{height:132px}.focus-results .chart-row{min-height:132px}#focus-results[aria-pressed=true]{background:var(--navy);color:#fff;border-color:var(--navy)}
+
+.stiffness-warning{background:#fff6e5;color:#7a4b00;border:1px solid #efcf8f;border-radius:6px;padding:8px 10px;margin:0 0 10px;font-size:.8125rem;line-height:1.5}.stiffness-warning small{color:#8a6a2f}.stiffness-plot{width:100%;height:100px;overflow:visible}.stiffness-plot text,.plot text.peak-label{font-family:"Segoe UI",sans-serif;font-size:11px}.plot text.peak-label{font-weight:600;paint-order:stroke;stroke:#fff;stroke-width:3px}.stiffness-plot text{fill:#8097a3}
+.grid-line{stroke:#edf2f5;stroke-width:.8}.plot text.tick,.il-plot text.tick{font-size:9.5px;fill:#9fb1bb}.il-plot{width:100%;height:100px;overflow:visible;cursor:crosshair}.il-plot text{font-family:"Segoe UI",sans-serif;font-size:11px;fill:#8097a3}.il-plot text.peak-label{font-weight:600;paint-order:stroke;stroke:#fff;stroke-width:3px}.il-hint{margin:6px 0 2px}
+.span-tag{white-space:nowrap}.span-row{grid-template-columns:78px 1fr 22px}
+.uplift-warning{background:#ffebe7;color:#9c3325;border:1px solid #e9b5aa;border-radius:6px;padding:8px 10px;margin:0 0 10px;font-size:.8125rem;line-height:1.5}
+#reactions .uplift{color:#c0392b!important;font-weight:700}#reactions .uplift::after{content:" ⚠"}
+.reaction .moment-reaction{display:block;margin-top:2px;color:#7a5bb5}.reaction .moment-reaction .text-button{color:#7a5bb5}
+.fixed-note{margin-top:8px}.play-button{font-weight:600}

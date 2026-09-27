@@ -1,6 +1,6 @@
-# QuickerBridge 0.4
+# QuickerBridge 0.5
 
-**Anthony Chéruel · 2026-09-15 · Français / English**
+**Anthony Chéruel · 2026-09-27 · Français / English**
 
 Un outil de calcul préliminaire de poutres continues de ponts, avec PyCBA dans le
 navigateur. Géométrie, charges et diagrammes restent réunis dans une interface
@@ -23,7 +23,11 @@ pont ne sont pas envoyées à un serveur de calcul. Fermer l’onglet interrompt
 
 1. **Géométrie :** choisissez 1 à 5 travées, leurs longueurs en mètres et les appuis.
    Les appuis articulés et à rouleaux bloquent le déplacement vertical, avec
-   continuité de la poutre aux appuis intérieurs.
+   continuité de la poutre aux appuis intérieurs. **Encastré (culée intégrale)**
+   bloque aussi la rotation et donne une réaction de moment Mr (anti-horaire +).
+   C’est une borne supérieure : une vraie culée intégrale est partiellement retenue
+   par ses pieux et le remblai; comparez avec des appuis articulés pour encadrer la
+   réponse. Retenue axiale, poussée des terres et dilatation du tablier : non modélisées.
 2. **Sections :** saisissez les dimensions des tôles en mm et E en GPa, ou une
    rigidité EI constante directement en kN·m². La hauteur comprend les semelles.
 3. **Charges :** choisissez permanentes, routières, les deux, ou thermique seul.
@@ -48,13 +52,29 @@ permet une hypothèse de rigidité effective, sans calculer une dalle transform�
 son centre de gravité, les contraintes ou la résistance composite.
 
 Les zones se suivent de 0 à 100 % de chaque travée. La section initiale d’une zone
-fournit ses tôles, E, M et sa hauteur initiale. La section finale fournit **seulement
-la hauteur cible**. La hauteur peut être constante, linéaire ou parabolique.
+fournit sa hauteur initiale, la section finale **la hauteur cible**. L’option
+**« Tôles, E et M de »** choisit la section qui fournit les tôles, E et M : initiale
+(défaut, comportement v0.4), finale ou **la plus haute**. La hauteur peut être constante, linéaire ou parabolique.
 Les semelles et l’épaisseur de l’âme restent constantes dans la zone; pour les
 changer, commencez une nouvelle zone. Le profil parabolique est tangent au côté
 le moins haut. [Détails et comparaison avec CSiBridge](NONPRISMATIC.md).
-Pour une géométrie miroir, inversez les sections initiale et finale dans la travée
-opposée; répéter le même taper orienté rend le pont non symétrique.
+Pour un gousset miroir de part et d’autre d’une pile, inversez les sections initiale
+et finale dans la travée opposée **et** choisissez « la plus haute » dans les deux
+zones : les tôles de la section sur pile sont alors utilisées des deux côtés. Avec
+l’option « initiale », l’inversion change les tôles et le pont n’est pas symétrique;
+le diagramme EI(x) et l’alerte « Saut de rigidité » le signalent.
+
+### Diagnostics et outils d’inspection (v0.4.1–0.5)
+
+- **EI(x)** sous les diagrammes et alerte de saut de rigidité (> 15 %).
+- **Soulèvement :** toute réaction minimale négative est signalée en rouge, avec le
+  contexte (charge vive seule, permanentes + vives, ou disposition affichée).
+- **Lignes d’influence :** onglet « Lignes d’influence », cliquez un diagramme pour
+  choisir la station. V, M, δ à la station et R (et Mr si encastré) à l’appui le plus
+  proche, pour 1 kN vers le bas, avec les essieux de la disposition M max.
+- **Animation :** en « Position du camion », ▶ Animer rejoue 60 positions
+  précalculées du véhicule complet; le curseur réutilise ces positions sans recalcul.
+- Axes Y gradués, quadrillage léger et valeurs des pics sur chaque diagramme.
 
 ### Enveloppes et thermique
 
@@ -108,9 +128,12 @@ included. Calculations run locally in your browser. Use the top EN/FR toggle.
 Define 1–5 spans, supports, steel plates or direct constant EI, then select dead,
 live, combined, or thermal-only loading. An inertia modifier multiplies the gross
 steel I for stiffness only; it does not calculate composite section properties.
-In a non-prismatic zone, only height varies. Start-section plates, E and modifier
-stay fixed until the next zone; the end section supplies only its target height.
-See [depth versus EI interpolation](NONPRISMATIC.md).
+In a non-prismatic zone, only height varies. “Plates, E and M from” selects the
+start section (default), the end section or the deeper section; choose Deeper on both
+sides of a pier for a true mirrored haunch. See [depth versus EI interpolation](NONPRISMATIC.md).
+Supports can be pinned, roller or **fixed (integral abutment)**, which adds a moment
+reaction Mr (CCW +); real fixity lies between pinned and fixed. Influence lines,
+uplift warnings, an EI(x) diagram and a 60-frame crossing animation help inspection.
 
 Both envelope limits are drawn in bold. Click an extreme to inspect its governing
 arrangement. Axle arrows show nominal loads, or Canadian lane-reduced loads in a

@@ -4,7 +4,7 @@ import base64
 import json
 
 from .models import Model
-from .engine import analyse, position_record, snapshot
+from .engine import analyse, influence, position_record, snapshot, traverse
 from .exports import excel_bytes
 from .projects import validate_project
 
@@ -24,6 +24,27 @@ def dispatch(raw: str) -> str:
         _results[data["job"]] = value
         for key in list(_results)[:-3]:
             del _results[key]
+    elif action in ("influence", "traverse"):
+        result = _results[data["job"]]
+        if result.get("kind") == "thermal":
+            raise ValueError("thermal.snapshot")
+        model = Model.model_validate(result["model"])
+        if action == "influence":
+            index = int(data.get("index", 0))
+            nx = len(result["x"])
+            support = data.get("support")
+            value = influence(
+                model,
+                index,
+                None if support is None else int(support),
+                result["case_max"][nx + index] if 0 <= index < nx else None,
+                result["case_min"][nx + index] if 0 <= index < nx else None,
+            )
+        else:
+            direction = data.get("direction", "forward")
+            if direction not in ("forward", "reverse"):
+                raise ValueError("vehicle.direction")
+            value = traverse(model, direction, int(data.get("frames", 60)))
     elif action in ("snapshot", "excel"):
         result = _results[data["job"]]
         if action == "excel":
