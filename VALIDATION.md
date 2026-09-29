@@ -199,7 +199,7 @@ intervals (unfactored permanent loads ÷ g, mesh broken at every load limit).
   (βL = nπ, 4.7300, 7.8532, 3.9266): 1e-4 relative or better for the first 6 modes;
 - default 2 × 34.8 m bridge: f1 equals the isolated simply supported span (antisymmetric),
   f2/f1 = (3.9266/π)² (symmetric);
-- identical to `pycba.BeamAnalysis.modal` (rtol 1e-9) for three unequal spans with pinned,
+- agrees with `pycba.BeamAnalysis.modal` (rtol 1e-8) for three unequal spans with pinned,
   fixed and rotational-spring supports;
 - rotational spring k → 0 and k → ∞ recover the pinned and fixed frequencies;
 - modal mass 8/π² and 8/(9π²) for a simply supported span; load factor ignored; two

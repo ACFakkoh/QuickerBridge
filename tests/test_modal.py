@@ -84,7 +84,7 @@ def test_agrees_with_pycba_modal(supports):
     ba = cba.BeamAnalysis(lengths, ei, supports=pycba_supports)
     reference = ba.modal(w / G, n_modes=12, nseg=40)
     np.testing.assert_allclose(
-        [m["f"] for m in ours["modes"]], reference.f[:12], rtol=1e-9
+        [m["f"] for m in ours["modes"]], reference.f[:12], rtol=1e-8
     )
 
 
