@@ -69,7 +69,8 @@ def mass_profile(model: Model):
     settings = model.modal
     starts = np.r_[0, np.cumsum([s.length for s in model.spans])]
     if settings.mass_source == "custom":
-        return [(0.0, float(starts[-1]), settings.mass)]
+        # Imposed value given as a weight per length (kN/m), like the loads.
+        return [(0.0, float(starts[-1]), settings.mass / G)]
     out = []
     for load in model.dead:
         # Mass is the unfactored permanent load: a load factor is not mass.

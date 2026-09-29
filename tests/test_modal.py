@@ -114,7 +114,7 @@ def test_mass_participation_and_custom_mass():
     assert ratios[2] == pytest.approx(8 / (9 * math.pi**2), rel=2.5e-2)
     assert 0.95 < sum(ratios) <= 1 + 1e-9
     custom = model(
-        [30.0], ["pin", "roller"], modal={"mass_source": "custom", "mass": 4.0}
+        [30.0], ["pin", "roller"], modal={"mass_source": "custom", "mass": 4.0 * G}
     )
     r4 = analyse_modal(custom)
     scale = math.sqrt((24 / G) / 4.0)
@@ -233,7 +233,7 @@ def test_modal_settings_do_not_touch_static_cache_or_results():
 
     a = Model.model_validate(Model().model_dump())
     b = Model.model_validate(
-        {**a.model_dump(), "modal": {"mass_source": "custom", "mass": 3}}
+        {**a.model_dump(), "modal": {"mass_source": "custom", "mass": 30}}
     )
     assert structure_key(a) == structure_key(b)
 

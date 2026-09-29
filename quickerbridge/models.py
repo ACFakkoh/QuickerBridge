@@ -121,7 +121,7 @@ class ModalSettings(InputModel):
     eigenvalue analysis and never changes the static results."""
 
     mass_source: Literal["dead", "custom"] = "dead"
-    mass: float = Field(default=1.0, gt=0, le=1000)  # t/m, custom source
+    mass: float = Field(default=10.0, gt=0, le=10000)  # kN/m (weight), custom source
     modes: int = Field(default=12, ge=1, le=12)
 
 

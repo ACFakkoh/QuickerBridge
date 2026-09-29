@@ -5,30 +5,30 @@
 // solver action ('modal', quickerbridge/modal.py) and owns one result view.
 // It never changes the static analysis, its cache or its results.
 Object.assign(words.en,{
- modesTitle:"Free vibration · vertical bending",deckModes:"DECK · VIBRATION MODE",modalMass:"Mass",massDead:"Permanent loads ÷ g (unfactored)",massCustom:"Imposed mass",modalCount:"Modes",
+ modesTitle:"Free vibration · vertical bending",deckModes:"DECK · VIBRATION MODE",modalMass:"Mass",massDead:"Permanent loads ÷ g (unfactored)",massCustom:"Imposed mass (kN/m)",modalCount:"Modes",
  slow:"Slow motion",realTime:"Real time",listen:"Listen to the bridge",listenHelp:"Plays the modal frequencies transposed into the audible range (ratios preserved); loudness follows the modal mass.",
  modalLoading:"Computing the vibration modes…",modalEngine:"The vibration modes are computed once the calculation engine has loaded.",modalFailed:"The vibration modes could not be computed.",noMass:"No mass: add a permanent load or choose an imposed mass.",
  mode:"Mode",frequency:"Frequency",period:"Period",modalMassShort:"Modal mass",cumulative:"Cumulative",shape:"Shape",symS:"Symmetric",symA:"Antisymmetric",
  modalCaption:"Mode {n} · f = {f} Hz · T = {T} s · {sym}modal mass {m} %",slowed:"slowed ×{k}",realSpeed:"true speed",tooFast:"too fast for the screen: slowed ×{k}",
- massNoteDead:"Mass = unfactored permanent loads ÷ g: {m} t/m on average, {M} t in total. Load factors are not mass.",massNoteCustom:"Imposed mass {m} t/m, {M} t in total.",unloaded:"{L} m of deck carry no permanent load, hence no mass.",
+ massNoteDead:"Mass = unfactored permanent loads ÷ g: {m} t/m on average, {M} t in total. Load factors are not mass.",massNoteCustom:"Imposed mass {w} kN/m ÷ g = {m} t/m, {M} t in total.",unloaded:"{L} m of deck carry no permanent load, hence no mass.",
  refNote:"Benchmark · isolated simply supported span, f = π/(2L²)·√(EI/m):",methodModal:"Euler-Bernoulli elements (the formulation of PyCBA BeamAnalysis.modal), consistent mass, {n} elements, EI(x) integrated with 3-point Gauss, supports and rotational springs as in the static model. Vertical bending of one girder line only: no torsion, no vehicle-bridge interaction, no damping. The modal mass is the share of the deck mass mobilised by a uniform vertical motion (±1-2 %).",
  pedestrianBand:"Shaded bands: vertical pedestrian resonance risk (Sétra 2006): 1.7-2.1 Hz maximum, 1-2.6 Hz medium, 2.6-5 Hz low (2nd harmonic).",
  modesHint:"Click a mode, or use ← →. The deck drawing above vibrates in the selected mode (arbitrary amplitude).",nodes:"nodes"
 });
 Object.assign(words.fr,{
- modesTitle:"Vibrations libres · flexion verticale",deckModes:"TABLIER · MODE PROPRE",modalMass:"Masse",massDead:"Charges permanentes ÷ g (non pondérées)",massCustom:"Masse imposée",modalCount:"Modes",
+ modesTitle:"Vibrations libres · flexion verticale",deckModes:"TABLIER · MODE PROPRE",modalMass:"Masse",massDead:"Charges permanentes ÷ g (non pondérées)",massCustom:"Masse imposée (kN/m)",modalCount:"Modes",
  slow:"Ralenti",realTime:"Temps réel",listen:"Écouter le pont",listenHelp:"Joue les fréquences propres transposées dans l’audible (rapports conservés) ; le volume suit la masse modale.",
  modalLoading:"Calcul des modes propres…",modalEngine:"Les modes propres seront calculés dès que le moteur de calcul sera chargé.",modalFailed:"Les modes propres n’ont pas pu être calculés.",noMass:"Aucune masse : ajoutez une charge permanente ou choisissez une masse imposée.",
  mode:"Mode",frequency:"Fréquence",period:"Période",modalMassShort:"Masse modale",cumulative:"Cumul",shape:"Forme",symS:"Symétrique",symA:"Antisymétrique",
  modalCaption:"Mode {n} · f = {f} Hz · T = {T} s · {sym}masse modale {m} %",slowed:"ralenti ×{k}",realSpeed:"vitesse réelle",tooFast:"trop rapide pour l’écran : ralenti ×{k}",
- massNoteDead:"Masse = charges permanentes non pondérées ÷ g : {m} t/m en moyenne, {M} t au total. Les facteurs de charge ne sont pas de la masse.",massNoteCustom:"Masse imposée {m} t/m, {M} t au total.",unloaded:"{L} m de tablier sans charge permanente, donc sans masse.",
+ massNoteDead:"Masse = charges permanentes non pondérées ÷ g : {m} t/m en moyenne, {M} t au total. Les facteurs de charge ne sont pas de la masse.",massNoteCustom:"Masse imposée {w} kN/m ÷ g = {m} t/m, {M} t au total.",unloaded:"{L} m de tablier sans charge permanente, donc sans masse.",
  refNote:"Repère · travée isolée simplement appuyée, f = π/(2L²)·√(EI/m) :",methodModal:"Éléments d’Euler-Bernoulli (formulation de PyCBA BeamAnalysis.modal), masse cohérente, {n} éléments, EI(x) intégré par Gauss à 3 points, appuis et ressorts de rotation comme dans le modèle statique. Flexion verticale d’une ligne de poutre seulement : ni torsion, ni interaction véhicule-pont, ni amortissement. La masse modale est la part de la masse du tablier mobilisée par un mouvement vertical uniforme (±1-2 %).",
  pedestrianBand:"Bandes ombrées : risque de résonance piétonne verticale (Sétra 2006) : 1,7-2,1 Hz maximal, 1-2,6 Hz moyen, 2,6-5 Hz faible (2ᵉ harmonique).",
  modesHint:"Cliquez sur un mode, ou utilisez ← →. Le tablier dessiné plus haut vibre selon le mode choisi (amplitude arbitraire).",nodes:"nœuds"
 });
 const tf=(key,values)=>t(key).replace(/\{(\w+)\}/g,(_,k)=>values[k]);
 let modalData=null,modalSel=0,modalToken=0,modalTimer=null,modalRAF=null,modalSpeed='slow',modalState='idle',modalError='',modalAudio=null;
-function modalSettings(){if(!model.modal)model.modal={mass_source:'dead',mass:1,modes:12};return model.modal;}
+function modalSettings(){if(!model.modal)model.modal={mass_source:'dead',mass:10,modes:12};return model.modal;}
 // Displayed oscillation rates. Thumbnails: compressed so the order stays
 // readable (faster for higher modes). Selected mode: slowed to ~0.7 Hz, or its
 // true frequency in "real time" when the screen can show it.
@@ -49,8 +49,14 @@ async function requestModal(){
   renderModesView();renderBeam();startModalAnimation();
  }catch(e){if(token!==modalToken)return;console.error(e);modalData=null;modalState='error';modalError=String(e.message||e);renderModesView();renderBeam();}
 }
-function modalShow(){if(!modalData||modalData.stale)requestModal();else{renderModesView();startModalAnimation();}renderBeam();}
-function modalHide(){stopModalAnimation();const heading=$('[data-i18n="beamLoads"]');if(heading)heading.textContent=t('beamLoads');renderBeam();}
+function modalMode(on){
+ // Vibration modes sit next to the load cases; the static result panels hide.
+ document.body.classList.toggle('modal-mode',on);
+ $$('#load-mode [data-mode]').forEach(b=>b.classList.toggle('active',!on&&b.dataset.mode===model?.load_mode));
+ $('#modes-mode')?.classList.toggle('active',on);
+}
+function modalShow(){modalMode(true);if(!modalData||modalData.stale)requestModal();else{renderModesView();startModalAnimation();}renderBeam();}
+function modalHide(){modalMode(false);stopModalAnimation();const heading=$('[data-i18n="beamLoads"]');if(heading)heading.textContent=t('beamLoads');renderBeam();}
 // ---- Beam panel: the deck itself vibrates in the selected mode.
 function modalBeam(){
  if(view!=='modes'||!modalData||!model)return false;
@@ -132,7 +138,7 @@ function spectrumSvg(){
 }
 function renderModesView(){
  const host=$('#modes-view');if(!host||!model)return;const st=modalSettings();
- const controls=`<div class="modal-head"><div class="modal-controls"><label>${t('modalMass')} <select data-modal="mass_source"><option value="dead"${st.mass_source==='dead'?' selected':''}>${t('massDead')}</option><option value="custom"${st.mass_source==='custom'?' selected':''}>${t('massCustom')}</option></select></label>${st.mass_source==='custom'?`<label><input type="number" step="any" min="0.001" max="1000" data-modal="mass" value="${st.mass}"> t/m</label>`:''}<label>${t('modalCount')} <select data-modal="modes">${[3,6,9,12].map(n=>`<option${st.modes===n?' selected':''}>${n}</option>`).join('')}</select></label></div><div class="modal-actions"><div class="segmented small"><button data-modal-speed="slow" class="${modalSpeed==='slow'?'active':''}">${t('slow')}</button><button data-modal-speed="real" class="${modalSpeed==='real'?'active':''}">${t('realTime')}</button></div><button id="modal-listen" title="${esc(t('listenHelp'))}" ${modalData?'':'disabled'}><svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path d="M3 8h3l4-4v12l-4-4H3z" fill="currentColor"/><path d="M13 6.5a5 5 0 0 1 0 7M15.5 4a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> ${t('listen')}</button></div></div>`;
+ const controls=`<div class="modal-head"><div class="modal-controls"><label>${t('modalMass')} <select data-modal="mass_source"><option value="dead"${st.mass_source==='dead'?' selected':''}>${t('massDead')}</option><option value="custom"${st.mass_source==='custom'?' selected':''}>${t('massCustom')}</option></select></label>${st.mass_source==='custom'?`<label><input type="number" step="any" min="0.001" max="10000" data-modal="mass" value="${st.mass}"> kN/m</label>`:''}<label>${t('modalCount')} <select data-modal="modes">${[3,6,9,12].map(n=>`<option${st.modes===n?' selected':''}>${n}</option>`).join('')}</select></label></div><div class="modal-actions"><div class="segmented small"><button data-modal-speed="slow" class="${modalSpeed==='slow'?'active':''}">${t('slow')}</button><button data-modal-speed="real" class="${modalSpeed==='real'?'active':''}">${t('realTime')}</button></div><button id="modal-listen" title="${esc(t('listenHelp'))}" ${modalData?'':'disabled'}><svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path d="M3 8h3l4-4v12l-4-4H3z" fill="currentColor"/><path d="M13 6.5a5 5 0 0 1 0 7M15.5 4a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> ${t('listen')}</button></div></div>`;
  let body='';
  if(modalState==='engine')body=`<p class="help">${t('modalEngine')}</p>`;
  else if(modalState==='error')body=`<p class="error">${modalError.includes('modal.no_mass')?t('noMass'):t('modalFailed')}</p>`;
@@ -141,7 +147,7 @@ function renderModesView(){
   const d=modalData;let cumulative=0;
   const cards=d.modes.map((m,i)=>{const sx=d.support_x.map(x=>(4+x/d.x.at(-1)*192).toFixed(1));return `<button class="modal-card${i===modalSel?' selected':''}" data-mode-index="${i}" aria-pressed="${i===modalSel}"><span class="mc-head"><b>${m.n}</b><span>${fmt(m.f,m.f<10?2:1)} Hz</span></span><svg viewBox="0 0 200 64" preserveAspectRatio="none" aria-hidden="true"><line x1="4" x2="196" y1="32" y2="32" stroke="#dbe5eb" vector-effect="non-scaling-stroke"/>${sx.map(x=>`<path d="M${x} 34l-4 7h8z" fill="#9db4c1"/>`).join('')}<polyline data-mode="${i}" fill="none" stroke="#008378" stroke-width="2" vector-effect="non-scaling-stroke" points=""/></svg><span class="mc-foot">T ${fmt(m.T,3)} s · ${fmt(100*m.mass_ratio,1)} %${m.symmetry!=='—'?` · ${m.symmetry}`:''}</span></button>`}).join('');
   const rows=d.modes.map((m,i)=>{cumulative+=m.mass_ratio;return `<tr class="${i===modalSel?'selected':''}" data-mode-index="${i}"><td>${m.n}</td><td>${fmt(m.f,3)}</td><td>${fmt(m.T,4)}</td><td>${fmt(m.omega,2)}</td><td>${fmt(100*m.mass_ratio,1)}</td><td>${fmt(100*cumulative,1)}</td><td>${m.symmetry==='S'?t('symS'):m.symmetry==='A'?t('symA'):'—'}</td></tr>`}).join('');
-  const mass=d.mass,massNote=mass.source==='dead'?tf('massNoteDead',{m:fmt(mass.mean_t_per_m,3),M:fmt(mass.total_t,1)}):tf('massNoteCustom',{m:fmt(mass.mean_t_per_m,3),M:fmt(mass.total_t,1)});
+  const mass=d.mass,massNote=mass.source==='dead'?tf('massNoteDead',{m:fmt(mass.mean_t_per_m,3),M:fmt(mass.total_t,1)}):tf('massNoteCustom',{w:fmt(mass.mean_t_per_m*9.81,2),m:fmt(mass.mean_t_per_m,3),M:fmt(mass.total_t,1)});
   body=`<div class="modal-spectrum-wrap">${spectrumSvg()}</div><div class="modal-grid${d.stale?' stale':''}">${cards}</div><p class="help modal-hint">${t('modesHint')}</p><div class="table-scroll modal-table"><table><thead><tr><th>${t('mode')}</th><th>f (Hz)</th><th>T (s)</th><th>ω (rad/s)</th><th>${t('modalMassShort')} (%)</th><th>${t('cumulative')} (%)</th><th>${t('shape')}</th></tr></thead><tbody>${rows}</tbody></table></div><div class="table-footnote">${massNote}${mass.unloaded_length>1e-6?` <b>${tf('unloaded',{L:fmt(mass.unloaded_length,2)})}</b>`:''}<br>${t('refNote')} ${d.references.map(r=>`${t('span')} ${r.span} : ${r.f_simple?fmt(r.f_simple,3)+' Hz':'—'}`).join(' · ')}<br>${t('pedestrianBand')}<br>${tf('methodModal',{n:d.elements})}</div>`;
  }
  host.innerHTML=`<h3 class="modal-title">${t('modesTitle')}</h3>`+controls+body;
@@ -168,6 +174,11 @@ function listenBridge(){
 function selectModeQuiet(i){if(i<0||i===modalSel)return;modalSel=i;$$('.modal-card').forEach(c=>{const on=Number(c.dataset.modeIndex)===i;c.classList.toggle('selected',on);c.setAttribute('aria-pressed',on)});$$('.modal-table tr[data-mode-index]').forEach(r=>r.classList.toggle('selected',Number(r.dataset.modeIndex)===i));const sw=$('.modal-spectrum-wrap');if(sw)sw.innerHTML=spectrumSvg();renderBeam();}
 // ---- Events (delegated; the view is re-rendered on every change).
 document.addEventListener('click',e=>{
+ const b=e.target.closest('#modes-mode,#load-mode [data-mode]');if(!b||!model)return;
+ if(b.id==='modes-mode'){if(view!=='modes')showView('modes');return;}
+ if(view==='modes')showView('diagrams');
+},true);
+document.addEventListener('click',e=>{
  if(!$('#modes-view')?.contains(e.target))return;
  const card=e.target.closest('[data-mode-index]');if(card){selectMode(Number(card.dataset.modeIndex));return;}
  const speed=e.target.closest('[data-modal-speed]');if(speed){modalSpeed=speed.dataset.modalSpeed;renderModesView();renderBeam();return;}
@@ -175,9 +186,9 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('change',e=>{
  const el=e.target.closest('[data-modal]');if(!el||!model)return;const st=modalSettings(),key=el.dataset.modal;
- if(key==='mass'){const v=Number(el.value);if(!(v>0&&v<=1000)||!el.validity.valid)return;st.mass=v;}
+ if(key==='mass'){const v=Number(el.value);if(!(v>0&&v<=10000)||!el.validity.valid)return;st.mass=v;}
  else if(key==='modes')st.modes=Number(el.value);
- else{st.mass_source=el.value;if(el.value==='custom'&&modalData?.mass?.source==='dead')st.mass=Number(modalData.mass.mean_t_per_m.toPrecision(4));}
+ else{st.mass_source=el.value;if(el.value==='custom'&&modalData?.mass?.source==='dead')st.mass=Number((modalData.mass.mean_t_per_m*9.81).toPrecision(4));}
  // Mass settings only feed this module: no static recalculation.
  updateProjectState();modalChanged();clearTimeout(modalTimer);requestModal();
 });
