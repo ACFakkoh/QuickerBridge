@@ -1,8 +1,8 @@
-# QuickerBridge 0.7.1 — guide en français
+# QuickerBridge 0.8 — guide en français
 
 [English README](README.md)
 
-**Anthony Chéruel · 2026-09-27 · Français / English**
+**Anthony Chéruel · 2026-09-28 · Français / English**
 
 Un outil de calcul préliminaire de poutres continues de ponts, avec PyCBA dans le
 navigateur. Géométrie, charges et diagrammes restent réunis dans une interface
@@ -103,6 +103,31 @@ courbure libre sont appliqués à toutes les travées. Un dessus plus chaud cour
 la poutre vers le haut. Le cas thermique ne se superpose pas aux autres charges.
 PyCBA reçoit une courbure imposée; il ne définit pas nativement un profil thermique
 bilinéaire dans la hauteur. Cette version conserve donc le gradient linéaire explicite.
+
+### Modes propres (v0.8)
+
+L’onglet **Modes propres**, à côté des notes de calcul, calcule jusqu’à 12 modes de
+flexion verticale du tablier : fréquence f (Hz), période T (s), pulsation ω, masse
+modale et forme symétrique/antisymétrique. Il reprend exactement le modèle statique :
+travées, sections, zones non prismatiques EI(x), appuis encastrés et ressorts de rotation.
+
+- **Masse :** par défaut les charges permanentes **non pondérées** divisées par g
+  (une charge de 10 kN/m donne 1,02 t/m) ; les facteurs de charge ne sont pas de la
+  masse. Une charge partielle crée une masse partielle. Choisissez « Masse imposée »
+  pour saisir directement des t/m. Ces réglages ne relancent pas le calcul statique.
+- **Animation :** le tablier dessiné dans le bandeau vibre selon le mode choisi
+  (ralenti, ou temps réel quand l’écran peut l’afficher). Les vignettes animent les
+  12 modes en même temps ; ← → changent de mode.
+- **Spectre :** les modes sur une échelle logarithmique ; la hauteur suit la masse
+  modale. Les bandes ombrées sont les plages de risque de résonance piétonne verticale
+  (Sétra 2006).
+- **Écouter le pont :** les fréquences propres sont transposées dans l’audible
+  (le mode 1 devient un sol à 196 Hz) et jouées en arpège ; les rapports entre modes
+  sont conservés et le volume suit la masse modale.
+- **Méthode :** éléments d’Euler-Bernoulli et masse cohérente, comme
+  `BeamAnalysis.modal` de PyCBA, étendus aux travées non prismatiques et à la masse
+  par intervalles. Flexion verticale d’une ligne de poutre seulement : ni torsion,
+  ni amortissement, ni interaction véhicule-pont.
 
 ### Enregistrer, rouvrir et exporter
 

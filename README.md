@@ -9,7 +9,7 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 
 ![QuickerBridge — envelopes of a two-span girder with rotational-spring abutments](docs/screenshots/envelopes.png)
 
-*Version 0.7.1 · 2026-09-27 · Anthony Chéruel · [Guide en français](README.fr.md)*
+*Version 0.8 · 2026-09-28 · Anthony Chéruel · [Guide en français](README.fr.md)*
 
 ---
 
@@ -22,8 +22,11 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 | **Truck crossing animation** | 60 pre-computed positions of the full vehicle, played back instantly; the envelope stays as a reference. |
 | **Supports** | Pinned, roller, **fixed (integral abutment)** or **rotational spring k** with the resulting degree of fixity. Uplift is flagged automatically. |
 | **Sections** | Steel I-girders from plate dimensions or direct EI, inertia modifier, non-prismatic zones with linear or parabolic depth, EI(x) diagram and stiffness-step warnings. |
+| **Vibration modes** *(v0.8)* | Up to 12 natural frequencies and periods in vertical bending from the same model (non-prismatic EI, integral abutments, springs), mass from the unfactored permanent loads. Animated deck, mode thumbnails, frequency spectrum with pedestrian resonance bands, modal mass — and *Listen to the bridge*. |
 | **Thermal gradient** | Linear ΔT through the depth on every span, alone or with integral/spring supports. |
 | **Outputs** | Station table, Excel export (FR/EN), `.quickerbridge.json` projects, bilingual interface. |
+
+![Vibration modes: animated deck, spectrum and the twelve first modes](docs/screenshots/vibration-modes.png)
 
 <table>
 <tr>
@@ -60,7 +63,9 @@ Retry button.
 
 Linear-elastic, one-dimensional Euler–Bernoulli continuous beam, one traffic lane,
 longitudinal effects only. Sagging moment positive, deflection positive downward,
-reactions positive upward, moment reactions counter-clockwise positive. No automatic
+reactions positive upward, moment reactions counter-clockwise positive. Vibration modes
+cover vertical bending of one girder line (no torsion, damping or vehicle-bridge
+interaction). No automatic
 self-weight, load combinations, transverse distribution, composite section properties,
 stresses or code checks.
 
@@ -72,7 +77,8 @@ stresses or code checks.
 
 468 automated tests (application + vendored PyCBA) compare results with closed-form
 solutions: continuous beams, fixed and propped beams, rotational springs, influence lines,
-thermal curvature, non-prismatic members and mirror symmetry. The application suite also
+thermal curvature, non-prismatic members, mirror symmetry and natural frequencies
+(closed forms and PyCBA `BeamAnalysis.modal`). The application suite also
 runs in the browser configuration (no matplotlib, NumPy-only SciPy subset). The CL-750-QC
 envelope of the default 2 × 34.8 m bridge matches an independent three-moment solution
 to 0.01 %. See [VALIDATION.md](VALIDATION.md) and [NONPRISMATIC.md](NONPRISMATIC.md).

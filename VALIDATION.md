@@ -1,4 +1,4 @@
-# Validation — QuickerBridge v0.4
+# Validation — QuickerBridge (v0.4 → v0.8)
 
 2026-09-15. Numerical checks are software regressions, not certification for bridge design.
 
@@ -186,3 +186,30 @@ SciPy (CubicSpline 2–97 knots, cumulative_trapezoid, simpson odd/even, quad_ve
 breakpoints, generalized eigh) and the full application suite passes in the browser
 configuration (`QB_MPL_STUB=1 QB_SCIPY_LITE=1`, also run in CI). Totals: 468 passed and
 1 skipped natively; 87 passed and 1 skipped in the browser configuration.
+
+## v0.8 vibration modes and undistorted diagrams (2026-09-28)
+
+`quickerbridge/modal.py` solves K φ = ω² M φ with Hermite Euler-Bernoulli elements and a
+consistent mass matrix (the formulation of PyCBA `BeamAnalysis.modal`), extended to
+EI(x) (3-point Gauss per element, mesh broken at every zone limit) and to mass defined by
+intervals (unfactored permanent loads ÷ g, mesh broken at every load limit).
+`tests/test_modal.py` (13 tests):
+
+- simply supported, fixed-fixed and propped cantilever against the closed forms
+  (βL = nπ, 4.7300, 7.8532, 3.9266): 1e-4 relative or better for the first 6 modes;
+- default 2 × 34.8 m bridge: f1 equals the isolated simply supported span (antisymmetric),
+  f2/f1 = (3.9266/π)² (symmetric);
+- identical to `pycba.BeamAnalysis.modal` (rtol 1e-9) for three unequal spans with pinned,
+  fixed and rotational-spring supports;
+- rotational spring k → 0 and k → ∞ recover the pinned and fixed frequencies;
+- modal mass 8/π² and 8/(9π²) for a simply supported span; load factor ignored; two
+  half-span loads equal one full load; a partly unloaded deck is reported;
+- mirrored haunch: S/A alternation and Standard/Fine agreement to 1e-4;
+- modal settings do not change the static structure cache; browser dispatch; project
+  schema 4 round trip and upgrade from schema 3.
+
+The result diagrams (V, M, δ, EI, influence lines) now use a viewBox whose height follows
+the on-screen aspect ratio, so text and markers are no longer squashed; they are taller
+(148 px, 124 px on short screens, 172 px on wide screens, 190 px in focus mode). Checked
+in headless Chromium at 820, 1366 and 1920 px wide, FR and EN, with the engine replaced
+by the native Python dispatcher.

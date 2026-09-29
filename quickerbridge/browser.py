@@ -23,6 +23,10 @@ def dispatch(raw: str) -> str:
         _results[data["job"]] = value
         for key in list(_results)[:-3]:
             del _results[key]
+    elif action == "modal":
+        from .modal import analyse_modal
+
+        value = analyse_modal(Model.model_validate(data["model"]))
     elif action in ("influence", "traverse"):
         result = _results[data["job"]]
         if result.get("kind") == "thermal":

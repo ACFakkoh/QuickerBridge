@@ -116,6 +116,15 @@ class ThermalLoad(InputModel):
     depth: float = Field(default=1200, gt=0, le=15000)  # thermal reference depth, mm
 
 
+class ModalSettings(InputModel):
+    """Free-vibration settings. The mass is not a load: it only feeds the
+    eigenvalue analysis and never changes the static results."""
+
+    mass_source: Literal["dead", "custom"] = "dead"
+    mass: float = Field(default=1.0, gt=0, le=1000)  # t/m, custom source
+    modes: int = Field(default=12, ge=1, le=12)
+
+
 class Model(InputModel):
     spans: list[Span] = Field(
         default_factory=lambda: [Span(), Span()], min_length=1, max_length=5
@@ -132,6 +141,7 @@ class Model(InputModel):
     dead: list[DeadLoad] = Field(default_factory=lambda: [DeadLoad()], max_length=30)
     live: LiveLoad = Field(default_factory=LiveLoad)
     thermal: ThermalLoad = Field(default_factory=ThermalLoad)
+    modal: ModalSettings = Field(default_factory=ModalSettings)
     load_mode: Literal["dead", "live", "both", "thermal"] = "both"
     subdivisions: int = Field(default=10, ge=2, le=100)
     precision: Literal["standard", "fine"] = "standard"

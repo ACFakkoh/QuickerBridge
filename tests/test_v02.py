@@ -94,7 +94,7 @@ def test_direct_ei_benchmark_and_browser_excel():
         dispatch(json.dumps(dict(action="excel", data=dict(job="test", lang="fr"))))
     )
     wb = load_workbook(BytesIO(base64.b64decode(encoded)))
-    assert wb["Modèle"]["B1"].value == "0.7.1"
+    assert wb["Modèle"]["B1"].value == "0.8"
     assert wb["Stations"]["L2"].value == pytest.approx(50)
     m.spans[0].zones = [Zone(end=1, section=0, profile="linear")]
     m.nonprismatic = True

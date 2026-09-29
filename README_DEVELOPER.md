@@ -66,6 +66,8 @@ fichiers à chaque livraison, pas seulement le HTML.
 | `quickerbridge/engine.py` | Influences, groupes d’essieux, enveloppes, cache |
 | `quickerbridge/loads.py` | Véhicules, facteurs, charge de voie et charges permanentes |
 | `quickerbridge/thermal.py` | Courbure thermique indépendante |
+| `quickerbridge/modal.py` | Modes propres (v0.8) : fréquences, périodes, formes, masse modale |
+| `dist/modes.js` | Vue « Modes propres » : animation, spectre, « Écouter le pont » (module indépendant d’`app.js`) |
 | `quickerbridge/projects.py` | Schéma de projet et compatibilité |
 | `quickerbridge/version.py` | Version, date, auteur |
 | `vendor/pycba/src/pycba/` | Solveur PyCBA et modifications locales |

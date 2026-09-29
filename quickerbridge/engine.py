@@ -294,7 +294,7 @@ class Basis:
 
 def structure_key(model):
     data = model.model_dump()
-    for key in ("live", "dead", "thermal", "load_mode"):
+    for key in ("live", "dead", "thermal", "load_mode", "modal"):
         data.pop(key)
     return json.dumps(data, sort_keys=True)
 

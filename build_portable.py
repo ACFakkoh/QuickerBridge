@@ -83,6 +83,7 @@ def source_entries():
         "index.html",
         "styles.css",
         "app.js",
+        "modes.js",
         "browser-solver.js",
         "version.js",
         "default-result.js",
@@ -172,6 +173,7 @@ def build_browser_assets() -> None:
         "solver-bundle.js",
         "browser-solver.js",
         "app.js",
+        "modes.js",
     )
     for filename in script_names:
         html = html.replace(f'<script src="./{filename}" defer></script>', "")
@@ -223,6 +225,7 @@ def build_release() -> None:
             "index.html",
             "styles.css",
             "app.js",
+            "modes.js",
             "browser-solver.js",
             "version.js",
             "default-result.js",
