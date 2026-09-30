@@ -1,8 +1,8 @@
-# QuickerBridge 0.8 — guide en français
+# QuickerBridge 0.8.5 — guide en français
 
 [English README](README.md)
 
-**Anthony Chéruel · 2026-09-28 · Français / English**
+**Anthony Chéruel · 2026-09-29 · Français / English**
 
 Un outil de calcul préliminaire de poutres continues de ponts, avec PyCBA dans le
 navigateur. Géométrie, charges et diagrammes restent réunis dans une interface
@@ -11,7 +11,7 @@ compacte. Aucune installation de Python et aucun serveur local pour les utilisat
 ## Démarrer
 
 - **Sur le web :** https://acfakkoh.github.io/QuickerBridge/ (GitHub Pages, publié à chaque mise à jour de `main`).
-- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.6-2026-09-27.html`) dans un navigateur moderne. Si vous
+- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.8.5-2026-09-29.html`) dans un navigateur moderne. Si vous
   recevez l’archive portable, extrayez-la avant d’ouvrir le HTML.
 - Une connexion Internet est nécessaire au démarrage pour charger Pyodide et ses
   bibliothèques. Le cache peut accélérer les ouvertures suivantes; cette édition
@@ -89,10 +89,22 @@ le diagramme EI(x) et l’alerte « Saut de rigidité » le signalent.
 
 Les deux lignes épaisses limitent les enveloppes min/max. Chaque extrême peut
 venir d’une disposition de charges différente. Cliquez sur un extrême pour voir
-la disposition compatible. Les flèches d’essieux et leurs nombres montrent les
+la disposition compatible. La case **Δ** sous V, M ou δ affiche, pour ce diagramme,
+la différence max − min à chaque abscisse. Le survol affiche aussi EI.
+Les flèches d’essieux et leurs nombres montrent les
  **charges nominales multipliées par le facteur d’essieu**; dans un cas de voie
  canadien, elles incluent aussi la réduction de voie. Elles n’affichent jamais le
  CMD ni le facteur routier global.
+Le cas supplémentaire **HL-93 · 90 % de deux camions** s’active pour les
+enveloppes avec voie du camion ou du tandem et au moins deux travées. Il combine
+90 % de deux camions à essieux arrière espacés de 14 pi avec 90 % de la voie,
+avec un espacement libre d’au moins 50 pi entre camions. Il concerne les moments
+négatifs autour des piles et les réactions verticales intérieures. Le CMD de
+33 % s’applique aux essieux seulement; les essieux et régions de voie favorables
+sont omis. Les centres des camions occupent deux travées adjacentes; leur
+espacement et leur position sont cherchés au pas Standard ou Fin.
+[Référence FHWA, §6.2.1](https://rosap.ntl.bts.gov/view/dot/42904/dot_42904_DS1.pdf).
+
 Moment positif en travée, flèche positive vers le bas,
 réactions positives vers le haut.
 
@@ -107,23 +119,21 @@ bilinéaire dans la hauteur. Cette version conserve donc le gradient linéaire e
 ### Modes propres (v0.8)
 
 L’onglet **Modes propres**, à côté des notes de calcul, calcule jusqu’à 12 modes de
-flexion verticale du tablier : fréquence f (Hz), période T (s), pulsation ω, masse
+flexion verticale du tablier, **6 par défaut** : fréquence f (Hz), période T (s), pulsation ω, masse
 modale et forme symétrique/antisymétrique. Il reprend exactement le modèle statique :
 travées, sections, zones non prismatiques EI(x), appuis encastrés et ressorts de rotation.
 
 - **Masse :** par défaut les charges permanentes **non pondérées** divisées par g
   (une charge de 10 kN/m donne 1,02 t/m) ; les facteurs de charge ne sont pas de la
   masse. Une charge partielle crée une masse partielle. Choisissez « Masse imposée »
-  pour saisir directement des t/m. Ces réglages ne relancent pas le calcul statique.
+  pour saisir une charge équivalente en kN/m, divisée par g pour obtenir les t/m. Ces réglages ne relancent pas le calcul statique.
 - **Animation :** le tablier dessiné dans le bandeau vibre selon le mode choisi
-  (ralenti, ou temps réel quand l’écran peut l’afficher). Les vignettes animent les
-  12 modes en même temps ; ← → changent de mode.
+  (**temps réel par défaut**, avec un ralenti disponible). Les vignettes animent
+  les modes calculés ; ← → changent de mode. Les fréquences élevées restent
+  limitées par le taux de rafraîchissement de l’écran.
 - **Spectre :** les modes sur une échelle logarithmique ; la hauteur suit la masse
   modale. Les bandes ombrées sont les plages de risque de résonance piétonne verticale
   (Sétra 2006).
-- **Écouter le pont :** les fréquences propres sont transposées dans l’audible
-  (le mode 1 devient un sol à 196 Hz) et jouées en arpège ; les rapports entre modes
-  sont conservés et le volume suit la masse modale.
 - **Méthode :** éléments d’Euler-Bernoulli et masse cohérente, comme
   `BeamAnalysis.modal` de PyCBA, étendus aux travées non prismatiques et à la masse
   par intervalles. Flexion verticale d’une ligne de poutre seulement : ni torsion,
@@ -137,8 +147,17 @@ n’est sauvegardé dans le projet. Enregistrez avant de fermer le navigateur.
 Les anciens projets dont les tôles variaient continûment doivent être consultés
 avec v0.3 puis redéfinis explicitement en zones dans v0.4; l’application les signale.
 
-**Excel** exporte les enveloppes, les réactions et le modèle, même si une position
-particulière du camion est affichée. En mode thermique, il exporte ce cas unique.
+**Comparer** ouvre un second projet JSON sans remplacer le projet courant.
+Les enveloppes V/M/δ se superposent sur une même abscisse en mètres, avec les
+appuis de chaque modèle et un tableau des écarts entre leurs extrema. Chaque
+projet conserve ses paramètres de charge.
+
+**Excel** exporte les enveloppes, les réactions, les Δ et le modèle, même si une
+position particulière du camion est affichée. Le même classeur contient les
+fréquences, périodes, masses modales et formes des modes avec les réglages
+actuels. Les tableaux sont filtrables et formatés; les unités figurent dans les
+entêtes. Sans masse, la feuille Modes indique pourquoi les modes sont indisponibles.
+En mode thermique, les résultats statiques sont ceux du cas unique.
 Les appuis partagés ont deux lignes pour les cisaillements gauche et droite.
 Le bouton **Agrandir les diagrammes** masque temporairement les entrées et agrandit
 les trois graphiques sans relancer le calcul.
@@ -195,7 +214,9 @@ to Canadian truck axle subsets; reduced-truck-plus-lane cases have no dynamic
 allowance. HL-93 envelopes its permitted 4.3–9.0 m rear-axle spacing and applies
 its 33% allowance to truck/tandem axles only, with a 9.3 kN/m companion UDL. Cooper
 uses PyCBA’s full E-series train and companion UDL. Standard companion UDLs cover
-the full bridge. The maintenance vehicle is 24 + 56 kN at 2.0 m, with no lane load
+the full bridge; the optional 90% two-truck HL-93 case uses adverse lane regions
+for negative moments and interior reactions, with at least 50 ft clear headway
+and fixed 14 ft truck axle spacings. The maintenance vehicle is 24 + 56 kN at 2.0 m, with no lane load
 or dynamic allowance. Truck and lane cases are alternatives. No automatic self-weight,
 load combinations, transverse
 load distribution, shear deformation, staged construction, prestress, cracking,

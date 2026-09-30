@@ -20,6 +20,7 @@ def model(lengths, supports, ei=2.4e6, w=24.0, **extra):
         "supports": supports,
         "sections": [{"kind": "ei", "EI": ei}],
         "dead": [{"w": w}],
+        "modal": {"modes": 12},
         **extra,
     }
     return Model.model_validate(data)
@@ -60,7 +61,7 @@ def test_two_equal_spans_default_model():
     )
     assert r["modes"][1]["symmetry"] == "S"
     assert r["references"][0]["f_simple"] == pytest.approx(f_ss)
-    assert len(r["modes"]) == len(r["shapes"]) == 12
+    assert len(r["modes"]) == len(r["shapes"]) == 6
     assert all(len(s) == len(r["x"]) for s in r["shapes"])
     assert all(max(abs(v) for v in s) == pytest.approx(1) for s in r["shapes"])
 

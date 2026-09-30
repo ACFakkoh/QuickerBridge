@@ -97,6 +97,7 @@ class LiveLoad(InputModel):
     factor: float = Field(default=1, ge=0, le=1000)
     axle_factor: float = Field(default=1, ge=0, le=1000)
     dynamic: bool = True
+    two_trucks: bool = False  # HL-93 supplementary 90% negative-moment/pier case
     direction: Literal["both", "forward", "reverse"] = "both"
 
     @model_validator(mode="after")
@@ -122,7 +123,7 @@ class ModalSettings(InputModel):
 
     mass_source: Literal["dead", "custom"] = "dead"
     mass: float = Field(default=10.0, gt=0, le=10000)  # kN/m (weight), custom source
-    modes: int = Field(default=12, ge=1, le=12)
+    modes: int = Field(default=6, ge=1, le=12)
 
 
 class Model(InputModel):

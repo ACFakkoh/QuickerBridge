@@ -1,23 +1,23 @@
 # QuickerBridge — guide développeur
 
-Version 0.4 · Anthony Chéruel · 2026-09-15
+Version 0.8.5 · Anthony Chéruel · 2026-09-29
 
 ## Quel fichier utiliser ou envoyer ?
 
 Pour utiliser l’outil, ouvrez le **QuickerBridge-v<version>-<date>.html à la racine du dossier personnel**.
 Pour l’envoyer à quelqu’un, ce fichier HTML suffit au fonctionnement, avec une
 connexion Internet au démarrage. Pour une redistribution complète avec les guides,
-exemples et notices, envoyez l’archive `QuickerBridge-v0.4-portable.zip`.
+exemples et notices, envoyez l’archive `QuickerBridge-v<version>-portable.zip`.
 
 Le dossier personnel est organisé ainsi :
 
 ```text
 QuickerBridge-v<version>-<date>.html                  application actuelle
 GitHub/                            livrables publics prêts à déposer
-  QuickerBridge-v0.4-source/        contenu à mettre à la racine du dépôt GitHub
-  QuickerBridge-v0.4-source.zip     même arbre, compressé
-  QuickerBridge-v0.4-pages.zip      site statique préconstruit
-  QuickerBridge-v0.4-portable.zip   édition à envoyer
+  QuickerBridge-v<version>-source/        contenu à mettre à la racine du dépôt GitHub
+  QuickerBridge-v<version>-source.zip     même arbre, compressé
+  QuickerBridge-v<version>-pages.zip      site statique préconstruit
+  QuickerBridge-v<version>-portable.zip   édition à envoyer
   MANIFEST.txt / SHA256SUMS.txt
 ref/
   source/                          copie de travail complète, tests et outils locaux
@@ -33,7 +33,7 @@ les PDF du code, vos captures, ni le dossier racine personnel complet.
 ## Publier sur GitHub Pages
 
 1. Créez un dépôt GitHub et placez **le contenu** de
-   `GitHub/QuickerBridge-v0.4-source/` à sa racine, y compris `.github/`.
+   `GitHub/QuickerBridge-v<version>-source/` à sa racine, y compris `.github/`.
    `build_portable.py`, `README.md`, `dist/` et `quickerbridge/` doivent être directement
    à la racine du dépôt, sans dossier source supplémentaire autour.
 2. Dans **Settings → Pages**, choisissez **GitHub Actions** comme source.
@@ -67,7 +67,8 @@ fichiers à chaque livraison, pas seulement le HTML.
 | `quickerbridge/loads.py` | Véhicules, facteurs, charge de voie et charges permanentes |
 | `quickerbridge/thermal.py` | Courbure thermique indépendante |
 | `quickerbridge/modal.py` | Modes propres (v0.8) : fréquences, périodes, formes, masse modale |
-| `dist/modes.js` | Vue « Modes propres » : animation, spectre, « Écouter le pont » (module indépendant d’`app.js`) |
+| `dist/modes.js` | Vue « Modes propres » : animation, spectre, six modes et temps réel par défaut |
+| `dist/comparison.js` | Comparaison de deux JSON, enveloppes et extrema sans remplacer le projet courant |
 | `quickerbridge/projects.py` | Schéma de projet et compatibilité |
 | `quickerbridge/version.py` | Version, date, auteur |
 | `vendor/pycba/src/pycba/` | Solveur PyCBA et modifications locales |

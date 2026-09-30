@@ -463,6 +463,14 @@ def analyse(model: Model):
                 target[changed] = candidate[changed]
                 for j in changed:
                     infos[j] = case_record("lane", "forward", -1, [], 1)
+    if (
+        model.load_mode != "dead"
+        and model.live.two_trucks
+        and model.live.vehicle in {"HL93Truck", "HL93Tandem"}
+        and include_lane
+        and basis.ns > 2
+    ):
+        steps += two_truck_envelope(basis, model, low, high, info_low, info_high, step)
     low += dead
     high += dead
     nx, ns = basis.nx, basis.ns
@@ -574,8 +582,153 @@ def analyse(model: Model):
     }
 
 
+def two_truck_envelope(basis, model, low, high, info_low, info_high, step):
+    """AASHTO 3.6.1.3.1: 90% two trucks + adverse lane; M− and interior R.
+
+    Fixed 14 ft axle spacing; clear headway >= 50 ft, varied on the travel
+    grid. Truck centres occupy adjacent spans. A prefix optimum searches all
+    admissible headways in linear time. Axles opposing the effect are omitted.
+    Reference: FHWA-HIF-16-002 Vol. 20, section 6.2.1 (pp. 18–19).
+    """
+    nx, ns = basis.nx, basis.ns
+    weights = np.array([35.0, 145.0, 145.0])
+    offsets = np.array([0.0, 14 * 0.3048, 28 * 0.3048])
+    length = offsets[-1]
+    clearance = 50 * 0.3048 + length
+    uniform = basis.full_lane(1.0)[nx : 2 * nx]
+    negative = uniform < -1e-8
+    # Keep only negative-moment regions connected to an interior pier.
+    eligible = np.zeros(nx, dtype=bool)
+    changes = np.diff(np.r_[False, negative, False].astype(int))
+    for a, b in zip(np.flatnonzero(changes == 1), np.flatnonzero(changes == -1)):
+        if any(basis.x[a] <= x <= basis.x[b - 1] for x in basis.support_x[1:-1]):
+            eligible[a:b] = True
+    moment_indices = nx + np.flatnonzero(eligible)
+    reactions = 3 * nx + np.arange(1, ns - 1)
+    indices = np.r_[moment_indices, reactions]
+    if not len(indices):
+        return 0
+    lane_lo, lane_hi, _, _ = basis.lane(9.3)
+    factor = 1.33 if model.live.dynamic else 1.0
+    directions = (
+        ["forward", "reverse"]
+        if model.live.direction == "both"
+        else [model.live.direction]
+    )
+    positions = 0
+    for direction in directions:
+        sign = -1 if direction == "forward" else 1
+        q = np.unique(
+            np.r_[
+                np.linspace(0, basis.length, int(np.ceil(basis.length / step)) + 1),
+                (basis.support_x[:, None] - sign * (offsets - length / 2)).ravel(),
+            ]
+        )
+        # Include exactly 50 ft clear headway at every sampled position and
+        # axle/support crossing; a coarse travel grid must not skip this limit.
+        q = np.unique(np.r_[q, q - clearance, q + clearance])
+        q = q[(q >= 0) & (q <= basis.length)]
+        positions += len(q)
+        effects = np.empty((3, len(q), len(indices)))
+        for a, (offset, weight) in enumerate(zip(offsets, weights)):
+            for start in range(0, len(q), 128):
+                p = q[start : start + 128] + sign * (offset - length / 2)
+                effects[a, start : start + 128] = basis.unit(p)[:, indices] * weight
+        for sense, target, infos, lane in (
+            (-1, low, info_low, lane_lo),
+            (1, high, info_high, lane_hi),
+        ):
+            scores = np.maximum(sense * effects, 0).sum(axis=0)
+            for column, index in enumerate(indices):
+                if sense == 1 and index < 3 * nx:
+                    continue  # supplementary case never affects M+, V or D
+                best_score, best_pair = -np.inf, None
+                for span in range(ns - 2):
+                    left = np.flatnonzero(
+                        (q >= basis.support_x[span]) & (q <= basis.support_x[span + 1])
+                    )
+                    right = np.flatnonzero(
+                        (q >= basis.support_x[span + 1])
+                        & (q <= basis.support_x[span + 2])
+                    )
+                    allowed = (
+                        np.searchsorted(
+                            q[left], q[right] - clearance + 1e-10, side="right"
+                        )
+                        - 1
+                    )
+                    right, allowed = right[allowed >= 0], allowed[allowed >= 0]
+                    if not len(right):
+                        continue
+                    values = scores[left, column]
+                    prefix = np.maximum.accumulate(values)
+                    chosen = np.maximum.accumulate(
+                        np.where(values == prefix, np.arange(len(left)), 0)
+                    )
+                    pairs = prefix[allowed] + scores[right, column]
+                    k = int(pairs.argmax())
+                    if pairs[k] > best_score:
+                        best_score = float(pairs[k])
+                        best_pair = (int(left[chosen[allowed[k]]]), int(right[k]))
+                if best_pair is None:
+                    continue
+                value = (
+                    0.9
+                    * model.live.factor
+                    * (
+                        sense * best_score * factor * model.live.axle_factor
+                        + lane[index]
+                    )
+                )
+                if sense * value <= sense * target[index] + 1e-10:
+                    continue
+                axles = []
+                for truck, k in enumerate(best_pair):
+                    for a, (offset, weight) in enumerate(zip(offsets, weights)):
+                        x = q[k] + sign * (offset - length / 2)
+                        if (
+                            0 <= x <= basis.length
+                            and sense * effects[a, k, column] > 1e-12
+                        ):
+                            axles.append(
+                                {
+                                    "id": truck * 3 + a + 1,
+                                    "x": float(x),
+                                    "load": float(weight),
+                                }
+                            )
+                fronts = [float(q[k] - sign * length / 2) for k in best_pair]
+                target[index] = value
+                infos[index] = case_record(
+                    "hl93_two_trucks",
+                    direction,
+                    fronts[0],
+                    [a["id"] for a in axles],
+                    factor,
+                    second_position=fronts[1],
+                    gap=float(q[best_pair[1]] - q[best_pair[0]] - length),
+                    reduction=0.9,
+                    special_axles=axles,
+                    target_index=int(index),
+                    sense="min" if sense == -1 else "max",
+                )
+    return positions
+
+
 def record_axles(model, record, length):
     """Factored axle loads on the bridge for one governing/position record."""
+    if record.get("case") == "hl93_two_trucks":
+        return [
+            {
+                **a,
+                "load": a["load"]
+                * 0.9
+                * record["factor"]
+                * model.live.axle_factor
+                * model.live.factor,
+            }
+            for a in record["special_axles"]
+        ]
     weights, offsets = vehicle_data(model.live, record.get("rear_spacing"))
     sign = -1 if record.get("direction") == "forward" else 1
     p = record.get("position", 0)
@@ -713,8 +866,14 @@ def snapshot(model, record, target_index=None, sense="max"):
     if model.load_mode == "live":
         dead *= 0
         intervals = []
-    is_lane = record.get("case") == "lane"
+    special = record.get("case") == "hl93_two_trucks"
+    is_lane = record.get("case") == "lane" or special
     lane_w, _, lane_style = lane_parameters(model.live)
+    if special:
+        lane_style = "patterned"
+        lane_w *= 0.9
+        target_index = record["target_index"]
+        sense = record["sense"]
     axles = record_axles(model, record, basis.length)
     values = dead.copy()
     for axle in axles:

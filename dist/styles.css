@@ -61,8 +61,6 @@ input[type=number]{appearance:textfield;-moz-appearance:textfield}
 .modal-controls{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:.8125rem}.modal-controls label{display:flex;align-items:center;gap:6px}
 .modal-controls select,.modal-controls input{min-height:30px;padding:3px 6px;font-size:.8125rem}.modal-controls input{width:80px}
 .modal-actions{display:flex;gap:10px;align-items:center}
-#modal-listen{display:inline-flex;align-items:center;gap:6px;font-size:.8125rem;font-weight:600;color:var(--teal);border-color:#9fd9cf;background:#f1fbf8}
-#modal-listen:hover{background:#dff5ee}
 .modal-spectrum-wrap{border-top:1px solid #edf1f4;padding-top:6px}
 .modal-spectrum{display:block;overflow:visible}.modal-spectrum text{font-family:"Segoe UI",sans-serif;font-size:10px;fill:#8097a3}
 .modal-spectrum .spec-label{font-size:10.5px;font-weight:600;fill:#17374b}
@@ -78,3 +76,13 @@ input[type=number]{appearance:textfield;-moz-appearance:textfield}
 .modal-hint{margin:6px 0 10px}
 .modal-table{max-height:none}.modal-table tr[data-mode-index]{cursor:pointer}.modal-table tr.selected td{background:#effaf6;font-weight:600}
 .plot path,.plot line,.il-plot path,.il-plot line,.stiffness-plot path,.stiffness-plot line,.stiffness-plot circle{vector-effect:non-scaling-stroke}
+
+#beam{height:146px;overflow:visible}
+.delta-option{display:inline-flex;align-items:center;gap:5px;font-size:.75rem;color:#a33329;white-space:nowrap}
+.modal-mode .chart-toolbar{display:flex}.modal-mode .view-tabs,.modal-mode #focus-results{display:none}
+.compare-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 0 12px;font-size:.8125rem}.compare-head span{overflow-wrap:anywhere}
+.compare-note{color:var(--muted);font-size:.75rem;margin:0 0 10px}.compare-legend{display:flex;flex-wrap:wrap;gap:18px;font-size:.75rem;margin:8px 0;color:var(--teal)}.compare-legend span+span{color:#b96f17}
+.comparison-table{margin-bottom:14px}.comparison-table th,.comparison-table td{text-align:right}.comparison-table td:first-child{text-align:left}
+.comparison-mode .metrics,.comparison-mode .reactions-block{display:none}
+
+@media(max-width:650px){.result-toolbar{flex-wrap:wrap}.result-toolbar .segmented{flex-wrap:wrap;max-width:100%}.result-toolbar #status{max-width:100%;text-align:left}.structure-heading{letter-spacing:.5px}.compare-head{flex-wrap:wrap}.compare-head>div{display:flex;gap:5px}.compare-head button{font-size:.75rem}}

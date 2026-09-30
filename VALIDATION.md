@@ -1,4 +1,4 @@
-# Validation — QuickerBridge (v0.4 → v0.8)
+# Validation — QuickerBridge (v0.4 → v0.8.5)
 
 2026-09-15. Numerical checks are software regressions, not certification for bridge design.
 
@@ -213,3 +213,51 @@ the on-screen aspect ratio, so text and markers are no longer squashed; they are
 (148 px, 124 px on short screens, 172 px on wide screens, 190 px in focus mode). Checked
 in headless Chromium at 820, 1366 and 1920 px wide, FR and EN, with the engine replaced
 by the native Python dispatcher.
+
+## v0.8.5 September 29 feedback (verified 2026-09-30)
+
+Scope: only the Notion page “QuickerBridge feedback et features 2026-09-29”.
+Version retained at 0.8.5. The application suite passes natively (119 tests,
+44.43 s) and with the browser replacements (103 passed, 1 skipped, 227.97 s).
+Both runs report two existing FastAPI/Starlette deprecation warnings.
+
+`tests/test_feedback_2026_09_29.py` checks:
+
+- HL-93 supplementary 90% two-truck case: fixed 14 ft axle spacings, at least
+  50 ft clear headway (the exact minimum is included in the travel search),
+  adverse axle/lane loading, dynamic allowance on axles only, user factors and
+  project-file round trip. Only the permitted negative moment regions and
+  interior vertical reactions change; V, deflection, positive M and exterior
+  reactions retain their ordinary envelopes.
+- Governing snapshots reproduce their target envelope value, with force and
+  moment equilibrium. For two equal 35 m spans, an independent three-moment
+  calculation and a 0.05 m exhaustive truck-position search agree with the
+  Standard envelope within 0.05% for pier M− and maximum interior R.
+- One workbook includes static results, Δ, modal frequencies and normalized
+  shapes. Modal mass/cumulative ratios are numeric percentages; modal settings
+  current at export are used. A model without mass retains its static export
+  and explains unavailable modes. Reference-project comparisons do not evict
+  the current analysis job.
+
+The supplementary case follows
+[FHWA-HIF-16-002 Vol.20, §6.2.1, pp.18–19](https://rosap.ntl.bts.gov/view/dot/42904/dot_42904_DS1.pdf)
+and uses adjacent spans as described in
+[WSDOT Bridge Design Manual, §3.9.2](https://devapps.wsdot.wa.gov/publications/manuals/fulltext/M23-50/M23-50.13Complete.pdf).
+Truck centres occupy adjacent spans; positions and clear headway are sampled.
+Standard/Fine sensitivity remains relevant for unequal or non-prismatic spans.
+
+Chrome checks use the real Pyodide runtime, including the portable HTML opened
+directly from disk. They cover individual V/M/δ range checkboxes, EI hover,
+beam/support alignment within 0.8 screen pixels at 390, 600, 1000 and 1440 px,
+six default modes, real-time animation, removal of audio, Excel access in the
+modal view, and FR/EN. Same-geometry and different-length JSON comparisons
+preserve the current model and share an absolute metre axis; comparison text
+keeps equal horizontal/vertical scale on mobile. No page errors occurred.
+
+The first portable check exposed premature comparison-module initialization.
+Initialization now waits for DOMContentLoaded so all embedded modules are ready;
+the corrected portable subsequently passed the checks above. A workbook generated
+by real Pyodide was reopened to verify all station Δ values, the six modal
+frequencies and mass ratios against browser results, HL-93 governing records,
+the shapes chart, typed percentages, frozen panes and version metadata.
+Its modal table was rendered and visually inspected.

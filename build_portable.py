@@ -84,6 +84,7 @@ def source_entries():
         "styles.css",
         "app.js",
         "modes.js",
+        "comparison.js",
         "browser-solver.js",
         "version.js",
         "default-result.js",
@@ -174,9 +175,11 @@ def build_browser_assets() -> None:
         "browser-solver.js",
         "app.js",
         "modes.js",
+        "comparison.js",
     )
     for filename in script_names:
         html = html.replace(f'<script src="./{filename}" defer></script>', "")
+    html = "\n".join("" if not line.strip() else line for line in html.split("\n"))
     scripts = "\n".join(
         (DIST / filename).read_text(encoding="utf-8") for filename in script_names
     )
@@ -190,7 +193,9 @@ def build_browser_assets() -> None:
     (ROOT / PORTABLE_NAME).write_text(html, encoding="utf-8")
     # Double-click launcher for the portable package, pointing at this build.
     (ROOT / "QuickerBridge.cmd").write_text(
-        f'@echo off\r\nstart "" "%~dp0{PORTABLE_NAME}"\r\n', encoding="utf-8"
+        f'@echo off\r\nstart "" "%~dp0{PORTABLE_NAME}"\r\n',
+        encoding="utf-8",
+        newline="",
     )
 
 
@@ -226,6 +231,7 @@ def build_release() -> None:
             "styles.css",
             "app.js",
             "modes.js",
+            "comparison.js",
             "browser-solver.js",
             "version.js",
             "default-result.js",
@@ -240,6 +246,7 @@ def build_release() -> None:
         (ROOT / PORTABLE_NAME, PORTABLE_NAME),
         (ROOT / "QuickerBridge.cmd", "QuickerBridge.cmd"),
         (ROOT / "README.md", "README.md"),
+        (ROOT / "README.fr.md", "README.fr.md"),
         (ROOT / "README_DEVELOPER.md", "README_DEVELOPER.md"),
         (ROOT / "NONPRISMATIC.md", "NONPRISMATIC.md"),
         (ROOT / "VALIDATION.md", "VALIDATION.md"),

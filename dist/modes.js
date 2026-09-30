@@ -6,7 +6,7 @@
 // It never changes the static analysis, its cache or its results.
 Object.assign(words.en,{
  modesTitle:"Free vibration · vertical bending",deckModes:"DECK · VIBRATION MODE",modalMass:"Mass",massDead:"Permanent loads ÷ g (unfactored)",massCustom:"Imposed mass (kN/m)",modalCount:"Modes",
- slow:"Slow motion",realTime:"Real time",listen:"Listen to the bridge",listenHelp:"Plays the modal frequencies transposed into the audible range (ratios preserved); loudness follows the modal mass.",
+ slow:"Slow motion",realTime:"Real time",
  modalLoading:"Computing the vibration modes…",modalEngine:"The vibration modes are computed once the calculation engine has loaded.",modalFailed:"The vibration modes could not be computed.",noMass:"No mass: add a permanent load or choose an imposed mass.",
  mode:"Mode",frequency:"Frequency",period:"Period",modalMassShort:"Modal mass",cumulative:"Cumulative",shape:"Shape",symS:"Symmetric",symA:"Antisymmetric",
  modalCaption:"Mode {n} · f = {f} Hz · T = {T} s · {sym}modal mass {m} %",slowed:"slowed ×{k}",realSpeed:"true speed",tooFast:"too fast for the screen: slowed ×{k}",
@@ -17,7 +17,7 @@ Object.assign(words.en,{
 });
 Object.assign(words.fr,{
  modesTitle:"Vibrations libres · flexion verticale",deckModes:"TABLIER · MODE PROPRE",modalMass:"Masse",massDead:"Charges permanentes ÷ g (non pondérées)",massCustom:"Masse imposée (kN/m)",modalCount:"Modes",
- slow:"Ralenti",realTime:"Temps réel",listen:"Écouter le pont",listenHelp:"Joue les fréquences propres transposées dans l’audible (rapports conservés) ; le volume suit la masse modale.",
+ slow:"Ralenti",realTime:"Temps réel",
  modalLoading:"Calcul des modes propres…",modalEngine:"Les modes propres seront calculés dès que le moteur de calcul sera chargé.",modalFailed:"Les modes propres n’ont pas pu être calculés.",noMass:"Aucune masse : ajoutez une charge permanente ou choisissez une masse imposée.",
  mode:"Mode",frequency:"Fréquence",period:"Période",modalMassShort:"Masse modale",cumulative:"Cumul",shape:"Forme",symS:"Symétrique",symA:"Antisymétrique",
  modalCaption:"Mode {n} · f = {f} Hz · T = {T} s · {sym}masse modale {m} %",slowed:"ralenti ×{k}",realSpeed:"vitesse réelle",tooFast:"trop rapide pour l’écran : ralenti ×{k}",
@@ -27,13 +27,13 @@ Object.assign(words.fr,{
  modesHint:"Cliquez sur un mode, ou utilisez ← →. Le tablier dessiné plus haut vibre selon le mode choisi (amplitude arbitraire).",nodes:"nœuds"
 });
 const tf=(key,values)=>t(key).replace(/\{(\w+)\}/g,(_,k)=>values[k]);
-let modalData=null,modalSel=0,modalToken=0,modalTimer=null,modalRAF=null,modalSpeed='slow',modalState='idle',modalError='',modalAudio=null;
-function modalSettings(){if(!model.modal)model.modal={mass_source:'dead',mass:10,modes:12};return model.modal;}
+let modalData=null,modalSel=0,modalToken=0,modalTimer=null,modalRAF=null,modalSpeed='real',modalState='idle',modalError='';
+function modalSettings(){if(!model.modal)model.modal={mass_source:'dead',mass:10,modes:6};return model.modal;}
 // Displayed oscillation rates. Thumbnails: compressed so the order stays
 // readable (faster for higher modes). Selected mode: slowed to ~0.7 Hz, or its
 // true frequency in "real time" when the screen can show it.
 function thumbRate(i){const f1=modalData.modes[0].f||1;return Math.min(3,.45*Math.sqrt(modalData.modes[i].f/f1));}
-function deckRate(i){const f=modalData.modes[i].f;if(modalSpeed==='real'&&f<=8)return {rate:f,note:t('realSpeed')};const rate=.7;return {rate,note:tf(modalSpeed==='real'?'tooFast':'slowed',{k:fmt(f/rate,f/rate<10?1:0)})};}
+function deckRate(i){const f=modalData.modes[i].f;if(modalSpeed==='real')return {rate:f,note:t('realSpeed')};const rate=.7;return {rate,note:tf('slowed',{k:fmt(f/rate,f/rate<10?1:0)})};}
 function modalChanged(){
  modalData=modalData&&{...modalData,stale:true};clearTimeout(modalTimer);
  if(view==='modes')modalTimer=setTimeout(requestModal,500);
@@ -60,7 +60,7 @@ function modalHide(){modalMode(false);stopModalAnimation();const heading=$('[dat
 // ---- Beam panel: the deck itself vibrates in the selected mode.
 function modalBeam(){
  if(view!=='modes'||!modalData||!model)return false;
- const d=modalData,total=d.x.at(-1),xp=x=>55+x/total*890,y0=64,A=22,i=modalSel,v=d.shapes[i],mode=d.modes[i];
+ const d=modalData,total=d.x.at(-1),xp=x=>beamX(x,total),y0=64,A=22,i=modalSel,v=d.shapes[i],mode=d.modes[i];
  let svg=`<defs><linearGradient id="modal-glow" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#73d8bd" stop-opacity=".18"/><stop offset="1" stop-color="#73d8bd" stop-opacity=".04"/></linearGradient></defs>`;
  const env=s=>d.x.map((x,k)=>`${k?'L':'M'}${xp(x).toFixed(1)},${(y0+s*A*v[k]).toFixed(1)}`).join('');
  svg+=`<path d="${env(1)}${d.x.map((x,k)=>`L${xp(d.x[d.x.length-1-k]).toFixed(1)},${(y0-A*v[d.x.length-1-k]).toFixed(1)}`).join('')}Z" fill="url(#modal-glow)"/>`;
@@ -108,7 +108,7 @@ function drawModalFrame(now){
  if(modalCache?.key!==modalData)modalCache=modalGeometry();
  const tsec=now/1000,deck=$('#modal-deck');
  if(deck){
-  const d=modalData,total=d.x.at(-1),xp=x=>55+x/total*890,v=d.shapes[modalSel],s=Math.sin(2*Math.PI*deckRate(modalSel).rate*tsec)*22,dp=modalCache.depth;
+  const d=modalData,total=d.x.at(-1),xp=x=>beamX(x,total),v=d.shapes[modalSel],s=Math.sin(2*Math.PI*deckRate(modalSel).rate*tsec)*22,dp=modalCache.depth;
   const top=d.x.map((x,k)=>`${k?'L':'M'}${xp(x).toFixed(1)},${(58+s*v[k]).toFixed(1)}`).join('');
   const bottom=d.x.map((_,k)=>{const j=d.x.length-1-k;return `L${xp(d.x[j]).toFixed(1)},${(58+dp[j]+s*v[j]).toFixed(1)}`}).join('');
   deck.setAttribute('d',top+bottom+'Z');
@@ -138,7 +138,7 @@ function spectrumSvg(){
 }
 function renderModesView(){
  const host=$('#modes-view');if(!host||!model)return;const st=modalSettings();
- const controls=`<div class="modal-head"><div class="modal-controls"><label>${t('modalMass')} <select data-modal="mass_source"><option value="dead"${st.mass_source==='dead'?' selected':''}>${t('massDead')}</option><option value="custom"${st.mass_source==='custom'?' selected':''}>${t('massCustom')}</option></select></label>${st.mass_source==='custom'?`<label><input type="number" step="any" min="0.001" max="10000" data-modal="mass" value="${st.mass}"> kN/m</label>`:''}<label>${t('modalCount')} <select data-modal="modes">${[3,6,9,12].map(n=>`<option${st.modes===n?' selected':''}>${n}</option>`).join('')}</select></label></div><div class="modal-actions"><div class="segmented small"><button data-modal-speed="slow" class="${modalSpeed==='slow'?'active':''}">${t('slow')}</button><button data-modal-speed="real" class="${modalSpeed==='real'?'active':''}">${t('realTime')}</button></div><button id="modal-listen" title="${esc(t('listenHelp'))}" ${modalData?'':'disabled'}><svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path d="M3 8h3l4-4v12l-4-4H3z" fill="currentColor"/><path d="M13 6.5a5 5 0 0 1 0 7M15.5 4a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> ${t('listen')}</button></div></div>`;
+ const controls=`<div class="modal-head"><div class="modal-controls"><label>${t('modalMass')} <select data-modal="mass_source"><option value="dead"${st.mass_source==='dead'?' selected':''}>${t('massDead')}</option><option value="custom"${st.mass_source==='custom'?' selected':''}>${t('massCustom')}</option></select></label>${st.mass_source==='custom'?`<label><input type="number" step="any" min="0.001" max="10000" data-modal="mass" value="${st.mass}"> kN/m</label>`:''}<label>${t('modalCount')} <select data-modal="modes">${[3,6,9,12].map(n=>`<option${st.modes===n?' selected':''}>${n}</option>`).join('')}</select></label></div><div class="modal-actions"><div class="segmented small"><button data-modal-speed="slow" class="${modalSpeed==='slow'?'active':''}">${t('slow')}</button><button data-modal-speed="real" class="${modalSpeed==='real'?'active':''}">${t('realTime')}</button></div></div></div>`;
  let body='';
  if(modalState==='engine')body=`<p class="help">${t('modalEngine')}</p>`;
  else if(modalState==='error')body=`<p class="error">${modalError.includes('modal.no_mass')?t('noMass'):t('modalFailed')}</p>`;
@@ -147,31 +147,14 @@ function renderModesView(){
   const d=modalData;let cumulative=0;
   const cards=d.modes.map((m,i)=>{const sx=d.support_x.map(x=>(4+x/d.x.at(-1)*192).toFixed(1));return `<button class="modal-card${i===modalSel?' selected':''}" data-mode-index="${i}" aria-pressed="${i===modalSel}"><span class="mc-head"><b>${m.n}</b><span>${fmt(m.f,m.f<10?2:1)} Hz</span></span><svg viewBox="0 0 200 64" preserveAspectRatio="none" aria-hidden="true"><line x1="4" x2="196" y1="32" y2="32" stroke="#dbe5eb" vector-effect="non-scaling-stroke"/>${sx.map(x=>`<path d="M${x} 34l-4 7h8z" fill="#9db4c1"/>`).join('')}<polyline data-mode="${i}" fill="none" stroke="#008378" stroke-width="2" vector-effect="non-scaling-stroke" points=""/></svg><span class="mc-foot">T ${fmt(m.T,3)} s · ${fmt(100*m.mass_ratio,1)} %${m.symmetry!=='—'?` · ${m.symmetry}`:''}</span></button>`}).join('');
   const rows=d.modes.map((m,i)=>{cumulative+=m.mass_ratio;return `<tr class="${i===modalSel?'selected':''}" data-mode-index="${i}"><td>${m.n}</td><td>${fmt(m.f,3)}</td><td>${fmt(m.T,4)}</td><td>${fmt(m.omega,2)}</td><td>${fmt(100*m.mass_ratio,1)}</td><td>${fmt(100*cumulative,1)}</td><td>${m.symmetry==='S'?t('symS'):m.symmetry==='A'?t('symA'):'—'}</td></tr>`}).join('');
-  const mass=d.mass,massNote=mass.source==='dead'?tf('massNoteDead',{m:fmt(mass.mean_t_per_m,3),M:fmt(mass.total_t,1)}):tf('massNoteCustom',{w:fmt(mass.mean_t_per_m*9.81,2),m:fmt(mass.mean_t_per_m,3),M:fmt(mass.total_t,1)});
-  body=`<div class="modal-spectrum-wrap">${spectrumSvg()}</div><div class="modal-grid${d.stale?' stale':''}">${cards}</div><p class="help modal-hint">${t('modesHint')}</p><div class="table-scroll modal-table"><table><thead><tr><th>${t('mode')}</th><th>f (Hz)</th><th>T (s)</th><th>ω (rad/s)</th><th>${t('modalMassShort')} (%)</th><th>${t('cumulative')} (%)</th><th>${t('shape')}</th></tr></thead><tbody>${rows}</tbody></table></div><div class="table-footnote">${massNote}${mass.unloaded_length>1e-6?` <b>${tf('unloaded',{L:fmt(mass.unloaded_length,2)})}</b>`:''}<br>${t('refNote')} ${d.references.map(r=>`${t('span')} ${r.span} : ${r.f_simple?fmt(r.f_simple,3)+' Hz':'—'}`).join(' · ')}<br>${t('pedestrianBand')}<br>${tf('methodModal',{n:d.elements})}</div>`;
+  const mass=d.mass;
+  body=`<div class="modal-spectrum-wrap">${spectrumSvg()}</div><div class="modal-grid${d.stale?' stale':''}">${cards}</div><div class="table-scroll modal-table"><table><thead><tr><th>${t('mode')}</th><th>f (Hz)</th><th>T (s)</th><th>ω (rad/s)</th><th>${t('modalMassShort')} (%)</th><th>${t('cumulative')} (%)</th><th>${t('shape')}</th></tr></thead><tbody>${rows}</tbody></table></div><div class="table-footnote">${fmt(mass.total_t,1)} t · ${fmt(mass.mean_t_per_m,3)} t/m${mass.unloaded_length>1e-6?` · <b>${tf('unloaded',{L:fmt(mass.unloaded_length,2)})}</b>`:''} · Euler–Bernoulli · ${d.elements} ${lang==='fr'?'éléments':'elements'}</div>`;
  }
  host.innerHTML=`<h3 class="modal-title">${t('modesTitle')}</h3>`+controls+body;
  if(modalState==='loading'&&modalData)host.querySelector('.modal-grid')?.classList.add('stale');
  if(modalData)drawModalFrame(performance.now());
 }
 function selectMode(i){if(!modalData)return;modalSel=Math.max(0,Math.min(modalData.modes.length-1,i));renderModesView();renderBeam();}
-// ---- "Listen to the bridge": modal frequencies transposed to the audible range.
-function listenBridge(){
- if(!modalData)return;const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;
- modalAudio=modalAudio||new Ctx();const ctx=modalAudio;if(ctx.state==='suspended')ctx.resume();
- const modes=modalData.modes.filter(m=>m.f>0),k=196/modes[0].f,now=ctx.currentTime+.05,master=ctx.createGain();
- master.gain.value=.22;master.connect(ctx.destination);
- const initial=modalSel;let last=0;
- modes.forEach((m,i)=>{const freq=m.f*k;if(freq>5000)return;last=i;
-  const osc=ctx.createOscillator(),g=ctx.createGain(),start=now+i*.075,dur=3.4*(modes[0].f/m.f)**.3,peak=(.3+.7*Math.sqrt(Math.max(0,m.mass_ratio)))/Math.sqrt(modes.length/2);
-  osc.type='sine';osc.frequency.value=freq;g.gain.setValueAtTime(0,start);g.gain.linearRampToValueAtTime(peak,start+.012);g.gain.exponentialRampToValueAtTime(.0001,start+dur);
-  osc.connect(g);g.connect(master);osc.start(start);osc.stop(start+dur+.05);
-  setTimeout(()=>{if(view==='modes'&&modalData)selectModeQuiet(modalData.modes.indexOf(m))},(start-ctx.currentTime)*1000);
- });
- // Back to the mode that was selected once the arpeggio has been heard.
- setTimeout(()=>{if(view==='modes'&&modalData)selectModeQuiet(initial)},(now+last*.075-ctx.currentTime)*1000+900);
-}
-function selectModeQuiet(i){if(i<0||i===modalSel)return;modalSel=i;$$('.modal-card').forEach(c=>{const on=Number(c.dataset.modeIndex)===i;c.classList.toggle('selected',on);c.setAttribute('aria-pressed',on)});$$('.modal-table tr[data-mode-index]').forEach(r=>r.classList.toggle('selected',Number(r.dataset.modeIndex)===i));const sw=$('.modal-spectrum-wrap');if(sw)sw.innerHTML=spectrumSvg();renderBeam();}
 // ---- Events (delegated; the view is re-rendered on every change).
 document.addEventListener('click',e=>{
  const b=e.target.closest('#modes-mode,#load-mode [data-mode]');if(!b||!model)return;
@@ -182,7 +165,6 @@ document.addEventListener('click',e=>{
  if(!$('#modes-view')?.contains(e.target))return;
  const card=e.target.closest('[data-mode-index]');if(card){selectMode(Number(card.dataset.modeIndex));return;}
  const speed=e.target.closest('[data-modal-speed]');if(speed){modalSpeed=speed.dataset.modalSpeed;renderModesView();renderBeam();return;}
- if(e.target.closest('#modal-listen'))listenBridge();
 });
 document.addEventListener('change',e=>{
  const el=e.target.closest('[data-modal]');if(!el||!model)return;const st=modalSettings(),key=el.dataset.modal;
@@ -190,7 +172,7 @@ document.addEventListener('change',e=>{
  else if(key==='modes')st.modes=Number(el.value);
  else{st.mass_source=el.value;if(el.value==='custom'&&modalData?.mass?.source==='dead')st.mass=Number((modalData.mass.mean_t_per_m*9.81).toPrecision(4));}
  // Mass settings only feed this module: no static recalculation.
- updateProjectState();modalChanged();clearTimeout(modalTimer);requestModal();
+ clearExcelFile();updateProjectState();modalChanged();clearTimeout(modalTimer);requestModal();
 });
 document.addEventListener('keydown',e=>{
  if(view!=='modes'||!modalData||e.target.closest('input,select,textarea'))return;

@@ -228,9 +228,17 @@ def test_browser_manual_position_keeps_selected_canadian_lane_case():
 
 def test_thermal_workbook_is_one_case_with_input_metadata():
     workbook = load_workbook(BytesIO(excel_bytes(analyse(thermal_model()), "fr")))
-    assert workbook.sheetnames == ["Stations", "Réactions", "Modèle"]
+    assert workbook.sheetnames == [
+        "Stations",
+        "Réactions",
+        "Modes",
+        "Formes modales",
+        "Modèle",
+    ]
     assert workbook["Stations"]["F1"].value == "V (kN)"
     assert workbook["Réactions"]["C1"].value == "R (kN)"
     metadata = dict(workbook["Modèle"].iter_rows(values_only=True))
-    assert metadata["QuickerBridge"] == "0.8"
+    from quickerbridge.version import APP_VERSION
+
+    assert metadata["QuickerBridge"] == APP_VERSION
     assert metadata["ΔT = Ttop − Tbottom (°C)"] == 15

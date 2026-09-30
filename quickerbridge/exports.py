@@ -5,7 +5,9 @@ from io import BytesIO, StringIO
 import json
 
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.worksheet.table import Table, TableStyleInfo
+from openpyxl.chart import ScatterChart, Reference, Series
 
 from .version import APP_VERSION, AUTHOR, RELEASE_DATE
 
@@ -118,7 +120,11 @@ def csv_bytes(result, language="en"):
     return stream.getvalue().encode("utf-8-sig")
 
 
-def excel_bytes(result, language="en"):
+def excel_bytes(result, language="en", model=None):
+    from .models import Model
+    from .modal import analyse_modal
+
+    model = model or Model.model_validate(result["model"])
     thermal = result.get("kind") == "thermal"
     wb = Workbook()
     ws = wb.active
@@ -208,8 +214,82 @@ def excel_bytes(result, language="en"):
                             result["model"]["live"].get("axle_factor", 1),
                             case["position"],
                             case["direction"],
+                            case.get("reduction", 1.0),
+                            case.get("second_position"),
+                            case.get("gap"),
                         ]
                     )
+        for column, label in enumerate(
+            ["Réduction / Reduction", "x₂ (m)", "Entre camions / Clear gap (m)"], 13
+        ):
+            cases.cell(1, column, label)
+        # Range columns preserve the original station/reaction column positions.
+        for column, (key, unit) in enumerate(
+            (("V", "kN"), ("M", "kN·m"), ("D", "mm")), 14
+        ):
+            ws.cell(1, column, f"Δ{key} ({unit})")
+            for row, station in enumerate(result["table"], 2):
+                ws.cell(row, column, station[f"{key}_max"] - station[f"{key}_min"])
+    modes = wb.create_sheet("Modes")
+    modes.append(
+        [
+            "Mode",
+            "f (Hz)",
+            "T (s)",
+            "ω (rad/s)",
+            "Masse modale" if language == "fr" else "Modal mass",
+            "Cumul" if language == "fr" else "Cumulative",
+            "Symétrie" if language == "fr" else "Symmetry",
+        ]
+    )
+    try:
+        modal = analyse_modal(model)
+    except ValueError as error:
+        if str(error) != "modal.no_mass":
+            raise
+        modal = None
+        modes.append(
+            [
+                "Aucune masse : modes indisponibles."
+                if language == "fr"
+                else "No mass: modes unavailable."
+            ]
+        )
+    if modal:
+        cumulative = 0.0
+        for mode in modal["modes"]:
+            cumulative += mode["mass_ratio"]
+            modes.append(
+                [
+                    mode["n"],
+                    mode["f"],
+                    mode["T"],
+                    mode["omega"],
+                    mode["mass_ratio"],
+                    cumulative,
+                    mode["symmetry"],
+                ]
+            )
+        shapes = wb.create_sheet(
+            "Formes modales" if language == "fr" else "Mode shapes"
+        )
+        shapes.append(
+            ["x (m)"] + [f"Mode {m['n']} (|φ|max = 1)" for m in modal["modes"]]
+        )
+        for i, x in enumerate(modal["x"]):
+            shapes.append([x] + [shape[i] for shape in modal["shapes"]])
+        chart = ScatterChart()
+        chart.title = "Formes modales" if language == "fr" else "Mode shapes"
+        chart.x_axis.title, chart.y_axis.title = "x (m)", "φ (|φ|max = 1)"
+        chart.width, chart.height = 24, 12
+        for column in range(2, min(shapes.max_column, 7) + 1):
+            series = Series(
+                Reference(shapes, min_col=column, min_row=2, max_row=shapes.max_row),
+                Reference(shapes, min_col=1, min_row=2, max_row=shapes.max_row),
+                title=f"Mode {column-1}",
+            )
+            chart.series.append(series)
+        shapes.add_chart(chart, "O2")
     meta = wb.create_sheet("Modèle" if language == "fr" else "Model")
     meta.append(["QuickerBridge", APP_VERSION])
     meta.append(["Warning / Avertissement", WARNING[language]])
@@ -272,6 +352,15 @@ def excel_bytes(result, language="en"):
                 "Standard vehicles: companion UDL over the full bridge. Custom vehicle: adverse regions.",
             ]
         )
+        if vehicle in ("HL93Truck", "HL93Tandem") and model.live.two_trucks:
+            meta.append(
+                [
+                    "HL-93 · 90% · two trucks / deux camions",
+                    "Supplementary lane case for M− around interior piers and interior vertical R only; "
+                    "90% trucks + adverse lane; 14 ft axle spacings; ≥50 ft clear headway; "
+                    "truck centres in adjacent spans. FHWA-HIF-16-002 Vol.20 §6.2.1.",
+                ]
+            )
         meta.append(
             [
                 "Envelope / Enveloppe",
@@ -281,30 +370,81 @@ def excel_bytes(result, language="en"):
     meta.append(["PyCBA", result["meta"]["pycba"]])
     if not thermal:
         meta.append(["Travel step / Pas (m)", result["meta"]["travel_step"]])
-    meta.append(["Model JSON", json.dumps(result["model"], ensure_ascii=False)])
-    for sheet in wb:
-        sheet.freeze_panes = "A2"
-        sheet.auto_filter.ref = sheet.dimensions
+    meta.append(["Masse / Mass", model.modal.mass_source])
+    if modal:
+        meta.append(["Masse totale / Total mass (t)", modal["mass"]["total_t"]])
+        meta.append(["Masse moyenne / Mean mass (t/m)", modal["mass"]["mean_t_per_m"]])
+    meta.append(["Model JSON", json.dumps(model.model_dump(), ensure_ascii=False)])
+    for index, sheet in enumerate(wb):
+        sheet.freeze_panes = (
+            "D2"
+            if sheet is ws
+            else "B2"
+            if sheet.title in ("Mode shapes", "Formes modales")
+            else "A2"
+        )
+        sheet.sheet_properties.pageSetUpPr.fitToPage = True
+        sheet.page_setup.orientation = "landscape"
+        sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
+        sheet.page_setup.fitToWidth = 1
+        sheet.page_setup.fitToHeight = 0
+        sheet.print_title_rows = "1:1"
+        sheet.sheet_properties.tabColor = "008378" if sheet is modes else "102D41"
+        if sheet is not meta and sheet.max_row > 1 and (sheet is not modes or modal):
+            table = Table(displayName=f"QBTable{index+1}", ref=sheet.dimensions)
+            table.tableStyleInfo = TableStyleInfo(
+                name="TableStyleMedium2", showRowStripes=True
+            )
+            sheet.add_table(table)
         for cell in sheet[1]:
             cell.fill = PatternFill("solid", fgColor="102D41")
-            cell.font = Font(color="FFFFFF", bold=True)
-            cell.alignment = Alignment(wrap_text=True, vertical="center")
-        sheet.row_dimensions[1].height = 32
+            cell.font = Font(name="Arial", size=10, color="FFFFFF", bold=True)
+            cell.alignment = Alignment(
+                wrap_text=True, vertical="center", horizontal="center"
+            )
+            cell.border = Border(right=Side(style="thin", color="FFFFFF"))
+        sheet.row_dimensions[1].height = 42
         for column in sheet.columns:
-            sheet.column_dimensions[column[0].column_letter].width = 20
+            header = str(column[0].value or "")
+            sheet.column_dimensions[column[0].column_letter].width = min(
+                32, max(14, len(header) * 0.7)
+            )
             for cell in column[1:]:
+                cell.font = Font(name="Arial", size=10, color="19384B")
+                cell.alignment = Alignment(
+                    vertical="center",
+                    horizontal="right"
+                    if isinstance(cell.value, (float, int))
+                    else "left",
+                )
                 if isinstance(cell.value, (float, int)):
-                    cell.number_format = "0.000"
+                    cell.number_format = "#,##0.000"
+                    if header in (
+                        "Mode",
+                        "Span",
+                        "Travée",
+                        "Station",
+                        "Support",
+                        "Appui",
+                    ):
+                        cell.number_format = "0"
+                    elif "(kN" in header or header.startswith("Δ"):
+                        cell.number_format = "#,##0.00"
+                    if sheet is modes and cell.column in (5, 6):
+                        cell.number_format = "0.0%"
                 if isinstance(cell.value, str) and cell.value.startswith(
                     ("=", "+", "-", "@")
                 ):
                     cell.value = "'" + cell.value
         sheet.sheet_view.showGridLines = False
-    meta.column_dimensions["A"].width = 30
-    meta.column_dimensions["B"].width = 100
+    meta.column_dimensions["A"].width = 36
+    meta.column_dimensions["B"].width = 96
     for row in meta.iter_rows(min_row=2):
         row[1].alignment = Alignment(wrap_text=True, vertical="top")
-        meta.row_dimensions[row[0].row].height = 48
+        text = str(row[1].value or "")
+        meta.row_dimensions[row[0].row].height = min(
+            60, 16 * max(1, (len(text) + 90) // 91)
+        )
     buffer = BytesIO()
     wb.save(buffer)
     return buffer.getvalue()

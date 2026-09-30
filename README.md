@@ -9,7 +9,7 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 
 ![QuickerBridge — envelopes of a two-span girder with rotational-spring abutments](docs/screenshots/envelopes.png)
 
-*Version 0.8 · 2026-09-28 · Anthony Chéruel · [Guide en français](README.fr.md)*
+*Version 0.8.5 · 2026-09-29 · Anthony Chéruel · [Guide en français](README.fr.md)*
 
 ---
 
@@ -17,16 +17,18 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 
 | | |
 |---|---|
-| **Moving-load envelopes** | CL-625, CL-750-QC (MTQ), AASHTO HL-93 truck & tandem, Cooper E, maintenance vehicle, or a custom 1–7 axle vehicle. CAN/CSA S6 dynamic allowance on every axle subset, lane loads over the full deck, load and axle factors. Click any extreme to see the governing truck position. |
+| **Moving-load envelopes** | CL-625, CL-750-QC (MTQ), AASHTO HL-93 truck & tandem, Cooper E, maintenance vehicle, or a custom 1–7 axle vehicle. CAN/CSA S6 dynamic allowance on every axle subset, lane loads over the full deck, load and axle factors. Optional HL-93 90% two-truck case for negative moments and interior reactions. Click any extreme to see its governing arrangement; per-diagram Δ shows max − min. |
 | **Influence lines** | V, M and deflection at any station, plus the reaction (and moment reaction) at the nearest support, with the governing axles drawn on the line. |
 | **Truck crossing animation** | 60 pre-computed positions of the full vehicle, played back instantly; the envelope stays as a reference. |
 | **Supports** | Pinned, roller, **fixed (integral abutment)** or **rotational spring k** with the resulting degree of fixity. Uplift is flagged automatically. |
 | **Sections** | Steel I-girders from plate dimensions or direct EI, inertia modifier, non-prismatic zones with linear or parabolic depth, EI(x) diagram and stiffness-step warnings. |
-| **Vibration modes** *(v0.8)* | Up to 12 natural frequencies and periods in vertical bending from the same model (non-prismatic EI, integral abutments, springs), mass from the unfactored permanent loads. Animated deck, mode thumbnails, frequency spectrum with pedestrian resonance bands, modal mass — and *Listen to the bridge*. |
+| **Vibration modes** *(v0.8)* | Up to 12 natural frequencies and periods in vertical bending from the same model (non-prismatic EI, integral abutments, springs), mass from the unfactored permanent loads. Animated deck, mode thumbnails, frequency spectrum with pedestrian resonance bands, modal mass. Six modes and real-time animation by default; optional slow motion. |
 | **Thermal gradient** | Linear ΔT through the depth on every span, alone or with integral/spring supports. |
-| **Outputs** | Station table, Excel export (FR/EN), `.quickerbridge.json` projects, bilingual interface. |
+| **Outputs** | Station table, one formatted Excel workbook including vibration modes and shapes (FR/EN), `.quickerbridge.json` projects, and comparison of two project envelopes on the same metre axis. |
 
-![Vibration modes: animated deck, spectrum and the twelve first modes](docs/screenshots/vibration-modes.png)
+![Vibration modes: animated deck, spectrum and the six default modes](docs/screenshots/vibration-modes.png)
+
+![Two JSON projects compared on the same metre axis](docs/screenshots/comparison.png)
 
 <table>
 <tr>
@@ -75,7 +77,7 @@ stresses or code checks.
 
 ## Validation
 
-468 automated tests (application + vendored PyCBA) compare results with closed-form
+119 application tests compare results with closed-form
 solutions: continuous beams, fixed and propped beams, rotational springs, influence lines,
 thermal curvature, non-prismatic members, mirror symmetry and natural frequencies
 (closed forms and PyCBA `BeamAnalysis.modal`). The application suite also

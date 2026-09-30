@@ -18,11 +18,12 @@ def dispatch(raw: str) -> str:
         value = Model().model_dump()
     elif action == "validate_project":
         value = validate_project(data["text"])
-    elif action == "analyse":
+    elif action in ("analyse", "compare"):
         value = analyse(Model.model_validate(data["model"]))
-        _results[data["job"]] = value
-        for key in list(_results)[:-3]:
-            del _results[key]
+        if action == "analyse":
+            _results[data["job"]] = value
+            for key in list(_results)[:-3]:
+                del _results[key]
     elif action == "modal":
         from .modal import analyse_modal
 
@@ -58,7 +59,14 @@ def dispatch(raw: str) -> str:
             language = data.get("lang", "fr")
             if language not in ("en", "fr"):
                 raise ValueError("language")
-            value = base64.b64encode(excel_bytes(result, language)).decode("ascii")
+            export_model = Model.model_validate(result["model"])
+            if "modal" in data:
+                from .models import ModalSettings
+
+                export_model.modal = ModalSettings.model_validate(data["modal"])
+            value = base64.b64encode(
+                excel_bytes(result, language, export_model)
+            ).decode("ascii")
         else:
             if result.get("kind") == "thermal":
                 raise ValueError("thermal.snapshot")
