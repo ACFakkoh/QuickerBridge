@@ -219,7 +219,7 @@ def test_project_round_trip_with_fixed_supports_and_plates():
         Zone(end=1, section=0),
     ]
     project = create_project(model, "Integral")
-    assert project["schema_version"] == 6
+    assert project["schema_version"] == 7
     reopened = validate_project(json.dumps(project))
     assert reopened["model"] == model.model_dump(mode="json")
     # v0.4 (schema 2) files still open: no plates key, default "start".

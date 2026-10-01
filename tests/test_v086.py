@@ -130,7 +130,7 @@ def test_old_projects_keep_results_and_new_projects_apply_self_weight():
     for span in project["model"]["spans"]:
         del span["simple"]
     reopened = validate_project(json.dumps(project))
-    assert reopened["schema_version"] == 6
+    assert reopened["schema_version"] == 7
     assert reopened["model"]["self_weight"]["apply"] is False
     fresh = validate_project(json.dumps(create_project(Model(), "New")))
     assert fresh["model"]["self_weight"]["apply"] is True

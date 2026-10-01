@@ -1,4 +1,4 @@
-# Validation — QuickerBridge (v0.4 → v0.9)
+# Validation — QuickerBridge (v0.4 → v0.9.1)
 
 2026-09-15. Numerical checks are software regressions, not certification for bridge design.
 
@@ -321,3 +321,29 @@ are tested. FT settings never change the analysis until applied.
 Browser check (real Pyodide): the Δ switch keeps the same position (758 px at
 1440 px wide) checked or not; FT card, detail view, apply to the axle factor and
 recalculation, Excel with the FT sheet, FR/EN; no console errors.
+
+## v0.9.1 FT applied by zone (verified 2026-10-01)
+
+FT is no longer copied as one value to a factor. The user picks the girder
+(interior/exterior) and the limit state (ULS/SLS1 or FLS/SLS2); when applied, the
+axle effects on M and V are multiplied station by station by the moment and
+shear FT of their zone: M+ span zones and M- support zones of Figure 5.1
+(0.20 L each side of a pier, 0.25 L with integral abutments, 0.15 L at an
+integral abutment). The factor enters the moving-load loop on each response
+column, so envelopes, governing records and snapshots stay consistent; the lane
+load, deflection and reactions keep one full lane, and FT replaces the entered
+axle factor. DVE is limited to 3.0 m. Project schema 7 drops the v0.9 "effect".
+"Les deux" is renamed "Permanentes + routières".
+
+tests/test_v09.py adds: zone limits and values (interior/exterior, ULS/FLS,
+exterior shear x Fs, hinge sides), truck-only M and V equal to one-lane values x
+zone FT with deflection and reactions unchanged, lane case changed but not a pure
+scaling, governing snapshots reproducing every extreme with force equilibrium,
+physical axle loads in the animation, FT replacing the axle factor, DVE cap, and
+the schema 6 to 7 upgrade.
+
+Browser check (real Pyodide): FT applied from the Loads card recalculates M and V
+(zones 0-14.05 / 14.05-21.08 / 21.08-35.16 m for the reference bridge), axle
+factor field disabled, caption and FT markers on the M and V diagrams; data typed
+in the FT tab keep the focus during the recalculation; the three compact tables
+fit without horizontal scrolling at 1440 px; Excel export; no console errors.

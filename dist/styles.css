@@ -108,4 +108,16 @@ input[type=number]{appearance:textfield;-moz-appearance:textfield}
 .axle-table-view thead th{text-align:center;background:#102d41;color:#fff}.axle-table-view thead th small{display:block;font-weight:400;color:#ffd49a}
 .axle-table-view tbody th{text-align:left;font-weight:500;color:var(--muted)}.axle-table-view td small{display:block;font-size:.65rem;color:var(--muted)}
 .axle-group th{background:#eef4f7;color:#17374b!important;font-weight:600!important;text-align:left}
-.axle-ftrow th{color:#17374b!important;font-weight:600!important}.axle-ftcell{font-weight:700;color:#8a4d0f;background:#fff7e8}.axle-ftcell sup{font-size:.6rem;color:#a33329;margin-left:2px}
+.axle-ftrow th{color:#17374b!important;font-weight:600!important}.axle-ftcell{font-weight:700;color:#8a4d0f;background:#fff7e8}.axle-ftcell sup{font-size:.6rem;color:#a33329;margin-left:2px}/* v0.9.1: FT tab — data first, compact full-width tables without scrolling */
+.axle-inputs{display:grid;grid-template-columns:minmax(0,3fr) minmax(220px,1.3fr);gap:6px 18px;align-items:start;margin:10px 0 4px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fbfcfd}
+.axle-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:4px 10px}.axle-grid .field,.axle-choice .field{margin:0}.axle-choice .toggle-row{margin:6px 0 0}
+@media (max-width:760px){.axle-inputs{grid-template-columns:1fr}}
+.axle-table-view{width:100%;table-layout:fixed;font-size:.72rem;margin:0 0 4px}.axle-table-view th,.axle-table-view td{padding:2px 5px;overflow:hidden;text-overflow:ellipsis}
+.axle-table-view .axle-labelcol{width:9.5em}.axle-table-view thead th{font-weight:600;line-height:1.25}.axle-table-view thead th small{display:inline;font-size:.66rem}
+.axle-table-view td small{display:inline;font-size:.62rem}.axle-table-view.selected{outline:2px solid #c9a24f;outline-offset:1px}
+.axle-zones td{text-align:center;font-size:.8rem;color:#8a4d0f;background:#fff7e8}.axle-zones thead th small{display:block}
+.axle-view h3{margin:12px 0 4px;font-size:.85rem}.axle-blocks{display:grid;gap:4px}
+.axle-notes{margin-top:10px;font-size:.8rem}.axle-notes summary{cursor:pointer;color:var(--muted)}
+.axle-mini{display:flex;gap:12px;flex-wrap:wrap;font-size:.75rem;color:var(--muted);margin:6px 0}.axle-mini b{color:#8a4d0f}
+.axle-open{font-size:.8rem}.axle-apply{font-weight:600}.axle-replaces{font-size:.72rem;color:#8a6214;margin-top:-4px}
+.axle-mark{font-size:calc(9.5px / var(--k,1));fill:#a47a1c}.axle-caption{color:#ffd49a}

@@ -1,6 +1,6 @@
 # QuickerBridge — guide développeur
 
-Version 0.9 · Anthony Chéruel · 2026-09-30
+Version 0.9.1 · Anthony Chéruel · 2026-10-01
 
 ## Quel fichier utiliser ou envoyer ?
 
@@ -153,8 +153,11 @@ Le schéma 2 utilise la variation de hauteur seule. Les fichiers schéma 1 dont 
 signification est identique sont acceptés. Les tapers anciens qui interpolaient
 les tôles ou E sont refusés avec explication, afin d’éviter une modification
 silencieuse du modèle. La valeur M et les nouveaux facteurs de charge valent 1 par
-défaut pour les projets qui les omettent. Le schéma 6 (v0.9) ajoute le bloc `distribution` (FT S6-25), qui ne modifie jamais
-l’analyse et n’entre pas dans la clé du cache. Le schéma 5 (v0.8.6) ajoute `self_weight`
+défaut pour les projets qui les omettent. Le schéma 6 (v0.9) ajoute le bloc `distribution` (FT S6-25); le schéma 7 (v0.9.1)
+y ajoute `apply` et retire `effect`. Appliqué, FT multiplie les effets des essieux
+sur M et V par zone (`engine.axle_scale`, `distribution.station_factors`); δ, R et
+la charge de voie restent pour une voie. Le bloc n’entre pas dans la clé du cache
+de la base d’influence. Le schéma 5 (v0.8.6) ajoute `self_weight`
 et `spans[].simple`; un projet de schéma ≤ 4 est rouvert avec `self_weight.apply = false`
 pour conserver ses résultats. Les travées isostatiques passent par les types
 d’éléments PyCBA (`engine.end_releases`); voir `pycba-pinned-pinned-shear.patch`.

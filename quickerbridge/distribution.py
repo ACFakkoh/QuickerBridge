@@ -39,6 +39,7 @@ LANE_LIMITS = (
 # Table 3.6: load modification factor for multiple loaded lanes.
 RL = {1: 1.00, 2: 0.90, 3: 0.80, 4: 0.70, 5: 0.60}
 WHEEL_GAUGE = 1.8  # m, CL-W truck wheel lines (truck axis on the lane axis)
+DVE_MAX = 3.0  # m, upper limit of the vehicle edge distance
 PIER_FACTOR = 0.20  # Figure 5.1 a), S6-25
 PIER_FACTOR_INTEGRAL = 0.25  # Figure 5.1 d)
 STATES = ("ULS", "FLS")  # ULS = ÉLUL and ÉLUT1; FLS = ÉLF and ÉLUT2
@@ -73,6 +74,9 @@ def effective_spans(model: Model, h_left: float, h_right: float):
     spans = model.spans
     n = len(spans)
     lengths = [s.length for s in spans]
+    starts = [0.0]
+    for length in lengths:
+        starts.append(starts[-1] + length)
     integral = [kind in ("fixed", "spring") for kind in model.supports]
     chains, i = [], 0
     while i < n:
@@ -101,12 +105,26 @@ def effective_spans(model: Model, h_left: float, h_right: float):
                 positive.append((k, 0.5 * lengths[k], "0,5 L"))
         factor = PIER_FACTOR_INTEGRAL if (left or right) else PIER_FACTOR
         label = "0,25 (L1+L2)" if (left or right) else "0,20 (L1+L2)"
+        # The last element is the negative-moment zone along the bridge: the
+        # same fraction of each adjacent span as in Le (Figure 5.1).
         if left:
-            negative.append((0, 0.15 * lengths[a] + h_left, "0,15 L + h", "abutment"))
+            zone = (starts[0], starts[0] + 0.15 * lengths[a])
+            negative.append(
+                (0, 0.15 * lengths[a] + h_left, "0,15 L + h", "abutment", zone)
+            )
         for k in range(a + 1, b + 1):
-            negative.append((k, factor * (lengths[k - 1] + lengths[k]), label, "pier"))
+            zone = (
+                starts[k] - factor * lengths[k - 1],
+                starts[k] + factor * lengths[k],
+            )
+            negative.append(
+                (k, factor * (lengths[k - 1] + lengths[k]), label, "pier", zone)
+            )
         if right:
-            negative.append((n, 0.15 * lengths[b] + h_right, "0,15 L + h", "abutment"))
+            zone = (starts[n] - 0.15 * lengths[b], starts[n])
+            negative.append(
+                (n, 0.15 * lengths[b] + h_right, "0,15 L + h", "abutment", zone)
+            )
     return positive, negative
 
 
@@ -189,6 +207,9 @@ def truck_fraction(model: Model) -> dict:
     curb = (B - Wc) / 2
     dve = curb + We / 2 - WHEEL_GAUGE / 2
     warnings = []
+    if dve > DVE_MAX:  # DVE shall not exceed 3.0 m
+        dve = DVE_MAX
+        warnings.append("dve_capped")
     if model.live.vehicle not in ("CL625", "CL750QC"):
         warnings.append("vehicle")
     if Sc > 0.6 * S:
@@ -249,7 +270,7 @@ def truck_fraction(model: Model) -> dict:
         for girder in ("interior", "exterior"):
             for k, le, rule in positive:
                 add(state, girder, "moment", "+", f"span:{k + 1}", clamp_le(le), rule)
-            for k, le, rule, kind in negative:
+            for k, le, rule, kind, _ in negative:
                 add(
                     state, girder, "moment", "-", f"support:{k + 1}", clamp_le(le), rule
                 )
@@ -268,7 +289,7 @@ def truck_fraction(model: Model) -> dict:
                     False,
                     skew,
                 )
-            for k, le, rule, kind in negative:
+            for k, le, rule, kind, _ in negative:
                 if kind != "pier":
                     continue
                 skew = max(fs[k - 1], fs[k]) if girder == "exterior" else 1.0
@@ -283,17 +304,6 @@ def truck_fraction(model: Model) -> dict:
                     continuous[k],
                     skew,
                 )
-    summary = {}
-    for state in STATES:
-        for girder in ("interior", "exterior"):
-            sel = [r for r in rows if r["state"] == state and r["girder"] == girder]
-            moment = max(r["FT"] for r in sel if r["effect"] == "moment")
-            shear = max(r["FT_Fs"] for r in sel if r["effect"] == "shear")
-            summary[f"{state}:{girder}"] = {
-                "moment": moment,
-                "shear": shear,
-                "max": max(moment, shear),
-            }
     return {
         "kind": "slab_on_girder",
         "inputs": d.model_dump(),
@@ -314,11 +324,89 @@ def truck_fraction(model: Model) -> dict:
             ],
             "negative": [
                 {"support": k + 1, "Le": clamp_le(le), "rule": rule, "kind": kind}
-                for k, le, rule, kind in negative
+                for k, le, rule, kind, _ in negative
             ],
             "minimum": minimum,
         },
         "rows": rows,
-        "summary": summary,
+        "zones": zones(model, rows, negative),
         "warnings": warnings,
     }
+
+
+def zones(model: Model, rows, negative):
+    """FT applied along the bridge for the selected girder and limit state.
+
+    Negative-moment zones (Figure 5.1) take the M− fraction of their support;
+    the rest of each span takes its M+ fraction. Shear uses the same zones:
+    the pier shear fraction over a continuous pier, otherwise the span shear
+    fraction (exterior girder: × Fs, conservatively over the whole zone).
+    """
+    d = model.distribution
+    sel = {
+        (r["effect"], r["where"]): r
+        for r in rows
+        if r["state"] == d.state and r["girder"] == d.girder
+    }
+    starts = [0.0]
+    for span in model.spans:
+        starts.append(starts[-1] + span.length)
+    cuts = sorted(
+        (zone[0], zone[1], k) for k, _, _, kind, zone in negative
+    )  # non-overlapping
+    out = []
+    for i in range(len(model.spans)):
+        pieces = [(starts[i], starts[i + 1])]
+        for a, b, _ in cuts:
+            pieces = [
+                part
+                for x0, x1 in pieces
+                for part in ((x0, min(x1, a)), (max(x0, b), x1))
+                if part[1] - part[0] > 1e-9
+            ]
+        for x0, x1 in pieces:
+            out.append(
+                {
+                    "x0": x0,
+                    "x1": x1,
+                    "sign": "+",
+                    "where": f"span:{i + 1}",
+                    "FT_M": sel[("moment", f"span:{i + 1}")]["FT"],
+                    "FT_V": sel[("shear", f"span:{i + 1}")]["FT_Fs"],
+                }
+            )
+    for a, b, k in cuts:
+        where = f"support:{k + 1}"
+        shear = sel.get(("shear", where))
+        if shear is None:  # integral abutment: shear of the adjacent span
+            span = min(k, len(model.spans) - 1)
+            shear = sel[("shear", f"span:{span + 1}")]
+        out.append(
+            {
+                "x0": a,
+                "x1": b,
+                "sign": "-",
+                "where": where,
+                "FT_M": sel[("moment", where)]["FT"],
+                "FT_V": shear["FT_Fs"],
+            }
+        )
+    return sorted(out, key=lambda z: z["x0"])
+
+
+def station_factors(model: Model, xs, sides, data=None):
+    """FT on V and M at report stations ``xs`` (side picks the zone at a cut)."""
+    data = data or truck_fraction(model)
+    zs = data["zones"]
+    total = zs[-1]["x1"]
+    fv, fm = [], []
+    for x, side in zip(xs, sides):
+        q = min(max(x + (-1e-9 if side == "left" else 1e-9), 0.0), total)
+        zone = next(z for z in zs if z["x0"] - 1e-12 <= q <= z["x1"] + 1e-12)
+        fv.append(zone["FT_V"])
+        fm.append(zone["FT_M"])
+    return fv, fm
+
+
+def applied(model: Model) -> bool:
+    return model.distribution.enabled and model.distribution.apply

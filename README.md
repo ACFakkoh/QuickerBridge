@@ -9,7 +9,7 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 
 ![QuickerBridge — envelopes of a two-span girder with rotational-spring abutments](docs/screenshots/envelopes.png)
 
-*Version 0.9 · 2026-09-30 · Anthony Chéruel · [Guide en français](README.fr.md)*
+*Version 0.9.1 · 2026-10-01 · Anthony Chéruel · [Guide en français](README.fr.md)*
 
 ---
 
@@ -23,7 +23,7 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 | **Supports** | Pinned, roller, **fixed (integral abutment)** or **rotational spring k** with the resulting degree of fixity. Any span can be made **simple (isostatic)**, hinged at both ends *(v0.8.6)*. Uplift is flagged automatically. |
 | **Sections** | Steel I-girders from plate dimensions, standard **precast prestressed NEBT 1000–1800** girders *(v0.8.6, concrete E 28 GPa by default)* or direct EI, inertia modifier, non-prismatic zones with linear or parabolic depth, EI(x) diagram and stiffness-step warnings. Girder **self-weight** is added to the permanent loads by default (steel +15%, NEBT +10%, adjustable, can be switched off). |
 | **Vibration modes** *(v0.8)* | Up to 12 natural frequencies and periods in vertical bending from the same model (non-prismatic EI, integral abutments, springs), mass from the unfactored permanent loads. Animated deck, mode thumbnails, frequency spectrum with pedestrian resonance bands, modal mass. Six modes and real-time animation by default; optional slow motion. |
-| **Truck load fraction FT** *(v0.9)* | CSA S6-25 simplified method for slab-on-girder bridges (classes A/B, CL-625 / CL-750-QC): N, S, Sc, Wc, skew → n, RL, We, μ, DVE, Le (Figure 5.1, 0.20 (L1+L2) over piers), DT, λ, γc, γe, FT for interior/exterior girders, moment and shear, ULS/SLS1 and FLS/SLS2, with Fs at the obtuse corner. One click copies the chosen FT to the axle or load factor; full table view and Excel sheet. |
+| **Truck load fraction FT** *(v0.9–0.9.1)* | CSA S6-25 simplified method for slab-on-girder bridges (classes A/B, CL-625 / CL-750-QC): N, S, Sc, Wc, skew → n, RL, We, μ, DVE (≤ 3.0 m), Le (Figure 5.1, 0.20 (L1+L2) over piers), DT, λ, γc, γe, FT for interior/exterior girders, moment and shear, ULS/SLS1 and FLS/SLS2, with Fs. Choose the girder and limit state; when applied, the axle effects on M and V are multiplied by the moment and shear FT of each M+ / M− zone. Data and compact tables in the “FT · S6-25” tab; Excel sheet. |
 | **Thermal gradient** | Linear ΔT through the depth on every span, alone or with integral/spring supports. |
 | **Outputs** | Station table, one formatted Excel workbook including vibration modes and shapes (FR/EN), `.quickerbridge.json` projects, and comparison of two project envelopes on the same metre axis. |
 

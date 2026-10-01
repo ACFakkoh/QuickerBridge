@@ -16,6 +16,7 @@ from scipy.interpolate import CubicSpline
 import pycba as cba
 
 from .models import Model
+from .distribution import applied as ft_applied, station_factors, truck_fraction
 from .sections import member_deflection, stiffness_profile, span_ei, properties
 from .loads import (
     CANADIAN_VEHICLES,
@@ -332,6 +333,24 @@ class Basis:
         return np.r_[v, m, d, r, mr]
 
 
+def axle_scale(model, basis):
+    """Factor on the axle effects of every response column (V, M, D, R, Mr).
+
+    Normally the user axle factor everywhere. With the S6-25 truck load
+    fraction applied, V and M take the shear and moment FT of their zone;
+    δ and the reactions keep one full lane (factor 1).
+    """
+    if not ft_applied(model):
+        return np.full(basis.nresponse, float(model.live.axle_factor))
+    fv, fm = station_factors(model, basis.x, basis.sides)
+    return np.r_[fv, fm, np.ones(basis.nresponse - 2 * basis.nx)]
+
+
+def displayed_axle_factor(model):
+    """Factor carried by the axle loads themselves (1 when FT zones apply)."""
+    return 1.0 if ft_applied(model) else model.live.axle_factor
+
+
 def structure_key(model):
     data = model.model_dump()
     for key in (
@@ -408,6 +427,7 @@ def analyse(model: Model):
     include_lane = model.live.case != "truck" and lane_style != "none"
     include_truck = model.live.case != "lane" or lane_style == "none"
     lane_lo = lane_hi = np.zeros(count)
+    scale = axle_scale(model, basis)
     if model.load_mode != "dead":
         if include_lane:
             if lane_style == "patterned":
@@ -445,7 +465,7 @@ def analyse(model: Model):
                         raw = np.einsum(
                             "a,apc->pc", group["mask"], effects, optimize=False
                         )
-                        axle_effect = raw * model.live.axle_factor
+                        axle_effect = raw * scale
                         cases = []
                         if include_truck:
                             amplified = (
@@ -626,6 +646,15 @@ def analyse(model: Model):
             "pycba": cba.__version__,
             "precision": model.precision,
         },
+        "ft": (
+            {
+                "girder": model.distribution.girder,
+                "state": model.distribution.state,
+                "zones": truck_fraction(model)["zones"],
+            }
+            if ft_applied(model) and model.load_mode != "dead"
+            else None
+        ),
         "model": model.model_dump(),
     }
 
@@ -657,6 +686,7 @@ def two_truck_envelope(basis, model, low, high, info_low, info_high, step):
     if not len(indices):
         return 0
     lane_lo, lane_hi, _, _ = basis.lane(9.3)
+    scale = axle_scale(model, basis)
     factor = 1.33 if model.live.dynamic else 1.0
     directions = (
         ["forward", "reverse"]
@@ -723,10 +753,7 @@ def two_truck_envelope(basis, model, low, high, info_low, info_high, step):
                 value = (
                     0.9
                     * model.live.factor
-                    * (
-                        sense * best_score * factor * model.live.axle_factor
-                        + lane[index]
-                    )
+                    * (sense * best_score * factor * scale[index] + lane[index])
                 )
                 if sense * value <= sense * target[index] + 1e-10:
                     continue
@@ -772,7 +799,7 @@ def record_axles(model, record, length):
                 "load": a["load"]
                 * 0.9
                 * record["factor"]
-                * model.live.axle_factor
+                * displayed_axle_factor(model)
                 * model.live.factor,
             }
             for a in record["special_axles"]
@@ -791,7 +818,7 @@ def record_axles(model, record, length):
             "id": i + 1,
             "x": float(p + sign * offset),
             "load": float(
-                weights[i] * model.live.axle_factor * factor * model.live.factor
+                weights[i] * displayed_axle_factor(model) * factor * model.live.factor
             ),
         }
         for i, offset in enumerate(offsets)
@@ -876,6 +903,7 @@ def traverse(model, direction="forward", frames=60):
         base += basis.full_lane(lane_w * model.live.factor)
         lane = [{"start": 0.0, "end": basis.length, "w": lane_w * model.live.factor}]
     out = []
+    scale = axle_scale(model, basis) if ft_applied(model) else 1.0
     for position in np.linspace(begin, end, frames):
         record = position_record(model, float(position), direction)
         if patterned:
@@ -884,9 +912,10 @@ def traverse(model, direction="forward", frames=60):
             axles, frame_lane = snap["axles"], snap["lane"]
         else:
             axles = record_axles(model, record, basis.length)
-            values = base.copy()
+            axle_values = np.zeros(basis.nresponse)
             for axle in axles:
-                values += basis.unit([axle["x"]])[0] * axle["load"]
+                axle_values += basis.unit([axle["x"]])[0] * axle["load"]
+            values = base + axle_values * scale
             frame_lane = lane
         out.append(
             {
@@ -923,9 +952,12 @@ def snapshot(model, record, target_index=None, sense="max"):
         target_index = record["target_index"]
         sense = record["sense"]
     axles = record_axles(model, record, basis.length)
-    values = dead.copy()
+    # Physical arrangement first (equilibrium, reactions, graph); the S6-25
+    # zone fractions are applied to the axle part of V and M at the end.
+    axle_values = np.zeros(basis.nresponse)
     for axle in axles:
-        values += basis.unit([axle["x"]])[0] * axle["load"]
+        axle_values += basis.unit([axle["x"]])[0] * axle["load"]
+    values = dead + axle_values
     lane_intervals = []
     lane_q = np.array([])
     lane_mass = np.array([])
@@ -1007,6 +1039,21 @@ def snapshot(model, record, target_index=None, sense="max"):
         gm -= gx * cumulative[before] - moments[before]
     ux, ui = np.unique(basis.x, return_index=True)
     gd = np.interp(gx, ux, values[2 * nx : 3 * nx][ui])
+    if ft_applied(model) and axles:
+        # Axle-only V and M by statics, scaled by the zone fractions; R, Mr
+        # and δ keep one full lane, so equilibrium stays the physical one.
+        ra = axle_values[3 * nx : 3 * nx + basis.ns]
+        mra = axle_values[3 * nx + basis.ns :]
+        av = ra @ (basis.support_x[:, None] < gc)
+        am = ra @ np.maximum(gx[None, :] - basis.support_x[:, None], 0)
+        am -= mra @ (basis.support_x[:, None] < gc)
+        for axle in axles:
+            av -= axle["load"] * (axle["x"] < gc)
+            am -= axle["load"] * np.maximum(gx - axle["x"], 0)
+        fv, fm = station_factors(model, gx, [s for _, s in graph_stations])
+        gv += (np.asarray(fv) - 1) * av
+        gm += (np.asarray(fm) - 1) * am
+        values = values + axle_values * (axle_scale(model, basis) - 1)
     graph = {
         "x": gx.tolist(),
         "sides": [side for x, side in graph_stations],

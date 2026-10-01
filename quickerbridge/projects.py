@@ -10,7 +10,7 @@ from .version import APP_VERSION
 
 
 FORMAT = "QuickerBridgeProject"
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 MAX_PROJECT_BYTES = 1024 * 1024
 
 
@@ -50,6 +50,11 @@ def validate_project(text: str) -> dict:
     version = raw.get("schema_version")
     if not isinstance(version, int) or version > SCHEMA_VERSION:
         raise ValueError("project.version")
+    if version <= 6 and isinstance(raw.get("model"), dict):
+        # v0.9 offered one enveloped FT ("effect"); zones replace it in v0.9.1.
+        distribution = raw["model"].get("distribution")
+        if isinstance(distribution, dict):
+            distribution.pop("effect", None)
     if version < 5 and isinstance(raw.get("model"), dict):
         # Before v0.8.6 the girder self-weight was never added automatically;
         # older projects keep the results they were saved with.
@@ -83,7 +88,7 @@ def validate_project(text: str) -> dict:
                     ):
                         raise ValueError("project.legacy_taper")
         raw["schema_version"] = SCHEMA_VERSION
-    elif version in (2, 3, 4, 5):
+    elif version in (2, 3, 4, 5, 6):
         # v0.4 files: zones without ``plates`` keep the start-section
         # convention, which is the default. Pin/roller supports are unchanged.
         raw["schema_version"] = SCHEMA_VERSION

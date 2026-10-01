@@ -4,6 +4,7 @@ from io import BytesIO
 import json
 import math
 
+import numpy as np
 import pytest
 from openpyxl import load_workbook
 
@@ -128,7 +129,7 @@ def test_s6_25_pier_value_and_exterior_shear_skew():
     row = pick(r, "ULS", "exterior", "shear", "+", "span:1")
     assert row["FT_Fs"] == pytest.approx(row["FT"] * row["Fs"])
     assert pick(r, "ULS", "interior", "shear", "+", "span:1")["Fs"] == 1.0
-    assert r["summary"]["ULS:exterior"]["shear"] >= row["FT_Fs"]
+    assert row["Fs"] > 1
 
 
 @pytest.mark.parametrize(
@@ -225,6 +226,16 @@ def test_le_configurations_figure_5_1():
     assert D.clamp_le(2) == 3 and D.clamp_le(80) == 60
 
 
+def test_dve_is_capped_at_3_m():
+    # Wide overhang: curb (B − Wc)/2 = 3.0 m, so the raw DVE would be 3.98 m.
+    m = bridge(girders=4, spacing=3.0, overhang=4.0, carriageway=11.0, skew=0)
+    r = D.truck_fraction(m)
+    assert r["derived"]["DVE"] == 3.0 and "dve_capped" in r["warnings"]
+    ext = pick(r, "FLS", "exterior", "moment", "+", "span:1")
+    assert ext["gamma_e"] == pytest.approx(D.gamma_e(4, ext["Le"], 3.0))
+    assert "dve_capped" not in D.truck_fraction(bridge())["warnings"]
+
+
 def test_warnings_and_skew():
     r = D.truck_fraction(bridge(overhang=2.5, carriageway=22))
     assert {"overhang", "width"} <= set(r["warnings"])
@@ -236,12 +247,13 @@ def test_warnings_and_skew():
     assert D.skew_factor(20, 3, 30) == pytest.approx(1.2 - 2 / (eps + 10))
 
 
-def test_distribution_never_changes_the_analysis_and_round_trips():
+def test_distribution_changes_the_analysis_only_when_applied_and_round_trips():
     plain = bridge(enabled=False)
     on = bridge()
     assert analyse(plain)["max"]["M"] == analyse(on)["max"]["M"]
+    assert analyse(on)["ft"] is None
     reopened = validate_project(json.dumps(create_project(on, "FT")))
-    assert reopened["schema_version"] == 6
+    assert reopened["schema_version"] == 7
     assert reopened["model"]["distribution"]["skew"] == 17.7
     old = create_project(plain, "Old")
     old["schema_version"] = 5
@@ -249,6 +261,91 @@ def test_distribution_never_changes_the_analysis_and_round_trips():
     assert (
         validate_project(json.dumps(old))["model"]["distribution"]["enabled"] is False
     )
+    # v0.9 files carried an enveloped "effect"; it is dropped in v0.9.1.
+    v09 = create_project(on, "v0.9")
+    v09["schema_version"] = 6
+    v09["model"]["distribution"]["effect"] = "max"
+    assert "effect" not in validate_project(json.dumps(v09))["model"]["distribution"]
+
+
+def test_zones_follow_figure_5_1():
+    r = D.truck_fraction(bridge())
+    zones = [(round(z["x0"], 3), round(z["x1"], 3), z["sign"]) for z in r["zones"]]
+    pier = 17.557
+    assert zones == [
+        (0, round(pier - 0.2 * 17.557, 3), "+"),
+        (round(pier - 0.2 * 17.557, 3), round(pier + 0.2 * 17.607, 3), "-"),
+        (round(pier + 0.2 * 17.607, 3), 35.164, "+"),
+    ]
+    neg = r["zones"][1]
+    assert neg["FT_M"] == pick(r, "ULS", "interior", "moment", "-", "support:2")["FT"]
+    assert neg["FT_V"] == pick(r, "ULS", "interior", "shear", "-", "support:2")["FT"]
+    # Exterior girder at FLS: zones carry the exterior FLS values, × Fs on shear.
+    ext = D.truck_fraction(bridge(girder="exterior", state="FLS"))
+    row = pick(ext, "FLS", "exterior", "shear", "+", "span:1")
+    assert ext["zones"][0]["FT_V"] == pytest.approx(row["FT"] * row["Fs"])
+    # Station sides pick the zone at a hinge between two simple spans.
+    iso = bridge(skew=0)
+    iso.spans[0].simple = True
+    fv, fm = D.station_factors(iso, [17.557, 17.557], ["left", "right"])
+    z = D.truck_fraction(iso)["zones"]
+    assert fm == [z[0]["FT_M"], z[1]["FT_M"]] and len(z) == 2
+
+
+def live_bridge(apply, **distribution):
+    data = bridge(apply=apply, **distribution).model_dump()
+    data["load_mode"] = "live"
+    return Model.model_validate(data)
+
+
+@pytest.mark.parametrize("case", ["truck", "lane"])
+def test_ft_scales_axle_effects_on_v_and_m_by_zone(case):
+    off, on = live_bridge(False), live_bridge(True)
+    for m in (off, on):
+        m.live.case = case
+        m.live.lane_fraction = 0.8
+    a, b = analyse(off), analyse(on)
+    zones = b["ft"]["zones"]
+    x = np.array(a["x"])
+    sides = a["sides"]
+    fv, fm = D.station_factors(on, x, sides)
+    if case == "truck":
+        # Truck only: every V and M value is exactly the zone fraction times
+        # the one-lane value; δ and reactions are unchanged.
+        np.testing.assert_allclose(b["max"]["M"], np.array(a["max"]["M"]) * fm)
+        np.testing.assert_allclose(b["min"]["V"], np.array(a["min"]["V"]) * fv)
+    else:
+        # The companion lane load is not scaled, so the result is not simply
+        # the one-lane value times FT, but it does change.
+        assert not np.allclose(b["max"]["M"], a["max"]["M"])
+        assert not np.allclose(b["max"]["M"], np.array(a["max"]["M"]) * fm)
+    np.testing.assert_allclose(b["max"]["D"], a["max"]["D"])
+    np.testing.assert_allclose(b["max"]["R"], a["max"]["R"])
+    assert {z["sign"] for z in zones} == {"+", "-"}
+
+
+def test_ft_snapshots_reproduce_the_envelope_and_keep_equilibrium():
+    from quickerbridge.engine import snapshot, traverse
+
+    m = live_bridge(True)
+    r = analyse(m)
+    for e in r["extrema"]:
+        s = snapshot(m, e, e["index"], e["sense"])
+        i = e["index"] % len(r["x"])
+        assert s[e["response"]][i] == pytest.approx(e["value"], abs=1e-7)
+        assert abs(s["equilibrium"]["force"]) < 1e-6
+    frames = traverse(m, "forward", 12)["frames"]
+    assert len(frames) == 12
+    # Displayed axle loads stay the physical ones (no FT on the arrows).
+    loads = [a["load"] for f in frames for a in f["axles"]]
+    assert max(loads) == pytest.approx(200 * 1.25)  # CL-750-QC axle 4 × DLA
+
+
+def test_ft_replaces_the_manual_axle_factor():
+    a = live_bridge(True)
+    b = live_bridge(True)
+    b.live.axle_factor = 3.0
+    np.testing.assert_allclose(analyse(a)["max"]["M"], analyse(b)["max"]["M"])
 
 
 def test_browser_action_and_excel_sheet():
@@ -258,12 +355,7 @@ def test_browser_action_and_excel_sheet():
             json.dumps({"action": "axle_factor", "data": {"model": m.model_dump()}})
         )
     )
-    moments = [
-        r["FT"]
-        for r in out["rows"]
-        if (r["state"], r["girder"], r["effect"]) == ("ULS", "interior", "moment")
-    ]
-    assert out["summary"]["ULS:interior"]["moment"] == max(moments)
+    assert len(out["zones"]) == 3
     assert pick(out, "ULS", "interior", "moment", "+", "span:1")["FT"] == pytest.approx(
         0.912, abs=0.001
     )

@@ -1,8 +1,8 @@
-# QuickerBridge 0.9 — guide en français
+# QuickerBridge 0.9.1 — guide en français
 
 [English README](README.md)
 
-**Anthony Chéruel · 2026-09-30 · Français / English**
+**Anthony Chéruel · 2026-10-01 · Français / English**
 
 Un outil de calcul préliminaire de poutres continues de ponts, avec PyCBA dans le
 navigateur. Géométrie, charges et diagrammes restent réunis dans une interface
@@ -11,7 +11,7 @@ compacte. Aucune installation de Python et aucun serveur local pour les utilisat
 ## Démarrer
 
 - **Sur le web :** https://acfakkoh.github.io/QuickerBridge/ (GitHub Pages, publié à chaque mise à jour de `main`).
-- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.9-2026-09-30.html`) dans un navigateur moderne. Si vous
+- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.9.1-2026-10-01.html`) dans un navigateur moderne. Si vous
   recevez l’archive portable, extrayez-la avant d’ouvrir le HTML.
 - Une connexion Internet est nécessaire au démarrage pour charger Pyodide et ses
   bibliothèques. Le cache peut accélérer les ouvertures suivantes; cette édition
@@ -50,14 +50,17 @@ pont ne sont pas envoyées à un serveur de calcul. Fermer l’onglet interrompt
    d’entretien 24 + 56 kN et un véhicule personnalisé de 1 à 7 essieux sont disponibles.
    Chaque charge permanente a son facteur. Le facteur routier multiplie tout le cas
    routier; le facteur d’essieu multiplie seulement les charges d’essieux.
-   **Facteur d’essieu FT (v0.9)** : la carte « S6-25 » sous les facteurs routiers
-   calcule la fraction de charge de camion d’un pont à dalle sur poutres (classes A
-   et B, CL-625 / CL-750-QC) à partir de N, S, Sc, Wc et du biais. Elle affiche n,
-   RL, We, μ, DVE, Fs et FT (poutre intérieure ou extérieure, ÉLUL/ÉLUT1 ou
-   ÉLF/ÉLUT2, moment, cisaillement ou enveloppe). Les boutons copient FT dans le
-   facteur d’essieu ou le facteur de charge; l’onglet « FT · S6-25 » donne le
-   tableau complet (Le, DT, λ, γc, γe par travée et par pile) et l’Excel une feuille
-   dédiée. Le sur pile vaut 0,20 (L1 + L2) selon S6-25.
+   **Facteur d’essieu FT (v0.9.1)** : la carte « S6-25 » sous les facteurs routiers
+   active la fraction de charge de camion d’un pont à dalle sur poutres (classes A
+   et B, CL-625 / CL-750-QC). On y choisit la poutre (intérieure ou extérieure) et
+   l’état limite (ÉLUL/ÉLUT1 ou ÉLF/ÉLUT2). Appliqué, FT multiplie les effets des
+   essieux sur M et V zone par zone : M par le FT moment, V par le FT cisaillement
+   de chaque zone M+ (travée) ou M− (0,20 L de part et d’autre d’une pile), comme Le
+   à la figure 5.1. Il remplace alors le facteur d’essieu saisi; la charge de voie,
+   la flèche et les réactions restent celles d’une voie. Les données du tablier (N,
+   S, Sc, Wc, biais, h des culées intégrales) et les tableaux compacts (Le, DT, λ,
+   γc, γe, FT par zone) sont dans l’onglet « FT · S6-25 »; l’Excel a une feuille
+   dédiée. DVE est borné à 3,0 m.
 4. Attendez la fin du calcul, puis inspectez les diagrammes et le tableau. La case
    **Écarts Δ (max − min)** remplace V, M et δ par ΔV, ΔM et Δδ, lus au curseur.
    L’augmentation du nombre de stations du tableau ne raffine pas le solveur.

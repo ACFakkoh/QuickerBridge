@@ -430,6 +430,20 @@ def excel_bytes(result, language="en", model=None):
                 ),
             ]
         )
+    if result.get("ft"):
+        ft = result["ft"]
+        meta.append(
+            [
+                "FT S6-25 (par zone / per zone)",
+                f"{ft['girder']} · {ft['state']} · "
+                + "; ".join(
+                    f"{z['x0']:.2f}–{z['x1']:.2f} m M×{z['FT_M']:.3f} V×{z['FT_V']:.3f}"
+                    for z in ft["zones"]
+                )
+                + " · axle effects on V and M only / effets des essieux sur V et M seulement; "
+                "lane load, δ and R: one lane / charge de voie, δ et R : une voie",
+            ]
+        )
     simple = [
         str(i + 1) for i, s in enumerate(result["model"]["spans"]) if s.get("simple")
     ]

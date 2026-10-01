@@ -152,11 +152,14 @@ class ThermalLoad(InputModel):
 class Distribution(InputModel):
     """S6-25 truck load fraction FT, slab-on-girder bridge (classes A and B).
 
-    It never changes the analysis by itself: the computed FT is copied to a
-    live factor only when the user applies it.
+    With ``apply``, the axle effects on V and M are multiplied station by
+    station by the shear and moment fractions of their zone (M+ span zones and
+    M− support zones of Figure 5.1), for the selected girder and limit state.
+    The lane load, δ and support reactions keep one full lane.
     """
 
     enabled: bool = False
+    apply: bool = False
     girders: int = Field(default=6, ge=1, le=40)  # N
     spacing: float = Field(default=3.25, gt=0.3, le=10)  # S, m
     overhang: float = Field(default=1.73, ge=0, le=6)  # Sc, m
@@ -167,7 +170,6 @@ class Distribution(InputModel):
     h_right: float = Field(default=3.0, ge=0, le=30)
     girder: Literal["interior", "exterior"] = "interior"
     state: Literal["ULS", "FLS"] = "ULS"
-    effect: Literal["max", "moment", "shear"] = "max"
 
 
 class ModalSettings(InputModel):
