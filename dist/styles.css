@@ -199,3 +199,4 @@ input[type=number]{appearance:textfield;-moz-appearance:textfield}
 .st-body .sp-figure{position:static}
 .st-zone-c{fill:#2f5f9e0d}.st-zone-t{fill:#a333290b}.st-zone-label{font-weight:700;letter-spacing:.02em}.st-compression-text{fill:#2f5f9e}.st-tension-text{fill:#a33329}
 .st-ena{stroke:#6a4fa3;stroke-width:1;stroke-dasharray:5 3}.st-ena-label{font-size:9.5px;font-weight:600;fill:#6a4fa3;paint-order:stroke;stroke:#fbfcfd;stroke-width:3px}
+.st-bar-band{stroke-width:1.2;stroke-linejoin:round}.st-bar-band.st-max{fill:#008378aa}.st-bar-band.st-min{fill:#c97a1caa}

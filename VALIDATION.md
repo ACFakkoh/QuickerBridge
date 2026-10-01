@@ -484,5 +484,8 @@ hover preview (cached per station, debounced, opposite side of the cursor),
 window with station step / x / slider and S3 y (writes y_1n, or y_steel without
 slab), table without slab faces and bottom bars, continuous outlines from 0,
 dashed neutral axes of every loaded stage (merged when equal), compression left
-and tension right; reopening right after closing keeps the station. No console
+and tension right; top-bar stress drawn as a band one bar diameter high;
+hover preview at a fixed height scale (deepest girder: the girder grows over
+haunches, the slab keeps its thickness) and without neutral axes; reopening
+right after closing keeps the station. No console
 errors.

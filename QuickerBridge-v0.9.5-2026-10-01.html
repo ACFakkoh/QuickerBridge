@@ -207,6 +207,7 @@ input[type=number]{appearance:textfield;-moz-appearance:textfield}
 .st-body .sp-figure{position:static}
 .st-zone-c{fill:#2f5f9e0d}.st-zone-t{fill:#a333290b}.st-zone-label{font-weight:700;letter-spacing:.02em}.st-compression-text{fill:#2f5f9e}.st-tension-text{fill:#a33329}
 .st-ena{stroke:#6a4fa3;stroke-width:1;stroke-dasharray:5 3}.st-ena-label{font-size:9.5px;font-weight:600;fill:#6a4fa3;paint-order:stroke;stroke:#fbfcfd;stroke-width:3px}
+.st-bar-band{stroke-width:1.2;stroke-linejoin:round}.st-bar-band.st-max{fill:#008378aa}.st-bar-band.st-min{fill:#c97a1caa}
 </style>
 
 
@@ -2021,6 +2022,12 @@ function stAxes(d){
 function stZones(ox,half,top,bottom,fs){
  return `<rect x="${ox-half}" y="${top}" width="${half}" height="${bottom-top}" class="st-zone-c"/><rect x="${ox}" y="${top}" width="${half}" height="${bottom-top}" class="st-zone-t"/><text x="${ox-6}" y="${top-4}" text-anchor="end" class="st-zone-label st-compression-text" style="font-size:${fs}px">◀ ${t('stComp')} (−)</text><text x="${ox+6}" y="${top-4}" class="st-zone-label st-tension-text" style="font-size:${fs}px">${t('stTens')} (+) ▶</text>`;
 }
+// Top-bar stress drawn as a band one bar diameter high, centred on the bars.
+function stBarBand(cs,s,by,Y,SX,ox){
+ const c=s.composite,v=cs.total.bar_top;if(!cs.composite||!c||by.bar_top===undefined||!Number.isFinite(v)||Math.abs(v)<1e-9)return '';
+ const r=(SP_BARS[c.bar_top]||[16])[0]/2,a=Y(by.bar_top+r),b=Y(by.bar_top-r);
+ return `M${ox} ${a}L${SX(v)} ${a}L${SX(v)} ${b}L${ox} ${b}Z`;
+}
 // Section outline and the two total stress profiles on the same height scale.
 function stSvg(d){
  const mx=d.cases.max,mn=d.cases.min,s=d.section,H=mx.height,vw=540,vh=372,top=44,bot=30,sy=(vh-top-bot)/H,Y=y=>vh-bot-y*sy;
@@ -2037,10 +2044,12 @@ function stSvg(d){
   let path=`M${ox} ${Y(0)}L${SX(cs.total.S5)} ${Y(0)}L${SX(cs.total.S2)} ${Y(d0)}L${ox} ${Y(d0)}`;
   if(cs.composite)path+=`L${ox} ${Y(by.slab_bottom)}L${SX(cs.total.slab_bottom)} ${Y(by.slab_bottom)}L${SX(cs.total.slab_top)} ${Y(by.slab_top)}L${ox} ${Y(by.slab_top)}`;
   g+=`<path d="${path}" class="${cls} st-area"/>`;
+  const band=stBarBand(cs,s,by,Y,SX,ox);if(band)g+=`<path d="${band}" class="${cls} st-bar-band"/>`;
  });
  // Neutral axes: dashed from the section across the stress diagram.
  let last=-Infinity;
  stAxes(d).sort((a,b)=>b.y-a.y).forEach(a=>{const yy=Y(a.y),yl=Math.max(yy-3,last+11);last=yl;g+=`<line x1="${X(-w/2)-6}" x2="${ox+half}" y1="${yy}" y2="${yy}" class="st-ena"/><text x="${ox+half-2}" y="${yl}" text-anchor="end" class="st-ena-label">${esc(a.label)}</text>`;});
+ [mx,mn].forEach((cs,n)=>{const v=cs.total.bar_top;if(cs.composite&&by.bar_top!==undefined&&Math.abs(v)>=.5)g+=`<text x="${SX(v)+(v>=0?4:-4)}" y="${Y(by.bar_top)+(n?10:-3)}" text-anchor="${v>=0?'start':'end'}" class="st-label ${n?'st-min-text':'st-max-text'}">${fmt(v,0)}</text>`;});
  [['S5',mx],['S2',mx]].concat(mx.composite?[['slab_top',mx]]:[]).forEach(([k])=>{g+=`<text x="${SX(mx.total[k])+(mx.total[k]>=0?4:-4)}" y="${Y(by[k])-3}" text-anchor="${mx.total[k]>=0?'start':'end'}" class="st-label st-max-text">${fmt(mx.total[k],0)}</text>`;});
  g+=`<text x="6" y="14" class="st-legend st-max-text">— ${t('stCaseMax')}</text><text x="6" y="28" class="st-legend st-min-text">— ${t('stCaseMin')}</text>`;
  return `<svg viewBox="0 0 ${vw} ${vh}" class="sp-svg" role="img" aria-label="${t('stTitle')}">${g}</svg>`;
@@ -2082,7 +2091,10 @@ function stPeekRender(el,d,i){
 }
 // Compact profile: section outline on the left, M max / M min totals.
 function stMini(d){
- const mx=d.cases.max,mn=d.cases.min,s=d.section,H=mx.height,vw=300,vh=184,pad=16,top=28,sy=(vh-top-pad)/H,Y=y=>vh-pad-y*sy;
+ // Fixed height scale (deepest girder + slab of the model): over a haunch the
+ // girder grows while the slab keeps its thickness.
+ const hmax=Math.max(d.cases.max.height,...model.sections.filter(q=>q.kind==='girder').map(q=>q.depth+(q.composite&&q.composite.enabled?q.composite.haunch+q.composite.slab_thickness:0)));
+ const mx=d.cases.max,mn=d.cases.min,s=d.section,H=mx.height,vw=300,vh=184,pad=16,top=28,sy=(vh-top-pad)/hmax,Y=y=>vh-pad-y*sy;
  const smax=Math.max(1,...[...Object.values(mx.total),...Object.values(mn.total)].map(Math.abs)),ox=180,half=105,SX=v=>ox+v/smax*half*.92;
  const c=mx.composite&&s.composite?s.composite:null,d0=s.depth,w=Math.max(s.top_width,s.bottom_width,c?Math.min(c.effective_width,2*Math.max(s.top_width,s.bottom_width)):0),sx=Math.min(64/w,sy),cx=40,X=v=>cx+v*sx;
  let g=`<rect x="${X(-s.bottom_width/2)}" y="${Y(s.bottom_thickness)}" width="${s.bottom_width*sx}" height="${s.bottom_thickness*sy}" class="sp-steel"/><rect x="${X(-s.web_thickness/2)}" y="${Y(d0-s.top_thickness)}" width="${Math.max(1,s.web_thickness*sx)}" height="${(d0-s.top_thickness-s.bottom_thickness)*sy}" class="sp-steel"/><rect x="${X(-s.top_width/2)}" y="${Y(d0)}" width="${s.top_width*sx}" height="${s.top_thickness*sy}" class="sp-steel"/>`;
@@ -2093,9 +2105,8 @@ function stMini(d){
   let path=`M${ox} ${Y(0)}L${SX(cs.total.S5)} ${Y(0)}L${SX(cs.total.S2)} ${Y(d0)}L${ox} ${Y(d0)}`;
   if(cs.composite)path+=`L${ox} ${Y(by.slab_bottom)}L${SX(cs.total.slab_bottom)} ${Y(by.slab_bottom)}L${SX(cs.total.slab_top)} ${Y(by.slab_top)}L${ox} ${Y(by.slab_top)}`;
   g+=`<path d="${path}" class="${cls} st-mini-area"/>`;
+  const band=stBarBand(cs,s,by,Y,SX,ox);if(band)g+=`<path d="${band}" class="${cls} st-bar-band"/>`;
  });
- let last=-Infinity;
- stAxes(d).sort((a,b)=>b.y-a.y).forEach(a=>{const yy=Y(a.y),yl=Math.max(yy-2,last+9);last=yl;g+=`<line x1="${X(-w/2)}" x2="${ox+half}" y1="${yy}" y2="${yy}" class="st-ena"/><text x="${X(w/2)+3}" y="${yl}" class="st-ena-label" style="font-size:8.5px">${esc(a.label)}</text>`;});
  return `<svg viewBox="0 0 ${vw} ${vh}" class="sp-svg" role="img" aria-label="${t('stTitle')}">${g}<text x="${ox+half*.92}" y="${vh-3}" class="sp-dim">+${fmt(smax,0)}</text><text x="${ox-half*.92}" y="${vh-3}" class="sp-dim">−${fmt(smax,0)}</text></svg>`;
 }
 // Visible entry point next to the display modes.
