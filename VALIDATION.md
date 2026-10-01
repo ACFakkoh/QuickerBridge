@@ -456,3 +456,33 @@ interior rows and the exterior zone factor. After the intro, the workspace
 panels arrive one after the other (fade, slight rise and blur, 50 to 1050 ms
 delays, 0.75 s each; disabled for reduced motion); checked in the browser by
 the animations attached when the intro ends. 205 tests pass.
+
+### v0.9.5 complement: negative region, y per configuration, support section
+
+Section properties: the region is the first choice. Negative region: I' = steel
+girder + both bar layers (full area, tension), no concrete, no 3n / 1n; S at
+S1 (top bars) to S5, ratio I'/I steel, 2dc/w with dc = y' - tb (web compressed
+from the bottom). Hand check by parallel axes on the reference section (15M @
+150, A' = 62 793 mm2) and independence from f'c, unit weight and FrQr. y of S3
+per configuration (y_steel, y_3n, y_1n, y_neg, default y3), each below its own
+ENA; S3 1n = 51.8e6 mm3 with y_1n = 915 mm. Steel alone: Fy and y available
+without slab. Non-prismatic: support_length (mm, default 400) of constant depth
+centred on every interior support; a varying zone touching the support starts
+after half of it at the support section (zones entered unchanged, applied to
+EI, self-weight, modal mesh and drawing). Projects of schema 7 and earlier open
+with 0 (previous geometry); schema 8. Default model: M min -6028 kN.m (400 mm)
+vs -6163 kN.m with 3000 mm in the browser. The window drawing is larger (view
+box fitted to the section). French is the default language (new storage key).
+tests/test_v095.py: 6 tests; 211 pass natively, 195 + 1 skipped in browser mode.
+
+### v0.9.5 complement: stress window and hover preview
+
+The stress profile reports the S3 fibre for the steel section alone too (y_steel
+below the steel ENA) and its reference (s3_ref 1n or steel, s3_y); test added
+(212 native, 196 + 1 skipped browser mode). Browser: "σ Stresses" button,
+hover preview (cached per station, debounced, opposite side of the cursor),
+window with station step / x / slider and S3 y (writes y_1n, or y_steel without
+slab), table without slab faces and bottom bars, continuous outlines from 0,
+dashed neutral axes of every loaded stage (merged when equal), compression left
+and tension right; reopening right after closing keeps the station. No console
+errors.

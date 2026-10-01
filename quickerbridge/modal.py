@@ -24,7 +24,7 @@ import time
 
 import numpy as np
 
-from .sections import span_ei
+from .sections import span_ei, span_zones
 from .models import Model
 from .loads import self_weight_intervals
 from .engine import end_releases
@@ -106,7 +106,7 @@ def mesh(model: Model, profile, per_span: int):
         length = span.length
         breaks = {0.0, length}
         if model.nonprismatic:
-            breaks.update(z.end * length for z in span.zones)
+            breaks.update(z.end * length for z in span_zones(model, i))
         for a, b, _ in profile:
             for value in (a - start, b - start):
                 if 0 < value < length:

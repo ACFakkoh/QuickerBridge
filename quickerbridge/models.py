@@ -35,6 +35,18 @@ class CompositeSlab(BaseModel):
     frqr: float = Field(default=0.85, gt=0, le=1)  # effective properties
     # S3: distance below the elastic neutral axis (positive downward), mm.
     y3: float = Field(default=500, gt=0, le=15000)
+    # v0.9.5: y of S3 per configuration, each below its own ENA; None = y3.
+    y_steel: float | None = Field(default=None, gt=0, le=15000)
+    y_3n: float | None = Field(default=None, gt=0, le=15000)
+    y_1n: float | None = Field(default=None, gt=0, le=15000)
+    y_neg: float | None = Field(default=None, gt=0, le=15000)  # I' (M−)
+    # Region shown in the section properties window: positive moment (steel,
+    # 3n, 1n) or negative moment (steel and I' = steel + bars in tension).
+    region: Literal["positive", "negative"] = "positive"
+
+    def y_of(self, config: str) -> float:
+        value = getattr(self, f"y_{config}")
+        return self.y3 if value is None else value
 
 
 NEBT_TYPES = ("NEBT1000", "NEBT1200", "NEBT1400", "NEBT1600", "NEBT1800")
@@ -229,6 +241,9 @@ class Model(InputModel):
         default_factory=lambda: [Section()], min_length=1, max_length=20
     )
     nonprismatic: bool = False
+    # Non-prismatic: length (mm) of constant-depth support section centred on
+    # every interior support; varying zones start beyond it (v0.9.5).
+    support_length: float = Field(default=400, ge=0, le=20000)
     dead: list[DeadLoad] = Field(default_factory=lambda: [DeadLoad()], max_length=30)
     self_weight: SelfWeight = Field(default_factory=SelfWeight)
     live: LiveLoad = Field(default_factory=LiveLoad)

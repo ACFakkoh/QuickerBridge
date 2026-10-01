@@ -261,3 +261,19 @@ to design a bridge.
 Pour installer les sources, tester, reconstruire les livrables ou publier sur
 GitHub Pages, consultez [le guide développeur](README_DEVELOPER.md).
 [Validation](VALIDATION.md) · [Notices des composants tiers](THIRD_PARTY_NOTICES.md).
+
+## Complément 0.9.5
+
+- **Propriétés de section** : choix de la région en premier. Région négative :
+  dalle fissurée ignorée, I′ = poutre d’acier + armatures (traction), sans 3n
+  ni 1n. Point S3 : y saisi pour chaque configuration (acier, 3n, 1n, I′), y
+  compris pour l’acier seul. Schéma de la section agrandi.
+- **Non prismatique** : section d’appui à hauteur constante centrée sur chaque
+  appui intermédiaire (400 mm par défaut); les goussets commencent au-delà.
+  Les projets antérieurs s’ouvrent avec 0 (géométrie inchangée).
+- Langue par défaut : français.
+- **Contraintes** : bouton « σ Contraintes ↗ » et aperçu au survol des
+  enveloppes (profil, ANE, côtés compression / traction); double-clic pour la
+  fenêtre complète, où l’on change la station (◀ ▶, x, curseur) et le y de S3.
+  Profils en trait continu depuis σ = 0, ANE en pointillés; lignes dessus /
+  dessous de dalle et armature inf. retirées du tableau.

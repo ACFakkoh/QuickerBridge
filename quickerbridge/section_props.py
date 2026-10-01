@@ -17,7 +17,10 @@ Conventions follow the validated reference sheet (author, 2026-10-01):
 * effective properties (partial shear connection): Ie = Is + FrQr (Ic − Is),
   and the same rule for the section moduli, FrQr = 0.85 by default;
 * section modulus S = I / |y − ȳ| at the usual points S1 to S5 (S1 top bars,
-  S2 top of top flange, S3 at y below the ENA, S4 top of bottom flange, S5 bottom).
+  S2 top of top flange, S3 at y below the ENA, S4 top of bottom flange, S5 bottom);
+  y of S3 is given per configuration (steel, 3n, 1n, I'), default ``y3``;
+* negative-moment region (v0.9.5): the slab is cracked, so I' counts the steel
+  girder and both bar layers (in tension) only; no concrete, no 3n / 1n.
 
 Section classes (CSA S6, 10.9.2.1, no axial load): flanges b/(2t) against
 145, 170, 200 / √Fy; web h/w against 1100, 1700, 1900 / √Fy; 10.10.2.1:
@@ -172,7 +175,7 @@ def composite_properties(s: Section, c: CompositeSlab) -> dict:
     ec = concrete_modulus(c.fc, c.unit_weight * 1000 / 9.81)
     n = es / ec
     gc, gs = ec / (2 * (1 + NU_CONCRETE)), es / (2 * (1 + NU_STEEL))
-    steel = steel_properties(s, c.fy, c.y3)
+    steel = steel_properties(s, c.fy, c.y_of("steel"))
     d = s.depth
     base = d + c.haunch  # slab bottom
     height = base + c.slab_thickness
@@ -203,7 +206,7 @@ def composite_properties(s: Section, c: CompositeSlab) -> dict:
         points = {
             "S1": top_bar,
             "S2": d,
-            "S3": ybar - c.y3,
+            "S3": ybar - c.y_of(label),
             "S4": s.bottom_thickness,
             "S5": 0.0,
         }
@@ -230,13 +233,57 @@ def composite_properties(s: Section, c: CompositeSlab) -> dict:
             "S_top": steel["S_top"] + fq * (comp["S"]["S2"] - steel["S_top"]),
             "S_bot": steel["S_bot"] + fq * (comp["S"]["S5"] - steel["S_bot"]),
         }
+    out["negative"] = negative_properties(s, c, steel)
     return out
 
 
+def negative_properties(s: Section, c: CompositeSlab, steel: dict) -> dict:
+    """Negative-moment region I': steel girder + both bar layers, no concrete.
+
+    The bars are in tension and count as steel (full area); the cracked slab
+    and the haunch are ignored. Web in compression from the bottom flange:
+    dc = ȳ' − tb for the 2dc/w check (10.10.2.1).
+    """
+    base = s.depth + c.haunch
+    reinf = bars(c)
+    parts = [(b * t, y, b * t**3 / 12) for b, t, y in _plates(s)]
+    parts += [(b["area"], base + b["y_in_slab"], 0.0) for b in reinf]
+    area, ybar, inertia = _combine(parts)
+    points = {
+        "S1": base + reinf[0]["y_in_slab"],
+        "S2": s.depth,
+        "S3": ybar - c.y_of("neg"),
+        "S4": s.bottom_thickness,
+        "S5": 0.0,
+    }
+    dc = ybar - s.bottom_thickness
+    root = math.sqrt(c.fy)
+    return {
+        "A": area,
+        "y_bottom": ybar,
+        "y_top_bars": points["S1"] - ybar,
+        "I": inertia,
+        "S": {
+            k: inertia / abs(y - ybar) for k, y in points.items() if abs(y - ybar) > 1e-9
+        },
+        "points": points,
+        "bars_area": sum(b["area"] for b in reinf),
+        "ratio": inertia / steel["Ix"],
+        "web_2dc": (2 * dc / s.web_thickness, 2 * dc / s.web_thickness > 1900 / root),
+    }
+
+
 def section_properties(section: Section) -> dict:
-    """Worker entry: steel alone, plus composite results when a slab is set."""
+    """Worker entry: steel alone, plus composite results when a slab is set.
+
+    ``region`` echoes the region chosen for display (positive / negative);
+    with a slab, both the positive (3n, 1n) and negative (I') results are given.
+    """
     composite = section.composite or CompositeSlab()
-    result = {"steel": steel_properties(section, composite.fy, composite.y3)}
+    result = {
+        "steel": steel_properties(section, composite.fy, composite.y_of("steel")),
+        "region": composite.region,
+    }
     if section.composite is not None and section.composite.enabled:
         result["composite"] = composite_properties(section, section.composite)
     return result
@@ -300,6 +347,14 @@ def stress_profile(section: Section, moments: dict) -> dict:
     )
     d, tb = section.depth, section.bottom_thickness
     fibres = [("S5", 0.0, "steel"), ("S4", tb, "steel"), ("S2", d, "steel")]
+    if comp is None and section.composite is not None:
+        # v0.9.5: steel alone, S3 at y_steel below the steel neutral axis.
+        _, ybar, _ = _combine(
+            [(b * t, y, b * t**3 / 12) for b, t, y in _plates(section)]
+        )
+        y3 = ybar - section.composite.y_of("steel")
+        if 0 <= y3 <= d:
+            fibres.append(("S3", y3, "steel"))
     if comp is not None:
         c = section.composite
         base = d + c.haunch
@@ -347,4 +402,11 @@ def stress_profile(section: Section, moments: dict) -> dict:
         "total": total,
         "composite": comp is not None,
         "height": comp["height"] if comp else d,
+        # Reference of the S3 fibre: y below the 1n axis, or the steel axis.
+        "s3_ref": "1n" if comp is not None else "steel",
+        "s3_y": (
+            section.composite.y_of("1n" if comp is not None else "steel")
+            if section.composite is not None
+            else None
+        ),
     }
