@@ -76,7 +76,7 @@ def test_direct_ei_benchmark_and_browser_excel():
         load_mode="dead",
     )
     assert properties(m.sections[0]) == dict(
-        A=None, I=None, centroid=None, EI=2_000_000
+        A=None, I=None, centroid=None, EI=2_000_000, w=None
     )
     assert span_ei(m, 0) == 2_000_000
     r = json.loads(

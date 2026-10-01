@@ -90,7 +90,7 @@ function modalBeam(){
 }
 // Girder depth along the deck, as drawn by renderBeam (haunches included).
 function modalDepths(xs){
- const depth=s=>s.kind==='ei'?1800:s.depth,max=Math.max(...model.sections.map(depth));let starts=[0];model.spans.forEach(s=>starts.push(starts.at(-1)+s.length));
+ const depth=sectionDepth,max=Math.max(...model.sections.map(depth));let starts=[0];model.spans.forEach(s=>starts.push(starts.at(-1)+s.length));
  return xs.map(x=>{let i=starts.findIndex((a,k)=>k<model.spans.length&&x<=starts[k+1]+1e-9);if(i<0)i=model.spans.length-1;const s=model.spans[i],u=(x-starts[i])/s.length;
   const zones=model.nonprismatic&&s.zones.length?s.zones:[{end:1,section:s.section,end_section:s.section,profile:'constant'}];let prev=0,z=zones.find(z=>u<=z.end+1e-9)||zones.at(-1);zones.some(q=>{if(q===z)return true;prev=q.end;return false});
   const a=model.sections[z.section]||model.sections[0],b=model.sections[z.end_section??z.section]||a,f=z.end>prev?Math.min(1,Math.max(0,(u-prev)/(z.end-prev))):0,sh=z.profile==='constant'?0:z.profile==='parabolic'?(a.depth>b.depth?1-(1-f)**2:f*f):f;

@@ -66,6 +66,7 @@ def source_entries():
         "launch.py",
         "pycba-cl750qc.patch",
         "pycba-nonprismatic-performance.patch",
+        "pycba-pinned-pinned-shear.patch",
     )
     for name in root_files:
         entries.append((ROOT / name, name))
@@ -85,6 +86,7 @@ def source_entries():
         "app.js",
         "modes.js",
         "comparison.js",
+        "axle.js",
         "browser-solver.js",
         "version.js",
         "default-result.js",
@@ -176,6 +178,7 @@ def build_browser_assets() -> None:
         "app.js",
         "modes.js",
         "comparison.js",
+        "axle.js",
     )
     for filename in script_names:
         html = html.replace(f'<script src="./{filename}" defer></script>', "")
@@ -232,6 +235,7 @@ def build_release() -> None:
             "app.js",
             "modes.js",
             "comparison.js",
+            "axle.js",
             "browser-solver.js",
             "version.js",
             "default-result.js",

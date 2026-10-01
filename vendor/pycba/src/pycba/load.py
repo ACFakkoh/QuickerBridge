@@ -116,9 +116,13 @@ class Load:
             ref[2] = -fm * cnl.Ma
             ref[3] = 0.5 * cnl.Ma
         elif eType == 4:  # keep only vertical, remove moments
-            ref[0] = -(cnl.Ma + cnl.Mb) / L
+            # Fixed-fixed shears are Va_ss + (Ma + Mb)/L and Vb_ss - (Ma + Mb)/L;
+            # removing the end-moment couple restores the simply-supported
+            # shears. (QuickerBridge fix: the signs were inverted, which only
+            # showed under asymmetric loads such as a point load off mid-span.)
+            ref[0] = (cnl.Ma + cnl.Mb) / L
             ref[1] = 1.0 * cnl.Ma
-            ref[2] = (cnl.Ma + cnl.Mb) / L
+            ref[2] = -(cnl.Ma + cnl.Mb) / L
             ref[3] = 1.0 * cnl.Mb
         else:
             # no nothing if it is FF

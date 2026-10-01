@@ -9,9 +9,16 @@ class InputModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+NEBT_TYPES = ("NEBT1000", "NEBT1200", "NEBT1400", "NEBT1600", "NEBT1800")
+NEBT_DEFAULT_E = 28.0  # GPa, prestressed concrete; editable per section
+
+
 class Section(InputModel):
     name: str = Field(default="S1", max_length=60)
-    kind: Literal["girder", "ei"] = "girder"
+    # girder: steel I from plates; ei: direct stiffness; nebt: standard
+    # precast prestressed NEBT girder with tabulated properties.
+    kind: Literal["girder", "ei", "nebt"] = "girder"
+    nebt: Literal[NEBT_TYPES] = "NEBT1400"
     EI: float = Field(default=20_000_000, gt=0, le=1e15)  # kN m², direct stiffness
     E: float = Field(default=200, gt=0, le=1000)  # GPa
     inertia_modifier: float = Field(default=1, gt=0, le=1000)
@@ -22,9 +29,17 @@ class Section(InputModel):
     bottom_width: float = Field(default=600, gt=0, le=20000)
     bottom_thickness: float = Field(default=50, gt=0, le=2000)
 
+    @model_validator(mode="before")
+    @classmethod
+    def concrete_modulus(cls, data):
+        # A NEBT section given without E is concrete, not the steel default.
+        if isinstance(data, dict) and data.get("kind") == "nebt" and "E" not in data:
+            data = {**data, "E": NEBT_DEFAULT_E}
+        return data
+
     @model_validator(mode="after")
     def geometry(self):
-        if self.kind == "ei":
+        if self.kind in ("ei", "nebt"):
             return self
         if self.depth <= self.top_thickness + self.bottom_thickness:
             raise ValueError("geometry.depth")
@@ -57,6 +72,23 @@ class Span(InputModel):
     length: float = Field(default=34.8, ge=0.5, le=200)
     section: int = Field(default=0, ge=0)
     zones: list[Zone] = Field(default_factory=list, max_length=12)
+    # Simply supported (isostatic) span: moment releases at both ends, so no
+    # continuity with the neighbouring spans.
+    simple: bool = False
+
+
+class SelfWeight(InputModel):
+    """Girder self-weight added to the permanent loads (steel and NEBT only).
+
+    ``*_increase`` are percentage allowances on the nominal girder weight
+    (stiffeners, diaphragms, connections...); ``factor`` is a load factor like
+    the one of the other permanent loads.
+    """
+
+    apply: bool = True
+    steel_increase: float = Field(default=15, ge=0, le=200)  # %
+    nebt_increase: float = Field(default=10, ge=0, le=200)  # %
+    factor: float = Field(default=1, ge=0, le=1000)
 
 
 class DeadLoad(InputModel):
@@ -117,6 +149,27 @@ class ThermalLoad(InputModel):
     depth: float = Field(default=1200, gt=0, le=15000)  # thermal reference depth, mm
 
 
+class Distribution(InputModel):
+    """S6-25 truck load fraction FT, slab-on-girder bridge (classes A and B).
+
+    It never changes the analysis by itself: the computed FT is copied to a
+    live factor only when the user applies it.
+    """
+
+    enabled: bool = False
+    girders: int = Field(default=6, ge=1, le=40)  # N
+    spacing: float = Field(default=3.25, gt=0.3, le=10)  # S, m
+    overhang: float = Field(default=1.73, ge=0, le=6)  # Sc, m
+    carriageway: float = Field(default=18.8, gt=1, le=60)  # Wc, m
+    road_class: Literal["AB"] = "AB"
+    skew: float = Field(default=0, ge=0, le=45)  # ψ, degrees
+    h_left: float = Field(default=3.0, ge=0, le=30)  # integral abutment height, m
+    h_right: float = Field(default=3.0, ge=0, le=30)
+    girder: Literal["interior", "exterior"] = "interior"
+    state: Literal["ULS", "FLS"] = "ULS"
+    effect: Literal["max", "moment", "shear"] = "max"
+
+
 class ModalSettings(InputModel):
     """Free-vibration settings. The mass is not a load: it only feeds the
     eigenvalue analysis and never changes the static results."""
@@ -140,9 +193,11 @@ class Model(InputModel):
     )
     nonprismatic: bool = False
     dead: list[DeadLoad] = Field(default_factory=lambda: [DeadLoad()], max_length=30)
+    self_weight: SelfWeight = Field(default_factory=SelfWeight)
     live: LiveLoad = Field(default_factory=LiveLoad)
     thermal: ThermalLoad = Field(default_factory=ThermalLoad)
     modal: ModalSettings = Field(default_factory=ModalSettings)
+    distribution: Distribution = Field(default_factory=Distribution)
     load_mode: Literal["dead", "live", "both", "thermal"] = "both"
     subdivisions: int = Field(default=10, ge=2, le=100)
     precision: Literal["standard", "fine"] = "standard"
@@ -174,7 +229,7 @@ class Model(InputModel):
                 ):
                     raise ValueError("model.section")
                 if zone.profile != "constant" and any(
-                    self.sections[i].kind == "ei"
+                    self.sections[i].kind in ("ei", "nebt")
                     for i in (
                         zone.section,
                         zone.end_section

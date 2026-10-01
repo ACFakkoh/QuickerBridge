@@ -78,7 +78,9 @@ input[type=number]{appearance:textfield;-moz-appearance:textfield}
 .plot path,.plot line,.il-plot path,.il-plot line,.stiffness-plot path,.stiffness-plot line,.stiffness-plot circle{vector-effect:non-scaling-stroke}
 
 #beam{height:146px;overflow:visible}
-.delta-option{display:inline-flex;align-items:center;gap:5px;font-size:.75rem;color:#a33329;white-space:nowrap}
+.delta-toggle{display:inline-flex;align-items:center;gap:6px;font-size:.8125rem;color:var(--ink,#17374b);white-space:nowrap;cursor:pointer;padding:4px 9px;border:1px solid var(--line);border-radius:7px;background:#fff}.delta-toggle:has(input:checked){border-color:#c0392b;color:#a33329;background:#fdf1ef}.delta-toggle.hidden{display:none}.legend.delta i{background:#e8e2f3;border-top:2px solid #7a5bb5;border-bottom:0}
+/* v0.8.6: isostatic span toggle beside each span length */
+.span-row:has(.simple-toggle){grid-template-columns:78px 1fr 22px auto}.simple-toggle{display:inline-flex;align-items:center;gap:4px;font-size:.75rem;color:var(--muted);white-space:nowrap;cursor:pointer}.simple-toggle:has(input:checked){color:#a86a12;font-weight:600}.self-weight-card .field-row{margin-top:4px}
 .modal-mode .chart-toolbar{display:flex}.modal-mode .view-tabs,.modal-mode #focus-results{display:none}
 .compare-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 0 12px;font-size:.8125rem}.compare-head span{overflow-wrap:anywhere}
 .compare-note{color:var(--muted);font-size:.75rem;margin:0 0 10px}.compare-legend{display:flex;flex-wrap:wrap;gap:18px;font-size:.75rem;margin:8px 0;color:var(--teal)}.compare-legend span+span{color:#b96f17}
@@ -86,3 +88,24 @@ input[type=number]{appearance:textfield;-moz-appearance:textfield}
 .comparison-mode .metrics,.comparison-mode .reactions-block{display:none}
 
 @media(max-width:650px){.result-toolbar{flex-wrap:wrap}.result-toolbar .segmented{flex-wrap:wrap;max-width:100%}.result-toolbar #status{max-width:100%;text-align:left}.structure-heading{letter-spacing:.5px}.compare-head{flex-wrap:wrap}.compare-head>div{display:flex;gap:5px}.compare-head button{font-size:.75rem}}
+
+/* v0.9: the Δ switch stays next to the display modes, whatever the legend text */
+.display-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.display-controls #legend{margin-left:auto}.delta-toggle{box-sizing:border-box;min-height:32px}
+/* v0.9: S6-25 truck load fraction FT */
+.axle-card{position:relative;margin:4px 0 14px;padding:12px 12px 10px;border-radius:9px;border:1px solid #d9c592;background:linear-gradient(135deg,#fffaf0,#f6fbf9);box-shadow:0 1px 6px #8a6d2414}
+.axle-card.on{border-color:#c9a24f;box-shadow:0 2px 10px #8a6d2422}
+.axle-head,.axle-view-head{display:flex;align-items:center;gap:10px;margin-bottom:4px}.axle-head b,.axle-view-head b{display:block;font-size:.9rem;color:#17374b}.axle-head small,.axle-view-head small{display:block;font-size:.72rem;color:var(--muted)}
+.axle-badge{flex:none;display:inline-flex;align-items:center;justify-content:center;padding:4px 7px;border-radius:6px;background:#102d41;color:#ffd49a;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+.axle-card .toggle-row{margin:8px 0}
+.axle-derived{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.75rem;color:var(--muted);margin:6px 0 10px}.axle-derived b{color:#17374b;font-weight:600}
+.axle-result{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:8px 10px;margin:8px 0;border-radius:7px;background:#102d41;color:#dceaf0}
+.axle-ft-label{font-size:.8rem;color:#9fc3d2}.axle-ft{font-size:1.45rem;color:#ffd49a;font-variant-numeric:tabular-nums}.axle-result small{flex-basis:100%;font-size:.72rem;color:#bdced7}
+.axle-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.axle-actions button:not(.text-button){font-size:.8rem;padding:5px 9px}
+.axle-warning{font-size:.75rem;color:#9a5b12;margin:6px 0 0}
+.axle-tab{color:#8a6214}
+.axle-view{max-width:1100px}.axle-view h3{margin:18px 0 6px;font-size:.95rem;color:#17374b}
+.axle-table-view{border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}.axle-table-view th,.axle-table-view td{padding:4px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.axle-table-view thead th{text-align:center;background:#102d41;color:#fff}.axle-table-view thead th small{display:block;font-weight:400;color:#ffd49a}
+.axle-table-view tbody th{text-align:left;font-weight:500;color:var(--muted)}.axle-table-view td small{display:block;font-size:.65rem;color:var(--muted)}
+.axle-group th{background:#eef4f7;color:#17374b!important;font-weight:600!important;text-align:left}
+.axle-ftrow th{color:#17374b!important;font-weight:600!important}.axle-ftcell{font-weight:700;color:#8a4d0f;background:#fff7e8}.axle-ftcell sup{font-size:.6rem;color:#a33329;margin-left:2px}

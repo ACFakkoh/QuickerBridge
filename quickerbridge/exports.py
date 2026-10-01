@@ -120,6 +120,89 @@ def csv_bytes(result, language="en"):
     return stream.getvalue().encode("utf-8-sig")
 
 
+def distribution_sheet(wb, model, language):
+    """S6-25 truck load fraction FT (slab-on-girder) as one flat table."""
+    from .distribution import truck_fraction
+
+    fr = language == "fr"
+    data = truck_fraction(model)
+    sheet = wb.create_sheet("Facteur d'essieu FT" if fr else "Truck fraction FT")
+    sheet.append(
+        [
+            "État limite" if fr else "Limit state",
+            "Poutre" if fr else "Girder",
+            "Effet" if fr else "Effect",
+            "Signe" if fr else "Sign",
+            "Lieu" if fr else "Location",
+            "Le (m)",
+            "Règle Le" if fr else "Le rule",
+            "DT (m)",
+            "λ",
+            "γc",
+            "γe",
+            "FT calculé" if fr else "FT computed",
+            "FT min",
+            "FT",
+            "Fs",
+            "FT × Fs",
+        ]
+    )
+    names = {
+        "ULS": "ÉLUL / ÉLUT1" if fr else "ULS / SLS1",
+        "FLS": "ÉLF / ÉLUT2" if fr else "FLS / SLS2",
+        "interior": "intérieure" if fr else "interior",
+        "exterior": "extérieure" if fr else "exterior",
+        "moment": "moment",
+        "shear": "cisaillement" if fr else "shear",
+    }
+    for r in data["rows"]:
+        kind, number = r["where"].split(":")
+        where = (
+            f"{'Travée' if fr else 'Span'} {number}"
+            if kind == "span"
+            else f"{'Appui' if fr else 'Support'} {number}"
+        )
+        sheet.append(
+            [
+                names[r["state"]],
+                names[r["girder"]],
+                names[r["effect"]],
+                ("positif" if fr else "positive")
+                if r["sign"] == "+"
+                else ("négatif" if fr else "negative"),
+                where,
+                r["Le"],
+                r["Le_rule"],
+                r["DT"],
+                r["lambda"],
+                r["gamma_c"],
+                r["gamma_e"],
+                r["FT_calc"],
+                r["FT_min"],
+                r["FT"],
+                r["Fs"],
+                r["FT_Fs"],
+            ]
+        )
+    d = data["derived"]
+    inputs = data["inputs"]
+    sheet.append([])
+    for label, value in (
+        ("N", inputs["girders"]),
+        ("S (m)", inputs["spacing"]),
+        ("Sc (m)", inputs["overhang"]),
+        ("Wc (m)", inputs["carriageway"]),
+        ("ψ (°)", inputs["skew"]),
+        ("B (m)", d["B"]),
+        ("n", d["n"]),
+        ("RL", d["RL"]),
+        ("We (m)", d["We"]),
+        ("μ", d["mu"]),
+        ("DVE (m)", d["DVE"]),
+    ):
+        sheet.append([label, value])
+
+
 def excel_bytes(result, language="en", model=None):
     from .models import Model
     from .modal import analyse_modal
@@ -290,6 +373,8 @@ def excel_bytes(result, language="en", model=None):
             )
             chart.series.append(series)
         shapes.add_chart(chart, "O2")
+    if model.distribution.enabled:
+        distribution_sheet(wb, model, language)
     meta = wb.create_sheet("Modèle" if language == "fr" else "Model")
     meta.append(["QuickerBridge", APP_VERSION])
     meta.append(["Warning / Avertissement", WARNING[language]])
@@ -331,6 +416,29 @@ def excel_bytes(result, language="en", model=None):
                     f"{load['name']} = {load.get('factor', 1)}"
                     for load in result["model"]["dead"]
                 ),
+            ]
+        )
+        self_weight = result["model"].get("self_weight", {})
+        meta.append(
+            [
+                "Girder self-weight / Poids propre des poutres",
+                (
+                    f"applied/appliqué · steel/acier 77 kN/m³ +{self_weight['steel_increase']} % · "
+                    f"NEBT +{self_weight['nebt_increase']} % · factor/facteur = {self_weight['factor']}"
+                    if self_weight.get("apply")
+                    else "not applied / non appliqué"
+                ),
+            ]
+        )
+    simple = [
+        str(i + 1) for i, s in enumerate(result["model"]["spans"]) if s.get("simple")
+    ]
+    if simple:
+        meta.append(
+            [
+                "Isostatic spans / Travées isostatiques",
+                ", ".join(simple)
+                + " (moment releases at both ends / rotules aux deux extrémités)",
             ]
         )
     meta.append(

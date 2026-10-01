@@ -58,25 +58,62 @@ def pycba_supports(model):
     return out
 
 
+def end_releases(model):
+    """Moment releases ``(left, right)`` per span for isostatic spans.
+
+    A simple span is hinged at both ends. At a node whose rotation is free
+    (pin/roller), only ONE member may be released, or the node rotation would
+    have no stiffness: if both neighbours are simple, the right one stays
+    attached and, being the node's only member, carries zero end moment
+    anyway. At a fixed or spring support every simple span is released, so it
+    is disconnected from the rotational restraint. An exterior pin already
+    gives zero moment and needs no release.
+    """
+    n = len(model.spans)
+    restrained = [kind in ("fixed", "spring") for kind in model.supports]
+    left, right = [False] * n, [False] * n
+    for i, span in enumerate(model.spans):
+        if span.simple:
+            left[i] = restrained[0] if i == 0 else True
+            right[i] = restrained[n] if i == n - 1 else True
+    for j in range(1, n):
+        if right[j - 1] and left[j] and not restrained[j]:
+            left[j] = False
+    return list(zip(left, right))
+
+
+def member_types(model):
+    """PyCBA element types: 1 FF, 2 FP, 3 PF, 4 PP."""
+    codes = {(False, False): 1, (False, True): 2, (True, False): 3, (True, True): 4}
+    return [codes[pair] for pair in end_releases(model)]
+
+
 def support_fixity(model, eis=None):
     """Degree of fixity k / (k + sum 3EI/L) of each support, 0 (pin) to 1.
 
     The adjacent members are taken with their far ends pinned; it is an
     indicator of how close a spring is to full fixity, not a code quantity.
+    Simple (isostatic) spans are released from the support rotation.
     """
     eis = eis or [span_ei(model, i) for i in range(len(model.spans))]
     lengths = [s.length for s in model.spans]
+    releases = end_releases(model)
     out = []
     for i, kind in enumerate(model.supports):
+        connected = [
+            j
+            for j, end in ((i - 1, 1), (i, 0))
+            if 0 <= j < len(lengths) and not releases[j][end]
+        ]
         if kind == "fixed":
-            out.append(1.0)
+            out.append(1.0 if connected else 0.0)
             continue
-        if kind != "spring":
+        if kind != "spring" or not connected:
             out.append(0.0)
             continue
         member = 0.0
         for j, at in ((i - 1, lengths[i - 1] if i else None), (i, 0.0)):
-            if 0 <= j < len(lengths):
+            if j in connected:
                 ei = eis[j]
                 value = (
                     float(ei(at if at is not None else 0.0))
@@ -119,7 +156,10 @@ class Basis:
         self.nresponse = 3 * self.nx + 2 * self.ns
         self.ei = [span_ei(model, i) for i in range(len(self.lengths))]
         self.ba = cba.BeamAnalysis(
-            self.lengths, self.ei, supports=pycba_supports(model)
+            self.lengths,
+            self.ei,
+            supports=pycba_supports(model),
+            eletype=member_types(model),
         )
         # A Basis has immutable geometry/EI; only its loads change. These small
         # per-instance caches must never be shared with another Basis.
@@ -294,7 +334,15 @@ class Basis:
 
 def structure_key(model):
     data = model.model_dump()
-    for key in ("live", "dead", "thermal", "load_mode", "modal"):
+    for key in (
+        "live",
+        "dead",
+        "self_weight",
+        "thermal",
+        "load_mode",
+        "modal",
+        "distribution",
+    ):
         data.pop(key)
     return json.dumps(data, sort_keys=True)
 

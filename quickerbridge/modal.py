@@ -26,6 +26,8 @@ import numpy as np
 
 from .sections import span_ei
 from .models import Model
+from .loads import self_weight_intervals
+from .engine import end_releases
 
 G = 9.81  # m/s2, weight (kN/m) -> mass (t/m)
 _GAUSS = (
@@ -71,7 +73,11 @@ def mass_profile(model: Model):
     if settings.mass_source == "custom":
         # Imposed value given as a weight per length (kN/m), like the loads.
         return [(0.0, float(starts[-1]), settings.mass / G)]
-    out = []
+    # Girder self-weight (with its allowance) is real mass; its load factor is not.
+    out = [
+        (v["start"], v["end"], v["input_w"] / G)
+        for v in self_weight_intervals(model, starts)
+    ]
     for load in model.dead:
         # Mass is the unfactored permanent load: a load factor is not mass.
         if not load.w:
@@ -143,11 +149,34 @@ def analyse_modal(model: Model) -> dict:
     per_span = 40 if model.precision == "standard" else 80
     elements = mesh(model, profile, per_span)
     n_nodes = len(elements) + 1
-    ndof = 2 * n_nodes
+    eis = [span_ei(model, i) for i in range(len(lengths))]
+    x_nodes = np.r_[elements[0][1], [gx0 + h for _, gx0, _, h in elements]]
+    support_x = np.r_[0.0, np.cumsum(lengths)]
+    support_nodes = [int(np.argmin(np.abs(x_nodes - x))) for x in support_x]
+    # Isostatic spans: at a support next to a released member end, the two
+    # sides get independent rotations (a hinge). The rotational restraint of
+    # a fixed/spring support acts only on the sides that are not released.
+    releases = end_releases(model)
+    nspan = len(lengths)
+    split, restrained_sides = {}, {}
+    for j, node in enumerate(support_nodes):
+        left = releases[j - 1][1] if j > 0 else None
+        right = releases[j][0] if j < nspan else None
+        split[node] = left is not None and right is not None and (left or right)
+        restrained_sides[j] = [
+            s for s, rel in (("l", left), ("r", right)) if rel is False
+        ]
+    # DOF map: vertical, rotation seen from the left, rotation seen from the right.
+    vdof, rl, rr = [], [], []
+    count = 0
+    for node in range(n_nodes):
+        vdof.append(count)
+        rl.append(count + 1)
+        rr.append(count + 2 if split.get(node) else count + 1)
+        count += 3 if split.get(node) else 2
+    ndof = count
     K = np.zeros((ndof, ndof))
     M = np.zeros((ndof, ndof))
-    eis = [span_ei(model, i) for i in range(len(lengths))]
-    x_nodes = np.zeros(n_nodes)
     mean_mass = total_mass / total_length
     # A massless stretch (partial permanent load) would make M singular; a
     # negligible floor keeps it positive definite without changing results.
@@ -157,19 +186,21 @@ def analyse_modal(model: Model) -> dict:
         m = _mass_at(profile, gx0 + h / 2)
         if m <= 0:
             unloaded += h
-        dofs = slice(2 * e, 2 * e + 4)
-        K[dofs, dofs] += _stiffness(eis[span], lx0, h)
-        M[dofs, dofs] += _mass(max(m, floor), h)
-        x_nodes[e + 1] = gx0 + h
-    support_x = np.r_[0.0, np.cumsum(lengths)]
+        dofs = np.array([vdof[e], rr[e], vdof[e + 1], rl[e + 1]])
+        K[np.ix_(dofs, dofs)] += _stiffness(eis[span], lx0, h)
+        M[np.ix_(dofs, dofs)] += _mass(max(m, floor), h)
     fixed = []
     for j, kind in enumerate(model.supports):
-        node = int(np.argmin(np.abs(x_nodes - support_x[j])))
-        fixed.append(2 * node)
+        node = support_nodes[j]
+        fixed.append(vdof[node])
+        rotations = sorted(
+            {rl[node] if s == "l" else rr[node] for s in restrained_sides[j]}
+        )
         if kind == "fixed":
-            fixed.append(2 * node + 1)
+            fixed.extend(rotations)
         elif kind == "spring":
-            K[2 * node + 1, 2 * node + 1] += float(model.support_springs[j])
+            for dof in rotations:
+                K[dof, dof] += float(model.support_springs[j])
     free = np.setdiff1d(np.arange(ndof), fixed)
     Kff, Mff = K[np.ix_(free, free)], M[np.ix_(free, free)]
     try:
@@ -183,7 +214,7 @@ def analyse_modal(model: Model) -> dict:
     # Vertical rigid-body influence vector: modal participation to a uniform
     # vertical excitation, as a share of the total mass of the deck.
     r = np.zeros(ndof)
-    r[0::2] = 1.0
+    r[vdof] = 1.0
     r = r[free]
     modes, shapes = [], []
     for n in range(count):
@@ -192,7 +223,7 @@ def analyse_modal(model: Model) -> dict:
         gamma = float(phi @ Mff @ r)
         full = np.zeros(ndof)
         full[free] = phi
-        v = full[0::2]
+        v = full[vdof]
         peak = float(np.max(np.abs(v)))
         if peak > 0:
             v = v / peak

@@ -24,4 +24,5 @@ jobs:
       - run: python build_portable.py --no-release
       - run: node --check dist/app.js
       - run: node --check dist/modes.js
+      - run: node --check dist/axle.js
 

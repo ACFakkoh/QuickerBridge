@@ -24,6 +24,10 @@ def dispatch(raw: str) -> str:
             _results[data["job"]] = value
             for key in list(_results)[:-3]:
                 del _results[key]
+    elif action == "axle_factor":
+        from .distribution import truck_fraction
+
+        value = truck_fraction(Model.model_validate(data["model"]))
     elif action == "modal":
         from .modal import analyse_modal
 
@@ -64,6 +68,13 @@ def dispatch(raw: str) -> str:
                 from .models import ModalSettings
 
                 export_model.modal = ModalSettings.model_validate(data["modal"])
+            if "distribution" in data:
+                # FT settings do not change the analysis: export the current ones.
+                from .models import Distribution
+
+                export_model.distribution = Distribution.model_validate(
+                    data["distribution"]
+                )
             value = base64.b64encode(
                 excel_bytes(result, language, export_model)
             ).decode("ascii")

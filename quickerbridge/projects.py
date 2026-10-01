@@ -10,7 +10,7 @@ from .version import APP_VERSION
 
 
 FORMAT = "QuickerBridgeProject"
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 6
 MAX_PROJECT_BYTES = 1024 * 1024
 
 
@@ -50,6 +50,10 @@ def validate_project(text: str) -> dict:
     version = raw.get("schema_version")
     if not isinstance(version, int) or version > SCHEMA_VERSION:
         raise ValueError("project.version")
+    if version < 5 and isinstance(raw.get("model"), dict):
+        # Before v0.8.6 the girder self-weight was never added automatically;
+        # older projects keep the results they were saved with.
+        raw["model"].setdefault("self_weight", {"apply": False})
     if version == 1:
         # Earlier tapered projects interpolated every plate dimension and E.
         # Upgrade only when depth-only interpolation preserves that model.
@@ -79,11 +83,12 @@ def validate_project(text: str) -> dict:
                     ):
                         raise ValueError("project.legacy_taper")
         raw["schema_version"] = SCHEMA_VERSION
-    elif version in (2, 3):
+    elif version in (2, 3, 4, 5):
         # v0.4 files: zones without ``plates`` keep the start-section
         # convention, which is the default. Pin/roller supports are unchanged.
         raw["schema_version"] = SCHEMA_VERSION
         # v0.5-v0.7 files have no ``modal`` block: the defaults apply.
+        # Schema 4 files have no isostatic spans (``simple`` defaults false).
     elif version != SCHEMA_VERSION:
         raise ValueError("project.version")
     return ProjectFile.model_validate(raw).model_dump(mode="json")

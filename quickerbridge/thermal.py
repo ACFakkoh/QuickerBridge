@@ -5,7 +5,13 @@ import time
 import numpy as np
 import pycba as cba
 
-from .engine import node_reactions, pycba_supports, stations, support_fixity
+from .engine import (
+    member_types,
+    node_reactions,
+    pycba_supports,
+    stations,
+    support_fixity,
+)
 from .models import Model
 from .sections import member_deflection, stiffness_profile, properties, span_ei
 
@@ -27,6 +33,7 @@ def analyse_thermal(model: Model) -> dict:
         lengths,
         eis,
         supports=pycba_supports(model),
+        eletype=member_types(model),
     )
     kappa = thermal_curvature(model)
     for member in range(1, len(lengths) + 1):

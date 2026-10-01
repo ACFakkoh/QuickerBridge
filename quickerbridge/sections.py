@@ -44,10 +44,34 @@ DIMENSIONS = (
 )
 
 
+# Standard precast prestressed NEBT girders (MTQ "Caractéristiques des poutres
+# préfabriquées"): area mm², strong-axis inertia 10⁶ mm⁴, Yb and depth mm,
+# linear weight kN/m. Top flange 1200 mm, bottom flange 810 mm, web 180 mm.
+NEBT = {
+    "NEBT1000": {"A": 481_787, "I": 62_119, "yb": 483.4, "h": 1000, "w": 11.80},
+    "NEBT1200": {"A": 517_773, "I": 99_187, "yb": 574.8, "h": 1200, "w": 12.69},
+    "NEBT1400": {"A": 553_643, "I": 146_547, "yb": 667.4, "h": 1400, "w": 13.56},
+    "NEBT1600": {"A": 589_884, "I": 204_920, "yb": 761.2, "h": 1600, "w": 14.45},
+    "NEBT1800": {"A": 625_457, "I": 275_049, "yb": 854.9, "h": 1800, "w": 15.32},
+}
+STEEL_UNIT_WEIGHT = 77.0  # kN/m³ (7850 kg/m³)
+
+
 def properties(section: Section) -> dict:
     """Parallel-axis theorem for three non-overlapping rectangles, in SI."""
     if section.kind == "ei":
-        return {"A": None, "I": None, "centroid": None, "EI": section.EI}
+        return {"A": None, "I": None, "centroid": None, "EI": section.EI, "w": None}
+    if section.kind == "nebt":
+        data = NEBT[section.nebt]
+        inertia = data["I"] * 1e-6  # 10⁶ mm⁴ -> m⁴
+        return {
+            "A": data["A"] * 1e-6,
+            "I": inertia,
+            "I_effective": inertia * section.inertia_modifier,
+            "centroid": data["yb"],
+            "EI": section.E * 1e6 * inertia * section.inertia_modifier,
+            "w": data["w"],
+        }
     d, bt, tt, tw, bb, tb = [getattr(section, key) / 1000 for key in DIMENSIONS]
     hw = d - tt - tb
     areas = np.array([bb * tb, tw * hw, bt * tt])
@@ -66,7 +90,45 @@ def properties(section: Section) -> dict:
         "I_effective": inertia * section.inertia_modifier,
         "centroid": centroid * 1000,
         "EI": section.E * 1e6 * inertia * section.inertia_modifier,
+        "w": float(area) * STEEL_UNIT_WEIGHT,
     }
+
+
+def self_weight_pieces(model: Model, pieces_per_taper: int = 6):
+    """Nominal girder weight per span as ``(span, a, b, w kN/m, section)``.
+
+    Direct-EI sections have no known area and carry no self-weight. In a
+    tapered steel zone the web height (hence the area) follows the depth; the
+    zone is split into equal pieces weighted at their mid-length.
+    """
+    out = []
+    for i, span in enumerate(model.spans):
+        length = span.length
+        if not model.nonprismatic or not span.zones:
+            section = model.sections[span.section]
+            out.append((i, 0.0, length, properties(section)["w"], section))
+            continue
+        start = 0.0
+        for zone in span.zones:
+            end = zone.end * length
+            a = model.sections[zone.section]
+            b = model.sections[
+                zone.end_section if zone.end_section is not None else zone.section
+            ]
+            if zone.profile == "constant" or a == b:
+                out.append((i, start, end, properties(a)["w"], a))
+            else:
+                source = plate_source(zone, a, b)
+                edges = np.linspace(start, end, pieces_per_taper + 1)
+                for x0, x1 in zip(edges[:-1], edges[1:]):
+                    u = ((x0 + x1) / 2 - start) / (end - start)
+                    shape = float(profile_fraction(a, b, u, zone.profile))
+                    piece = interpolate(a, b, shape, source)
+                    out.append(
+                        (i, float(x0), float(x1), properties(piece)["w"], source)
+                    )
+            start = end
+    return [p for p in out if p[3]]
 
 
 def profile_fraction(a: Section, b: Section, t, profile: str):

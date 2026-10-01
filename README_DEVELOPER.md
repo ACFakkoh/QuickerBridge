@@ -1,6 +1,6 @@
 # QuickerBridge — guide développeur
 
-Version 0.8.5 · Anthony Chéruel · 2026-09-29
+Version 0.9 · Anthony Chéruel · 2026-09-30
 
 ## Quel fichier utiliser ou envoyer ?
 
@@ -69,6 +69,8 @@ fichiers à chaque livraison, pas seulement le HTML.
 | `quickerbridge/modal.py` | Modes propres (v0.8) : fréquences, périodes, formes, masse modale |
 | `dist/modes.js` | Vue « Modes propres » : animation, spectre, six modes et temps réel par défaut |
 | `dist/comparison.js` | Comparaison de deux JSON, enveloppes et extrema sans remplacer le projet courant |
+| `quickerbridge/distribution.py` | v0.9 : fraction de charge de camion FT S6-25, pont à dalle sur poutres (tableaux 3.5, 3.6, 5.3 à 5.7, figures 5.1 et 5.2) |
+| `dist/axle.js` | v0.9 : carte FT (onglet Charges), vue « FT · S6-25 », application au facteur d’essieu ou de charge |
 | `quickerbridge/projects.py` | Schéma de projet et compatibilité |
 | `quickerbridge/version.py` | Version, date, auteur |
 | `vendor/pycba/src/pycba/` | Solveur PyCBA et modifications locales |
@@ -151,7 +153,11 @@ Le schéma 2 utilise la variation de hauteur seule. Les fichiers schéma 1 dont 
 signification est identique sont acceptés. Les tapers anciens qui interpolaient
 les tôles ou E sont refusés avec explication, afin d’éviter une modification
 silencieuse du modèle. La valeur M et les nouveaux facteurs de charge valent 1 par
-défaut pour les projets qui les omettent.
+défaut pour les projets qui les omettent. Le schéma 6 (v0.9) ajoute le bloc `distribution` (FT S6-25), qui ne modifie jamais
+l’analyse et n’entre pas dans la clé du cache. Le schéma 5 (v0.8.6) ajoute `self_weight`
+et `spans[].simple`; un projet de schéma ≤ 4 est rouvert avec `self_weight.apply = false`
+pour conserver ses résultats. Les travées isostatiques passent par les types
+d’éléments PyCBA (`engine.end_releases`); voir `pycba-pinned-pinned-shear.patch`.
 Incrémentez la version dans `version.py`, mettez à jour la date et reconstruisez.
 
 Avant livraison : exécutez les tests pertinents, vérifiez FR/EN, les deux limites

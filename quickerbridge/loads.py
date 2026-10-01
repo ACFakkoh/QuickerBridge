@@ -6,6 +6,7 @@ import numpy as np
 import pycba as cba
 
 from .models import LiveLoad
+from .sections import self_weight_pieces
 
 
 CANADIAN_VEHICLES = {"CL625", "CL750QC"}
@@ -117,9 +118,45 @@ def lane_axle_factor(live: LiveLoad, truck_factor: float) -> float:
     return truck_factor if live.vehicle in HL93_VEHICLES else fraction
 
 
+def self_weight_intervals(model, starts=None):
+    """Girder self-weight with its type allowance, as permanent-load intervals.
+
+    ``input_w`` includes the allowance (it is real weight, hence also mass);
+    ``w`` additionally includes the self-weight load factor.
+    """
+    settings = model.self_weight
+    if not settings.apply:
+        return []
+    if starts is None:
+        starts = np.r_[0, np.cumsum([s.length for s in model.spans])]
+    out = []
+    for i, a, b, w, section in self_weight_pieces(model):
+        increase = (
+            settings.nebt_increase
+            if section.kind == "nebt"
+            else settings.steel_increase
+        )
+        weight = w * (1 + increase / 100)
+        out.append(
+            {
+                "span": i,
+                "a": a,
+                "b": b,
+                "start": float(starts[i] + a),
+                "end": float(starts[i] + b),
+                "w": weight * settings.factor,
+                "input_w": weight,
+                "factor": settings.factor,
+                "name": f"Self-weight / Poids propre {section.name}",
+                "self_weight": True,
+            }
+        )
+    return out
+
+
 def dead_intervals(model):
     starts = np.r_[0, np.cumsum([s.length for s in model.spans])]
-    intervals = []
+    intervals = self_weight_intervals(model, starts)
     for load in model.dead:
         for i, span in enumerate(model.spans):
             if load.span in (-1, i) and load.w:

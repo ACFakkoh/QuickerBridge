@@ -872,14 +872,13 @@ class Beam:
         )
 
         if eType == 4:
-            # Pinned-pinned: release both end moments.  Mirror the prismatic
-            # :meth:`pycba.load.Load.get_ref` convention exactly (the vertical
-            # correction is ``(Ma + Mb)/L`` applied to the fixed-fixed CNL),
-            # so the constant-EI limit is reproduced.
-            Va_ff, Vb_ff = ref[0], ref[2]
-            ref[0] = Va_ff + (Ma + Mb) / L
+            # Pinned-pinned: release both end moments, which leaves the
+            # simply-supported shears (QuickerBridge fix: the end-moment couple
+            # was added a second time instead of removed, like the prismatic
+            # :meth:`pycba.load.Load.get_ref`).
+            ref[0] = Va_ss
             ref[1] = 0.0
-            ref[2] = Vb_ff - (Ma + Mb) / L
+            ref[2] = Vb_ss
             ref[3] = 0.0
         elif eType in (2, 3):
             # Single moment release: condense the released rotational DOF so

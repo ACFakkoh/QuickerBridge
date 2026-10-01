@@ -1,4 +1,4 @@
-# Validation — QuickerBridge (v0.4 → v0.8.5)
+# Validation — QuickerBridge (v0.4 → v0.9)
 
 2026-09-15. Numerical checks are software regressions, not certification for bridge design.
 
@@ -261,3 +261,63 @@ by real Pyodide was reopened to verify all station Δ values, the six modal
 frequencies and mass ratios against browser results, HL-93 governing records,
 the shapes chart, typed percentages, frozen panes and version metadata.
 Its modal table was rendered and visually inspected.
+
+## v0.8.6 September 30 fixes and features (verified 2026-09-30)
+
+Scope: only the Notion page "QuickerBridge fix and features 2026-09-30".
+The application suite passes natively (138 tests, 46.28 s) and with the browser
+replacements (122 passed, 1 skipped, 46.45 s); the vendored PyCBA suite passes
+(362 passed, 4 skipped). Suites written before v0.8.6 run without the automatic
+self-weight (tests/conftest.py) because they check closed-form results of the
+user loads; `tests/test_v086.py` keeps the default and checks:
+
+- NEBT 1000-1800 properties against the standard table (A, I, Yb, linear weight;
+  table weights equal A x 24.5 kN/m3), concrete E default 30 GPa, constant zones only.
+- Self-weight: steel A x 77 kN/m3 x 1.15 and NEBT w x 1.10 by default, editable
+  allowances and load factor, switch-off, direct-EI sections without weight, linear
+  taper weight equal to the mean of both ends, modal mass without the load factor
+  (simple-span frequency), and pre-0.8.6 projects reopened with self-weight off.
+- Simple spans: release layout keeps every node stable; two simple spans equal two
+  independent beams (R, M, 5wL4/384EI) with pinned or fixed supports; a simple
+  span beside a propped cantilever (M = wL2/8 at the wall); a simple middle span
+  isolates its neighbours (pier M and influence lines); no thermal moment; modal
+  frequencies of simple beams with pinned or fixed supports; project round trip.
+- PyCBA fix: an off-centre point load on a pinned-pinned member returned
+  V_ff + (Ma + Mb)/L instead of the simply-supported shears (prismatic and
+  non-prismatic paths). Symmetric loads were unaffected. See
+  pycba-pinned-pinned-shear.patch.
+
+Browser check (real Pyodide, portable HTML served locally): single Δ switch draws
+ΔV, ΔM, Δδ with the hover cursor and readout (Δ plus min / max); simple span shows
+hinges and zero pier moment; NEBT 1800 card, outline and properties; self-weight
+card and deck band; modes, thermal, snapshot equilibrium, influence lines, traverse
+and Excel export through the worker; FR/EN; no page errors.
+
+## v0.9 S6-25 truck load fraction FT, concrete E, Δ switch (2026-09-30)
+
+Scope: Notion page "Module facteur d'essieu 2026-09-30" (slab-on-girder bridges,
+classes A and B) plus two requests: NEBT concrete E 28 GPa by default and a
+"Écarts Δ" switch that no longer moves when clicked.
+
+`quickerbridge/distribution.py` transcribes Tables 3.5, 3.6, 5.3 to 5.7, Figures
+5.1 and 5.2 and clauses 5.6.4.3 to 5.6.4.6 and 5.6.6.2:
+FT = S / (DT γc (1 + μλ + γe)) with the 1.05 n RL / N (ULS) and 1.05 / N (FLS)
+floors. Le over a pier is 0.20 (L1 + L2) (S6-25 update of Figure 5.1 a); integral
+abutments follow Figure 5.1 d); simple spans split the bridge into chains.
+DVE = (B − Wc)/2 + We/2 − 0.9 with B = (N − 1) S + 2 Sc.
+
+`tests/test_v09.py` reproduces the reference sheet (N = 6, S = 3.25, Sc = 1.73,
+Wc = 18.8, ψ = 17.7°, L = 17.557 / 17.607 m, with its pre-S6-25 0.25 pier value):
+n, RL, We, μ, B, DVE, Fs, every Le, DT, λ, γc, and FT for interior and exterior
+moments at ULS, interior moments at FLS and span shear, all to 0.001. Two
+values differ by design and the author confirmed both are simplifications of the
+sheet: exterior moment at FLS uses λ = 0.0 for n ≥ 3 (Table 5.3; the sheet keeps
+0.05: 0.781 instead of 0.756), and shear over a continuous pier uses
+γc = (S/4.5)^0.15 ≤ 0.9 (Table 5.6; the sheet keeps 1.0: 1.062 instead of 0.956).
+Branches of Tables 3.5, 3.6, 5.3, 5.4, 5.5, 5.6 and 5.7, Le configurations, Le
+limits, warnings, project round trip (schema 6), worker action and Excel sheet
+are tested. FT settings never change the analysis until applied.
+
+Browser check (real Pyodide): the Δ switch keeps the same position (758 px at
+1440 px wide) checked or not; FT card, detail view, apply to the axle factor and
+recalculation, Excel with the FT sheet, FR/EN; no console errors.

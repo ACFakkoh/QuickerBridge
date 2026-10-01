@@ -1,0 +1,41 @@
+--- a/src/pycba/load.py
++++ b/src/pycba/load.py
+@@ -116,9 +116,13 @@
+             ref[2] = -fm * cnl.Ma
+             ref[3] = 0.5 * cnl.Ma
+         elif eType == 4:  # keep only vertical, remove moments
+-            ref[0] = -(cnl.Ma + cnl.Mb) / L
++            # Fixed-fixed shears are Va_ss + (Ma + Mb)/L and Vb_ss - (Ma + Mb)/L;
++            # removing the end-moment couple restores the simply-supported
++            # shears. (QuickerBridge fix: the signs were inverted, which only
++            # showed under asymmetric loads such as a point load off mid-span.)
++            ref[0] = (cnl.Ma + cnl.Mb) / L
+             ref[1] = 1.0 * cnl.Ma
+-            ref[2] = (cnl.Ma + cnl.Mb) / L
++            ref[2] = -(cnl.Ma + cnl.Mb) / L
+             ref[3] = 1.0 * cnl.Mb
+         else:
+             # no nothing if it is FF
+--- a/src/pycba/beam.py
++++ b/src/pycba/beam.py
+@@ -872,14 +872,13 @@
+         )
+ 
+         if eType == 4:
+-            # Pinned-pinned: release both end moments.  Mirror the prismatic
+-            # :meth:`pycba.load.Load.get_ref` convention exactly (the vertical
+-            # correction is ``(Ma + Mb)/L`` applied to the fixed-fixed CNL),
+-            # so the constant-EI limit is reproduced.
+-            Va_ff, Vb_ff = ref[0], ref[2]
+-            ref[0] = Va_ff + (Ma + Mb) / L
++            # Pinned-pinned: release both end moments, which leaves the
++            # simply-supported shears (QuickerBridge fix: the end-moment couple
++            # was added a second time instead of removed, like the prismatic
++            # :meth:`pycba.load.Load.get_ref`).
++            ref[0] = Va_ss
+             ref[1] = 0.0
+-            ref[2] = Vb_ff - (Ma + Mb) / L
++            ref[2] = Vb_ss
+             ref[3] = 0.0
+         elif eType in (2, 3):
+             # Single moment release: condense the released rotational DOF so

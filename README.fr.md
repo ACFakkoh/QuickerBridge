@@ -1,8 +1,8 @@
-# QuickerBridge 0.8.5 — guide en français
+# QuickerBridge 0.9 — guide en français
 
 [English README](README.md)
 
-**Anthony Chéruel · 2026-09-29 · Français / English**
+**Anthony Chéruel · 2026-09-30 · Français / English**
 
 Un outil de calcul préliminaire de poutres continues de ponts, avec PyCBA dans le
 navigateur. Géométrie, charges et diagrammes restent réunis dans une interface
@@ -11,7 +11,7 @@ compacte. Aucune installation de Python et aucun serveur local pour les utilisat
 ## Démarrer
 
 - **Sur le web :** https://acfakkoh.github.io/QuickerBridge/ (GitHub Pages, publié à chaque mise à jour de `main`).
-- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.8.5-2026-09-29.html`) dans un navigateur moderne. Si vous
+- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.9-2026-09-30.html`) dans un navigateur moderne. Si vous
   recevez l’archive portable, extrayez-la avant d’ouvrir le HTML.
 - Une connexion Internet est nécessaire au démarrage pour charger Pyodide et ses
   bibliothèques. Le cache peut accélérer les ouvertures suivantes; cette édition
@@ -34,15 +34,32 @@ pont ne sont pas envoyées à un serveur de calcul. Fermer l’onglet interrompt
    retenue élastiquement (culée intégrale sur pieux, appui partiellement encastré).
    L’application affiche la **fixité** k / (k + Σ3EI/L des travées adjacentes),
    de 0 % (articulé) à 100 % (encastré); le k proposé par défaut donne 50 %.
-2. **Sections :** saisissez les dimensions des tôles en mm et E en GPa, ou une
-   rigidité EI constante directement en kN·m². La hauteur comprend les semelles.
+   La case **Isostatique** d’une travée (v0.8.6) la rend simplement appuyée :
+   rotules aux deux extrémités, aucune continuité avec les travées voisines.
+2. **Sections :** saisissez les dimensions des tôles en mm et E en GPa, choisissez
+   une **poutre précontrainte NEBT 1000 à 1800** (propriétés normalisées, E béton
+   28 GPa par défaut, modifiable), ou une rigidité EI constante directement en kN·m².
+   La hauteur comprend les semelles.
 3. **Charges :** choisissez permanentes, routières, les deux, ou thermique seul.
+   Le **poids propre des poutres** acier (aire × 77 kN/m³, +15 %) et NEBT (poids
+   normalisé, +10 %) est ajouté par défaut aux charges permanentes; majorations et
+   facteur de charge modifiables, option pour ne pas l’appliquer. Les projets
+   enregistrés avant v0.8.6 se rouvrent sans poids propre automatique.
    Plusieurs charges uniformes sont possibles. CL-750QC à 80 % est le choix initial;
    CL-625, le camion et le tandem AASHTO HL-93, le train Cooper E, le véhicule
    d’entretien 24 + 56 kN et un véhicule personnalisé de 1 à 7 essieux sont disponibles.
    Chaque charge permanente a son facteur. Le facteur routier multiplie tout le cas
    routier; le facteur d’essieu multiplie seulement les charges d’essieux.
-4. Attendez la fin du calcul, puis inspectez les diagrammes et le tableau.
+   **Facteur d’essieu FT (v0.9)** : la carte « S6-25 » sous les facteurs routiers
+   calcule la fraction de charge de camion d’un pont à dalle sur poutres (classes A
+   et B, CL-625 / CL-750-QC) à partir de N, S, Sc, Wc et du biais. Elle affiche n,
+   RL, We, μ, DVE, Fs et FT (poutre intérieure ou extérieure, ÉLUL/ÉLUT1 ou
+   ÉLF/ÉLUT2, moment, cisaillement ou enveloppe). Les boutons copient FT dans le
+   facteur d’essieu ou le facteur de charge; l’onglet « FT · S6-25 » donne le
+   tableau complet (Le, DT, λ, γc, γe par travée et par pile) et l’Excel une feuille
+   dédiée. Le sur pile vaut 0,20 (L1 + L2) selon S6-25.
+4. Attendez la fin du calcul, puis inspectez les diagrammes et le tableau. La case
+   **Écarts Δ (max − min)** remplace V, M et δ par ΔV, ΔM et Δδ, lus au curseur.
    L’augmentation du nombre de stations du tableau ne raffine pas le solveur.
 
 Le modèle initial comporte **2 × 34,8 m**, une poutre de **1200 mm** de hauteur,
