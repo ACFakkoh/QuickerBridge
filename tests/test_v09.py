@@ -178,7 +178,9 @@ def test_table_5_4_5_5_5_7_branches():
     assert D.gamma_c_interior_fls(2, 60, 3) == pytest.approx(1.54)
     assert D.gamma_c_interior_fls(2, 60, 4) == 1.72
     assert D.gamma_c_interior_fls(2, 50, 3) == pytest.approx(0.3 * 3 + 0.64)
-    assert D.gamma_c_exterior(3, 1.4) == 1
+    # Table 5.5, S6-25: 1.10 up to 0.3 S, then 1.25 − 0.50 Sc/S ≤ 1.10.
+    assert D.gamma_c_exterior(3, 0.9) == 1.10
+    assert D.gamma_c_exterior(3, 1.4) == pytest.approx(1.25 - 0.5 * 1.4 / 3)
     assert D.gamma_c_exterior(3, 1.7) == pytest.approx(1.25 - 0.5 * 1.7 / 3)
     assert D.gamma_c_shear(1.5, False) == pytest.approx((1.5 / 2) ** 0.25)
     assert D.gamma_c_shear(3.0, False) == 1.0
@@ -287,7 +289,7 @@ def test_zones_follow_figure_5_1():
     # Station sides pick the zone at a hinge between two simple spans.
     iso = bridge(skew=0)
     iso.spans[0].simple = True
-    fv, fm = D.station_factors(iso, [17.557, 17.557], ["left", "right"])
+    fv, fm, _ = D.station_factors(iso, [17.557, 17.557], ["left", "right"])
     z = D.truck_fraction(iso)["zones"]
     assert fm == [z[0]["FT_M"], z[1]["FT_M"]] and len(z) == 2
 
@@ -308,19 +310,21 @@ def test_ft_scales_axle_effects_on_v_and_m_by_zone(case):
     zones = b["ft"]["zones"]
     x = np.array(a["x"])
     sides = a["sides"]
-    fv, fm = D.station_factors(on, x, sides)
-    if case == "truck":
-        # Truck only: every V and M value is exactly the zone fraction times
-        # the one-lane value; δ and reactions are unchanged.
-        np.testing.assert_allclose(b["max"]["M"], np.array(a["max"]["M"]) * fm)
-        np.testing.assert_allclose(b["min"]["V"], np.array(a["min"]["V"]) * fv)
-    else:
-        # The companion lane load is not scaled, so the result is not simply
-        # the one-lane value times FT, but it does change.
-        assert not np.allclose(b["max"]["M"], a["max"]["M"])
-        assert not np.allclose(b["max"]["M"], np.array(a["max"]["M"]) * fm)
-    np.testing.assert_allclose(b["max"]["D"], a["max"]["D"])
-    np.testing.assert_allclose(b["max"]["R"], a["max"]["R"])
+    fv, fm, _ = D.station_factors(on, x, sides)
+    # v0.9.2: FT applies to the whole live load (trucks and lane load): every
+    # V, M and δ value is exactly the zone fraction times the one-lane value;
+    # each reaction takes the shear FT of the zone holding its support.
+    for sense in ("max", "min"):
+        np.testing.assert_allclose(b[sense]["M"], np.array(a[sense]["M"]) * fm)
+        np.testing.assert_allclose(b[sense]["V"], np.array(a[sense]["V"]) * fv)
+        np.testing.assert_allclose(b[sense]["D"], np.array(a[sense]["D"]) * fm)
+    by_zone = {z["where"]: z for z in zones}
+    expected = [
+        by_zone["span:1"]["FT_V"],
+        by_zone["support:2"]["FT_V"],
+        by_zone["span:2"]["FT_V"],
+    ]
+    np.testing.assert_allclose(b["max"]["R"], np.array(a["max"]["R"]) * expected)
     assert {z["sign"] for z in zones} == {"+", "-"}
 
 
@@ -366,3 +370,227 @@ def test_browser_action_and_excel_sheet():
 
 def test_nebt_concrete_default_is_28_gpa():
     assert Section(kind="nebt").E == 28
+
+
+# --- v0.9.2 ------------------------------------------------------------------
+
+
+def test_classes_c_and_d_table_a5_3_3():
+    le = 20.0
+    r = math.sqrt(le + 5)
+    cd = lambda *a: D.coefficients(*a, road_class="CD")
+    # ULS/SLS1, interior moment: n = 2 and n = 3 rows, with their floors.
+    assert cd("ULS", "interior", "moment", 2, le)[0] == pytest.approx(4.80 - 5.60 / r)
+    assert cd("ULS", "interior", "moment", 3, le)[0] == pytest.approx(4.50 - 5.30 / r)
+    assert cd("ULS", "interior", "moment", 2, 3)[0] == 2.90
+    assert cd("ULS", "interior", "moment", 3, 3)[0] == 3.15
+    assert cd("ULS", "interior", "moment", 1, le) == D.coefficients(
+        "ULS", "interior", "moment", 1, le
+    )
+    # Exterior moment n = 3 and shear n = 2, 3.
+    assert cd("ULS", "exterior", "moment", 3, le) == (
+        pytest.approx(3.80 + le / 475),
+        pytest.approx(0.10 - 0.25 / le),
+    )
+    assert cd("ULS", "exterior", "moment", 2, le)[0] == pytest.approx(3.40 + le / 500)
+    assert cd("ULS", "interior", "shear", 2, le) == (3.55, 0.0)
+    assert cd("ULS", "interior", "shear", 3, le) == (3.55, 0.0)
+    # SLS2/FLS rows equal Table 5.3 for n ≤ 3; more lanes use the n = 3 row.
+    for n in (1, 2, 3):
+        for girder in ("interior", "exterior"):
+            assert cd("FLS", girder, "moment", n, le) == D.coefficients(
+                "FLS", girder, "moment", n, le
+            )
+    assert cd("FLS", "interior", "moment", 5, le) == D.coefficients(
+        "FLS", "interior", "moment", 3, le
+    )
+    m = bridge(road_class="CD")
+    assert "cd_lanes" in D.truck_fraction(m)["warnings"]  # Wc = 18.8 m: n = 5
+
+
+def test_default_ft_parameters_and_dve_cap():
+    d = Model().distribution
+    assert (d.girders, d.spacing, d.overhang, d.carriageway, d.skew) == (
+        5,
+        3.11,
+        1.555,
+        10.4,
+        8.5,
+    )
+    assert (d.road_class, d.girder, d.state) == ("AB", "interior", "ULS")
+    m = Model.model_validate({"distribution": {"enabled": True}})
+    r = D.truck_fraction(m)
+    assert r["derived"]["n"] == 3 and r["derived"]["DVE"] == 3.0
+    assert "dve_capped" in r["warnings"]
+
+
+def test_default_application_model():
+    from quickerbridge.models import default_model
+
+    m = default_model()
+    assert m.nonprismatic and m.distribution.enabled and m.distribution.apply
+    assert m.sections[1].depth > m.sections[0].depth
+    first, second = m.spans
+    # S2 only over the pier, parabolic, plates from the deeper section.
+    assert [z.end for z in first.zones] == [0.8, 1.0]
+    assert first.zones[0].section == 0 and first.zones[0].profile == "constant"
+    assert (first.zones[1].end_section, first.zones[1].profile) == (1, "parabolic")
+    assert (second.zones[0].section, second.zones[0].plates) == (1, "deep")
+    assert second.zones[-1].section == 0  # abutment keeps S1
+    r = analyse(m)
+    assert r["ft"] is not None and r["kind"] == "mechanical"
+
+
+def test_exterior_girder_dead_load_shear_takes_fs():
+    base = bridge(skew=30).model_dump()
+    base["load_mode"] = "dead"
+    interior = Model.model_validate(base)
+    interior.distribution.apply = True
+    exterior = interior.model_copy(deep=True)
+    exterior.distribution.girder = "exterior"
+    plain = Model.model_validate(base)
+    a, i, e = analyse(plain), analyse(interior), analyse(exterior)
+    np.testing.assert_allclose(i["max"]["V"], a["max"]["V"])
+    _, _, fs = D.station_factors(exterior, a["x"], a["sides"])
+    np.testing.assert_allclose(e["max"]["V"], np.array(a["max"]["V"]) * fs)
+    np.testing.assert_allclose(e["max"]["M"], a["max"]["M"])
+    assert min(fs) > 1
+    # Dead-load reactions of the exterior girder take Fs as well.
+    span_fs = [s["Fs"] for s in D.truck_fraction(exterior)["derived"]["spans"]]
+    np.testing.assert_allclose(
+        e["max"]["R"], np.array(a["max"]["R"]) * [span_fs[0], max(span_fs), span_fs[1]]
+    )
+    np.testing.assert_allclose(i["max"]["R"], a["max"]["R"])
+
+
+# --- v0.9.3: slab and voided-slab bridges --------------------------------------
+
+
+def slab(bridge_type="slab", lengths=(20.0,), **distribution):
+    data = {
+        "enabled": True,
+        "bridge_type": bridge_type,
+        "slab_width": 12.0,
+        "carriageway": 10.4,
+        "skew": 0,
+        **distribution,
+    }
+    return Model.model_validate(
+        {
+            "spans": [{"length": L} for L in lengths],
+            "supports": ["pin"] + ["roller"] * len(lengths),
+            "distribution": data,
+        }
+    )
+
+
+def test_slab_ft_hand_calculation():
+    r = D.truck_fraction(slab())
+    d = r["derived"]
+    assert (d["n"], d["RL"], d["B"], d["Be"]) == (3, 0.8, 12.0, 12.0)
+    mu = (10.4 / 3 - 3.3) / 0.6
+    m = pick(r, "ULS", "interior", "moment", "+", "span:1")
+    assert m["DT"] == pytest.approx(4.50 - 4.5 / 20)
+    assert m["lambda"] == pytest.approx(0.15 - 0.30 / 20)
+    assert m["FT"] == pytest.approx(12 / (12 * 4.275 * (1 + mu * 0.135)))
+    v = pick(r, "ULS", "interior", "shear", "+", "span:1")
+    assert v["DT"] == pytest.approx(2.35 + 0.35 * math.sqrt(20)) and v["lambda"] == 0
+    f = pick(r, "FLS", "interior", "shear", "+", "span:1")
+    assert f["DT"] == pytest.approx(3.20 + 0.10 * 20)  # 0.10·Le (author's choice)
+    fm = pick(r, "FLS", "exterior", "moment", "+", "span:1")
+    assert fm["DT"] == pytest.approx(11.0 - 14.5 / math.sqrt(20))
+    assert fm["lambda"] == pytest.approx(0.15 - 0.40 / 20)
+    # Interior and exterior portions share the tables; no γc / γe.
+    assert fm["FT"] == pick(r, "FLS", "interior", "moment", "+", "span:1")["FT"]
+    assert d["minimum"] == {
+        "ULS": pytest.approx(1.05 * 3 * 0.8 / 12),
+        "FLS": pytest.approx(1.05 / 12),
+    }
+
+
+def test_slab_equivalent_width_and_floor():
+    wide = D.truck_fraction(slab(equivalent_width=10.0))
+    base = D.truck_fraction(slab())
+    a = pick(wide, "ULS", "interior", "moment", "+", "span:1")
+    b = pick(base, "ULS", "interior", "moment", "+", "span:1")
+    assert a["FT"] == pytest.approx(b["FT"] * 12 / 10)
+    assert wide["derived"]["minimum"]["ULS"] == pytest.approx(1.05 * 3 * 0.8 / 10)
+    assert (
+        "equivalent_width" in D.truck_fraction(slab(equivalent_width=13.0))["warnings"]
+    )
+    assert "slab_width" in D.truck_fraction(slab(slab_width=9.0))["warnings"]
+
+
+def test_slab_tables_branches():
+    le = 16.0
+    assert D.slab_moment("ULS", 1, le) == (
+        pytest.approx(4.20 - 1 / le),
+        pytest.approx(0.15 - 0.3 / le),
+    )
+    assert D.slab_moment("ULS", 2, le)[0] == pytest.approx(4.15 - 3 / le)
+    assert D.slab_moment("ULS", 2, 1.2)[0] == 3.00
+    assert D.slab_moment("ULS", 4, le)[0] == pytest.approx(5.10 - 7 / le)
+    assert D.slab_moment("FLS", 2, le)[0] == pytest.approx(7.0 - 12 / le)
+    assert D.slab_moment("FLS", 5, le)[0] == pytest.approx(
+        15.0 - 31 / math.sqrt(le + 4)
+    )
+    # Classes C and D (Table A5.3.1): n = 2 and 3, more lanes use n = 3.
+    assert D.slab_moment("ULS", 2, le, "CD")[0] == pytest.approx(4.35 - 3.15 / le)
+    assert D.slab_moment("ULS", 3, le, "CD")[0] == pytest.approx(5.15 - 5.15 / le)
+    assert D.slab_moment("ULS", 3, 3, "CD")[0] == 3.55
+    assert D.slab_moment("FLS", 5, le, "CD") == D.slab_moment("FLS", 3, le)
+    # Shear (Tables 5.2 / A5.3.2).
+    assert D.slab_shear("ULS", 2, le, False, 3, "CD")[0] == pytest.approx(
+        2.45 + 0.40 * 4
+    )
+    assert D.slab_shear("ULS", 1, le, True, 3) == (3.60, 0.0)
+    assert D.slab_shear("ULS", 2, le, True, 3) == (3.50, 0.0)
+    assert D.slab_shear("ULS", 2, le, True, 3, "CD") == (3.70, 0.0)
+    assert D.slab_shear("FLS", 3, le, True, 3) == (3.60, 0.0)
+    # Voided slab, web lines closer than 2.0 m: DT × (S/2)^0.25.
+    assert D.slab_shear("ULS", 2, le, True, 1.0)[0] == pytest.approx(3.50 * 0.5**0.25)
+
+
+def test_slab_skew_factor_on_exterior_dead_load():
+    assert D.slab_skew_factor(30, False) == pytest.approx(
+        1 + math.sin(math.radians(50))
+    )
+    assert D.slab_skew_factor(30, True) == pytest.approx(
+        1 + 0.5 * math.sin(math.radians(50))
+    )
+    assert D.slab_skew_factor(4, False) == 1.0  # sin(−2°) < 0: floor 1.0
+    simple = D.truck_fraction(slab(skew=30))
+    cont = D.truck_fraction(slab(skew=30, lengths=(15.0, 15.0)))
+    assert simple["derived"]["spans"][0]["Fs"] == pytest.approx(1.766, abs=1e-3)
+    assert cont["derived"]["spans"][0]["Fs"] == pytest.approx(1.383, abs=1e-3)
+    # Fs only on dead loads of the exterior portion; live FT unchanged.
+    row = pick(simple, "ULS", "exterior", "shear", "+", "span:1")
+    assert row["FT_Fs"] == row["FT"]
+    m = slab(skew=30)
+    m.load_mode = "dead"
+    m.distribution.apply = True
+    m.distribution.girder = "exterior"
+    plain = m.model_copy(deep=True)
+    plain.distribution.apply = False
+    a, e = analyse(plain), analyse(m)
+    np.testing.assert_allclose(
+        e["max"]["V"], np.array(a["max"]["V"]) * 1.766, rtol=1e-3
+    )
+
+
+def test_slab_ft_applied_per_metre():
+    m = slab(lengths=(15.0, 15.0))
+    m.load_mode = "live"
+    off = m.model_copy(deep=True)
+    m.distribution.apply = True
+    a, b = analyse(off), analyse(m)
+    _, fm, _ = D.station_factors(m, a["x"], a["sides"])
+    np.testing.assert_allclose(b["max"]["M"], np.array(a["max"]["M"]) * fm)
+    assert {z["sign"] for z in b["ft"]["zones"]} == {"+", "-"}
+
+
+def test_slab_excel_sheet():
+    m = slab(lengths=(15.0, 15.0))
+    wb = load_workbook(BytesIO(excel_bytes(analyse(m), "en", m)))
+    values = [c.value for c in wb["Truck fraction FT"]["A"]]
+    assert "Be (m)" in values and "DVE (m)" not in values

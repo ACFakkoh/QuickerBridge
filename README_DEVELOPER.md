@@ -1,6 +1,6 @@
 # QuickerBridge — guide développeur
 
-Version 0.9.1 · Anthony Chéruel · 2026-10-01
+Version 0.9.4 · Anthony Chéruel · 2026-10-01
 
 ## Quel fichier utiliser ou envoyer ?
 
@@ -70,6 +70,8 @@ fichiers à chaque livraison, pas seulement le HTML.
 | `dist/modes.js` | Vue « Modes propres » : animation, spectre, six modes et temps réel par défaut |
 | `dist/comparison.js` | Comparaison de deux JSON, enveloppes et extrema sans remplacer le projet courant |
 | `quickerbridge/distribution.py` | v0.9 : fraction de charge de camion FT S6-25, pont à dalle sur poutres (tableaux 3.5, 3.6, 5.3 à 5.7, figures 5.1 et 5.2) |
+| `quickerbridge/section_props.py` | v0.9.3bis : propriétés de section acier seul, mixte 3n et 1n, effectives (affichage seulement) |
+| `dist/sections.js` | v0.9.3bis : fenêtre « Propriétés de section », créée à la première ouverture |
 | `dist/axle.js` | v0.9 : carte FT (onglet Charges), vue « FT · S6-25 », application au facteur d’essieu ou de charge |
 | `quickerbridge/projects.py` | Schéma de projet et compatibilité |
 | `quickerbridge/version.py` | Version, date, auteur |

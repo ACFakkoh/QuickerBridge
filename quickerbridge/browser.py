@@ -3,7 +3,7 @@
 import base64
 import json
 
-from .models import Model
+from .models import Model, default_model
 from .engine import analyse, influence, position_record, snapshot, traverse
 from .projects import validate_project
 
@@ -15,7 +15,7 @@ def dispatch(raw: str) -> str:
     action = request["action"]
     data = request.get("data", {})
     if action == "defaults":
-        value = Model().model_dump()
+        value = default_model().model_dump()
     elif action == "validate_project":
         value = validate_project(data["text"])
     elif action in ("analyse", "compare"):
@@ -24,6 +24,36 @@ def dispatch(raw: str) -> str:
             _results[data["job"]] = value
             for key in list(_results)[:-3]:
                 del _results[key]
+    elif action == "stress":
+        from .engine import stress_at
+
+        result = _results[data["job"]]
+        if result.get("kind") == "thermal":
+            raise ValueError("thermal.stress")
+        index = int(data.get("index", 0))
+        stages = (data.get("self_weight_stage", "steel"), data.get("dead_stage", "3n"))
+        if not 0 <= index < len(result["x"]) or any(
+            s not in ("steel", "3n") for s in stages
+        ):
+            raise ValueError("stress.request")
+        model = Model.model_validate(result["model"])
+        # Slab data are display-only and never trigger an analysis: use the
+        # current ones sent by the page (one entry per section, or None).
+        composites = data.get("composites")
+        if composites is not None:
+            from .models import CompositeSlab
+
+            for section, slab in zip(model.sections, composites):
+                section.composite = (
+                    None if slab is None else CompositeSlab.model_validate(slab)
+                )
+        value = stress_at(model, result, index, *stages)
+    elif action == "section_properties":
+        # Loaded only when the user opens the section properties window.
+        from .models import Section
+        from .section_props import section_properties
+
+        value = section_properties(Section.model_validate(data["section"]))
     elif action == "axle_factor":
         from .distribution import truck_fraction
 

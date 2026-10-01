@@ -9,6 +9,34 @@ class InputModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class CompositeSlab(BaseModel):
+    """Concrete deck acting with a steel girder, for section properties only.
+
+    Display only (v0.9.3bis): it never changes the beam stiffness; the user may
+    copy a composite / steel inertia ratio into the inertia modifier M.
+    Lengths in mm, f'c and Fy in MPa, concrete unit weight in kN/m³.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    slab_thickness: float = Field(default=200, gt=0, le=2000)  # tc
+    haunch: float = Field(default=50, ge=0, le=1000)  # concrete haunch
+    effective_width: float = Field(default=3110, gt=0, le=20000)  # be
+    fc: float = Field(default=35, gt=0, le=150)  # f'c
+    unit_weight: float = Field(default=24.0, gt=10, le=40)  # γc, kN/m³
+    bar_top: Literal["10M", "15M", "20M"] = "15M"
+    spacing_top: float = Field(default=300, gt=10, le=2000)
+    bar_bottom: Literal["10M", "15M", "20M"] = "15M"
+    spacing_bottom: float = Field(default=300, gt=10, le=2000)
+    cover_top: float = Field(default=60, ge=0, le=500)
+    cover_bottom: float = Field(default=35, ge=0, le=500)
+    fy: float = Field(default=345, gt=0, le=1000)  # girder steel Fy
+    frqr: float = Field(default=0.85, gt=0, le=1)  # effective properties
+    # S3: distance below the elastic neutral axis (positive downward), mm.
+    y3: float = Field(default=500, gt=0, le=15000)
+
+
 NEBT_TYPES = ("NEBT1000", "NEBT1200", "NEBT1400", "NEBT1600", "NEBT1800")
 NEBT_DEFAULT_E = 28.0  # GPa, prestressed concrete; editable per section
 
@@ -28,6 +56,7 @@ class Section(InputModel):
     web_thickness: float = Field(default=14, gt=0, le=2000)
     bottom_width: float = Field(default=600, gt=0, le=20000)
     bottom_thickness: float = Field(default=50, gt=0, le=2000)
+    composite: CompositeSlab | None = None  # section properties module only
 
     @model_validator(mode="before")
     @classmethod
@@ -152,20 +181,26 @@ class ThermalLoad(InputModel):
 class Distribution(InputModel):
     """S6-25 truck load fraction FT, slab-on-girder bridge (classes A and B).
 
-    With ``apply``, the axle effects on V and M are multiplied station by
-    station by the shear and moment fractions of their zone (M+ span zones and
-    M− support zones of Figure 5.1), for the selected girder and limit state.
-    The lane load, δ and support reactions keep one full lane.
+    With ``apply``, the live-load effects (trucks and lane load, ML and VL) are
+    multiplied station by station by the moment fraction (M and δ) and the
+    shear fraction (V) of their zone (M+ span zones and M− support zones of
+    Figure 5.1), for the selected girder and limit state. Reactions keep one
+    full lane. For an exterior girder the dead-load shear takes Fs.
     """
 
     enabled: bool = False
     apply: bool = False
-    girders: int = Field(default=6, ge=1, le=40)  # N
-    spacing: float = Field(default=3.25, gt=0.3, le=10)  # S, m
-    overhang: float = Field(default=1.73, ge=0, le=6)  # Sc, m
-    carriageway: float = Field(default=18.8, gt=1, le=60)  # Wc, m
-    road_class: Literal["AB"] = "AB"
-    skew: float = Field(default=0, ge=0, le=45)  # ψ, degrees
+    # Slab and voided-slab bridges (5.6.4.2, 5.6.5): effects per metre of width.
+    bridge_type: Literal["slab_on_girder", "slab", "voided_slab"] = "slab_on_girder"
+    slab_width: float = Field(default=12.0, gt=1, le=60)  # B, m (slab bridges)
+    # Be, m: equivalent width of a slab with tapered free edges (5.5.2); B if None.
+    equivalent_width: float | None = Field(default=None, gt=1, le=60)
+    girders: int = Field(default=5, ge=1, le=40)  # N
+    spacing: float = Field(default=3.11, gt=0.3, le=10)  # S, m
+    overhang: float = Field(default=1.555, ge=0, le=6)  # Sc, m
+    carriageway: float = Field(default=10.4, gt=1, le=60)  # Wc, m
+    road_class: Literal["AB", "CD"] = "AB"  # Table 5.3 / Table A5.3.3
+    skew: float = Field(default=8.5, ge=0, le=45)  # ψ, degrees
     h_left: float = Field(default=3.0, ge=0, le=30)  # integral abutment height, m
     h_right: float = Field(default=3.0, ge=0, le=30)
     girder: Literal["interior", "exterior"] = "interior"
@@ -256,3 +291,53 @@ class Model(InputModel):
         if any(load.span >= len(self.spans) for load in self.dead):
             raise ValueError("load.span")
         return self
+
+
+def default_model() -> Model:
+    """Starting model of the application (v0.9.2).
+
+    Non-prismatic girder: S2 (deeper) only over the interior supports, reached
+    by parabolic depth haunches over 20 % of each adjacent span, plates, E and
+    M from the deeper section; S1 elsewhere, including at the abutments. The
+    S6-25 truck load fraction is applied (interior girder, ULS).
+    """
+    model = Model(
+        nonprismatic=True,
+        sections=[Section(), Section(name="S2", depth=1560)],
+        distribution=Distribution(enabled=True, apply=True),
+    )
+    apply_default_haunches(model)
+    return Model.model_validate(model.model_dump())
+
+
+def apply_default_haunches(model: Model, deep: int = 1, length: float = 0.2):
+    """Parabolic haunches to section ``deep`` at every interior support only."""
+    n = len(model.spans)
+    for i, span in enumerate(model.spans):
+        shallow = span.section if span.section != deep else 0
+        zones = []
+        if i > 0:
+            zones.append(
+                Zone(
+                    end=length,
+                    section=deep,
+                    end_section=shallow,
+                    profile="parabolic",
+                    plates="deep",
+                )
+            )
+        if i < n - 1:
+            zones.append(Zone(end=1 - length, section=shallow))
+            zones.append(
+                Zone(
+                    end=1,
+                    section=shallow,
+                    end_section=deep,
+                    profile="parabolic",
+                    plates="deep",
+                )
+            )
+        else:
+            zones.append(Zone(end=1, section=shallow))
+        span.zones = zones
+    return model

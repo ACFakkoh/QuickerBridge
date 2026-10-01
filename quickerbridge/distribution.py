@@ -1,6 +1,7 @@
 """CSA S6-25 simplified method: truck load fraction FT, slab-on-girder bridges.
 
-Scope: highway classes A and B (Table 5.3), CL-625 / CL-750-QC trucks.
+Scope: highway classes A and B (Table 5.3) and C and D (Table A5.3.3),
+CL-625 / CL-750-QC trucks. Table 5.5 is the S6-25 version (γc ≤ 1.10).
 
     FT = S / (DT γc (1 + μλ + γe))       (clause 5.6.4.3 with Tables 5.3 to 5.7)
     FT ≥ 1.05 n RL / N  at ULS and SLS1,   FT ≥ 1.05 / N  at FLS and SLS2
@@ -128,22 +129,38 @@ def effective_spans(model: Model, h_left: float, h_right: float):
     return positive, negative
 
 
-# --- Table 5.3 (classes A and B) ---------------------------------------------
+# --- Table 5.3 (classes A and B) and Table A5.3.3 (classes C and D) ----------
 
 
-def coefficients(state, girder, effect, n, le):
-    """DT and λ from Table 5.3 for one load effect."""
+def coefficients(state, girder, effect, n, le, road_class="AB"):
+    """DT and λ for one load effect.
+
+    Classes A and B: Table 5.3. Classes C and D: Table A5.3.3, which only
+    differs at ULS/SLS1 and stops at n = 3 (more lanes use the n = 3 row).
+    Its SLS2/FLS rows equal those of Table 5.3 for n ≤ 3.
+    """
+    cd = road_class == "CD"
+    if cd:
+        n = min(n, 3)
     if effect == "shear":
         if state == "ULS":
-            return (3.50 if n == 1 else 3.40), 0.0
+            return (3.50 if n == 1 else 3.55 if cd else 3.40), 0.0
         return (3.50 if n == 1 else 3.60), 0.0
     if state == "ULS":
         lam = 0.05 - 0.10 / le if n == 1 else 0.10 - 0.25 / le
         if girder == "interior":
             if n == 1:
                 return 4.60 - 3.10 / math.sqrt(le + 5), lam
+            if cd and n == 2:
+                return max(4.80 - 5.60 / math.sqrt(le + 5), 2.90), lam
+            if cd:
+                return max(4.50 - 5.30 / math.sqrt(le + 5), 3.15), lam
             return max(4.60 - 5.30 / math.sqrt(le + 5), 2.80), lam
-        return (3.30 + le / 300 if n == 1 else 3.40 + le / 500), lam
+        if n == 1:
+            return 3.30 + le / 300, lam
+        if cd and n == 3:
+            return 3.80 + le / 475, lam
+        return 3.40 + le / 500, lam
     if girder == "interior":
         if n == 1:
             dt = 4.60 - 3.10 / math.sqrt(le + 5)
@@ -173,10 +190,10 @@ def gamma_c_interior_fls(n, le, s):
 
 
 def gamma_c_exterior(s, sc):
-    """Table 5.5: exterior girders, moments (ULS, SLS and FLS)."""
-    if sc <= 0.5 * s:
-        return 1.0
-    return min(1.25 - 0.50 * sc / s, 1.0)
+    """Table 5.5 (S6-25): exterior girders, moments (ULS, SLS and FLS)."""
+    if sc <= 0.3 * s:
+        return 1.10
+    return min(1.25 - 0.50 * sc / s, 1.10)
 
 
 def gamma_c_shear(s, continuous_support):
@@ -198,6 +215,8 @@ def gamma_e(girders, le, dve):
 
 def truck_fraction(model: Model) -> dict:
     d = model.distribution
+    if d.bridge_type in ("slab", "voided_slab"):
+        return slab_fraction(model)
     N, S, Sc, Wc = d.girders, d.spacing, d.overhang, d.carriageway
     n = design_lanes(Wc)
     rl = lane_factor(n)
@@ -216,6 +235,8 @@ def truck_fraction(model: Model) -> dict:
         warnings.append("overhang")
     if curb < 0:
         warnings.append("width")
+    if d.road_class == "CD" and n > 3:
+        warnings.append("cd_lanes")
     positive, negative = effective_spans(model, d.h_left, d.h_right)
     if any(not 3 <= le <= 60 for _, le, *_ in positive + negative):
         warnings.append("le_clamped")
@@ -230,7 +251,7 @@ def truck_fraction(model: Model) -> dict:
     rows = []
 
     def add(state, girder, effect, sign, where, le, rule, cont=False, skew=1.0):
-        dt, lam = coefficients(state, girder, effect, n, le)
+        dt, lam = coefficients(state, girder, effect, n, le, d.road_class)
         if effect == "shear":
             gc = gamma_c_shear(S, cont)
         elif girder == "exterior":
@@ -329,12 +350,12 @@ def truck_fraction(model: Model) -> dict:
             "minimum": minimum,
         },
         "rows": rows,
-        "zones": zones(model, rows, negative),
+        "zones": zones(model, rows, negative, fs),
         "warnings": warnings,
     }
 
 
-def zones(model: Model, rows, negative):
+def zones(model: Model, rows, negative, fs):
     """FT applied along the bridge for the selected girder and limit state.
 
     Negative-moment zones (Figure 5.1) take the M− fraction of their support;
@@ -373,6 +394,7 @@ def zones(model: Model, rows, negative):
                     "where": f"span:{i + 1}",
                     "FT_M": sel[("moment", f"span:{i + 1}")]["FT"],
                     "FT_V": sel[("shear", f"span:{i + 1}")]["FT_Fs"],
+                    "Fs": fs[i],
                 }
             )
     for a, b, k in cuts:
@@ -389,24 +411,209 @@ def zones(model: Model, rows, negative):
                 "where": where,
                 "FT_M": sel[("moment", where)]["FT"],
                 "FT_V": shear["FT_Fs"],
+                "Fs": max(fs[max(k - 1, 0)], fs[min(k, len(fs) - 1)]),
             }
         )
     return sorted(out, key=lambda z: z["x0"])
 
 
 def station_factors(model: Model, xs, sides, data=None):
-    """FT on V and M at report stations ``xs`` (side picks the zone at a cut)."""
+    """FT on V and M, and Fs, at stations ``xs`` (side picks the zone at a cut)."""
     data = data or truck_fraction(model)
     zs = data["zones"]
     total = zs[-1]["x1"]
-    fv, fm = [], []
+    fv, fm, fs = [], [], []
     for x, side in zip(xs, sides):
         q = min(max(x + (-1e-9 if side == "left" else 1e-9), 0.0), total)
         zone = next(z for z in zs if z["x0"] - 1e-12 <= q <= z["x1"] + 1e-12)
         fv.append(zone["FT_V"])
         fm.append(zone["FT_M"])
-    return fv, fm
+        fs.append(zone["Fs"])
+    return fv, fm, fs
 
 
 def applied(model: Model) -> bool:
     return model.distribution.enabled and model.distribution.apply
+
+
+# --- Slab and voided-slab bridges (clauses 5.6.4.2 and 5.6.5) ----------------
+#
+#     FT = B / (Be DT (1 + μλ))   per metre of width
+#     FT ≥ 1.05 n RL / Be  at ULS and SLS1,   FT ≥ 1.05 / Be  at FLS and SLS2
+#
+# Tables 5.1 / 5.2 (classes A and B) and A5.3.1 / A5.3.2 (classes C and D)
+# apply to both the interior and exterior portions. Be is the equivalent width
+# of a slab with tapered free edges (5.5.2), B when the edges are not tapered.
+
+
+def slab_moment(state, n, le, road_class="AB"):
+    """DT and λ for moments, Table 5.1 (A, B) or Table A5.3.1 (C, D)."""
+    cd = road_class == "CD"
+    if cd:
+        n = min(n, 3)
+    if state == "ULS":
+        lam = 0.15 - 0.30 / le
+        if n == 1:
+            return 4.20 - 1.0 / le, lam
+        if cd:
+            if n == 2:
+                return max(4.35 - 3.15 / le, 3.15), lam
+            return max(5.15 - 5.15 / le, 3.55), lam
+        if n == 2:
+            return max(4.15 - 3.0 / le, 3.00), lam
+        if n == 3:
+            return max(4.50 - 4.5 / le, 3.10), lam
+        return max(5.10 - 7.0 / le, 3.20), lam
+    lam = 0.15 - 0.40 / le
+    if n == 1:
+        return 4.20 - 1.0 / le, lam
+    if n == 2:
+        return max(7.0 - 12.0 / le, 4.10), lam
+    if n == 3 or cd:
+        return max(11.0 - 14.5 / math.sqrt(le), 4.20), lam
+    return max(15.0 - 31.0 / math.sqrt(le + 4), 4.30), lam
+
+
+def slab_shear(state, n, le, voided, spacing, road_class="AB"):
+    """DT for shear (λ = 0), Table 5.2 (A, B) or Table A5.3.2 (C, D).
+
+    The SLS2/FLS solid-slab row for n ≥ 2 is printed 3.20 + 0.10 Le in Table
+    5.2 and 3.20 + 0.10 / Le in Table A5.3.2; 3.20 + 0.10 Le is used for both
+    (author's decision, v0.9.3). For voided slabs with web lines closer than
+    2.0 m, DT is multiplied by (S / 2.0)^0.25 (5.6.5.1, classes A and B).
+    """
+    cd = road_class == "CD"
+    root = math.sqrt(le)
+    if voided:
+        if state == "FLS":
+            dt = 3.60
+        elif n == 1:
+            dt = 3.60
+        else:
+            dt = 3.70 if cd else 3.50
+        if not cd and spacing < 2.0:
+            dt *= (spacing / 2.0) ** 0.25
+        return dt, 0.0
+    if n == 1:
+        return 2.60 + 0.45 * root, 0.0
+    if state == "FLS":
+        return 3.20 + 0.10 * le, 0.0
+    return (2.45 + 0.40 * root if cd else 2.35 + 0.35 * root), 0.0
+
+
+def slab_skew_factor(skew_deg: float, continuous: bool) -> float:
+    """Fs for slabs (5.6.6.2 a): dead loads of the exterior portion.
+
+    Simply supported: 1 + sin(2ψ − 10°) ≥ 1.0; continuous: 1 + 0.5 sin(2ψ − 10°).
+    """
+    if skew_deg <= 0:
+        return 1.0
+    value = math.sin(math.radians(2 * skew_deg - 10))
+    return max(1.0, 1 + (0.5 if continuous else 1.0) * value)
+
+
+def slab_fraction(model: Model) -> dict:
+    d = model.distribution
+    voided = d.bridge_type == "voided_slab"
+    Wc, B = d.carriageway, d.slab_width
+    Be = d.equivalent_width or B
+    n = design_lanes(Wc)
+    rl = lane_factor(n)
+    We = Wc / n
+    mu = min((We - 3.3) / 0.6, 1.0)
+    warnings = []
+    if model.live.vehicle not in ("CL625", "CL750QC"):
+        warnings.append("vehicle")
+    if B < Wc:
+        warnings.append("slab_width")
+    if Be > B:
+        warnings.append("equivalent_width")
+    if d.road_class == "CD" and n > 3:
+        warnings.append("cd_lanes")
+    positive, negative = effective_spans(model, d.h_left, d.h_right)
+    if any(not 3 <= le <= 60 for _, le, *_ in positive + negative):
+        warnings.append("le_clamped")
+    lengths = [s.length for s in model.spans]
+    simple = {k for k, _, rule in positive if rule == "L"}
+    fs = [slab_skew_factor(d.skew, i not in simple) for i in range(len(lengths))]
+    minimum = {"ULS": 1.05 * n * rl / Be, "FLS": 1.05 / Be}
+    rows = []
+
+    def add(state, portion, effect, sign, where, le, rule):
+        if effect == "moment":
+            dt, lam = slab_moment(state, n, le, d.road_class)
+        else:
+            dt, lam = slab_shear(state, n, le, voided, d.spacing, d.road_class)
+        calc = B / (Be * dt * (1 + mu * lam))
+        ft = max(calc, minimum[state])
+        rows.append(
+            {
+                "state": state,
+                "girder": portion,
+                "effect": effect,
+                "sign": sign,
+                "where": where,
+                "Le": le,
+                "Le_rule": rule,
+                "DT": dt,
+                "lambda": lam,
+                "gamma_c": 1.0,
+                "gamma_e": 0.0,
+                "FT_calc": calc,
+                "FT_min": minimum[state],
+                "FT": ft,
+                "minimum_governs": calc < minimum[state],
+                # Fs of slabs acts on the dead loads of the exterior portion
+                # (zones), not on the live-load fraction.
+                "Fs": 1.0,
+                "FT_Fs": ft,
+            }
+        )
+
+    for state in STATES:
+        for portion in ("interior", "exterior"):
+            for effect in ("moment", "shear"):
+                for k, le, rule in positive:
+                    add(
+                        state, portion, effect, "+", f"span:{k + 1}", clamp_le(le), rule
+                    )
+                for k, le, rule, kind, _ in negative:
+                    if effect == "shear" and kind != "pier":
+                        continue
+                    add(
+                        state,
+                        portion,
+                        effect,
+                        "-",
+                        f"support:{k + 1}",
+                        clamp_le(le),
+                        rule,
+                    )
+    return {
+        "kind": d.bridge_type,
+        "inputs": d.model_dump(),
+        "derived": {
+            "n": n,
+            "RL": rl,
+            "We": We,
+            "mu": mu,
+            "B": B,
+            "Be": Be,
+            "per_metre": True,
+            "spans": [
+                {"span": i + 1, "L": L, "Fs": fs[i]} for i, L in enumerate(lengths)
+            ],
+            "positive": [
+                {"span": k + 1, "Le": clamp_le(le), "rule": rule}
+                for k, le, rule in positive
+            ],
+            "negative": [
+                {"support": k + 1, "Le": clamp_le(le), "rule": rule, "kind": kind}
+                for k, le, rule, kind, _ in negative
+            ],
+            "minimum": minimum,
+        },
+        "rows": rows,
+        "zones": zones(model, rows, negative, fs),
+        "warnings": warnings,
+    }

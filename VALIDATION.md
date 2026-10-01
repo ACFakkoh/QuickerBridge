@@ -1,4 +1,4 @@
-# Validation — QuickerBridge (v0.4 → v0.9.1)
+# Validation — QuickerBridge (v0.4 → v0.9.4)
 
 2026-09-15. Numerical checks are software regressions, not certification for bridge design.
 
@@ -347,3 +347,101 @@ Browser check (real Pyodide): FT applied from the Loads card recalculates M and 
 factor field disabled, caption and FT markers on the M and V diagrams; data typed
 in the FT tab keep the focus during the recalculation; the three compact tables
 fit without horizontal scrolling at 1440 px; Excel export; no console errors.
+
+## v0.9.2 fixes and features (verified 2026-10-01)
+
+Scope: Notion page "QuickerBridge 0.9.2 Fix and features" plus two chat requests
+(reactions, DVE). FT now applies to the whole live load of one lane (trucks and
+lane load, ML and VL), zone by zone: M and deflection x moment FT, V x shear FT,
+each reaction x the shear FT of the zone holding its support (Mr x moment FT).
+Positive factors commute with the envelope, so the live envelope is scaled per
+column; governing snapshots apply the same factors and keep their physical
+equilibrium check. Exterior girder: dead-load V and reactions x Fs (5.6.6.2).
+S6-25 Table 5.5 (gamma_c <= 1.10) and Table A5.3.3 (classes C and D) are added;
+the S6-25 clause 5.6.4.3 image confirms gamma_e only at FLS/SLS2. A bridge type
+("slab on girders"; "slab / voided slab" prepared) comes first. Default model:
+non-prismatic, parabolic haunches to S2 over 20 % of each span next to interior
+supports only, plates from the deeper section; FT applied with N = 5, S = 3.11,
+Sc = 1.555, Wc = 10.4, skew 8.5 (DVE capped at 3.0 m). Input panels use
+collapsible subsections (Loads: self-weight first, all collapsed; FT its own
+subsection); FT notes define every parameter in words.
+
+tests/test_v09.py: whole-live-load scaling of M, V, deflection and reactions
+(truck and lane cases), exterior dead-load Fs on V and reactions, Table A5.3.3
+rows and floors, Table 5.5 (S6-25), default parameters and DVE cap, default
+application model, slab type prepared. 182 tests pass natively.
+
+Browser check (real Pyodide): default model with FT applied, collapsed Loads
+subsections in the requested order, haunches regenerated for 3 spans and back,
+FT tab fields aligned (carriageway width in French), 20 definitions, no console
+errors.
+
+## v0.9.3 FT for slab and voided-slab bridges (verified 2026-10-01)
+
+Scope: Notion page "QuickerBridge features 0.9.3". Clause 5.6.4.2:
+FT = B / (Be DT (1 + mu lambda)) per metre of width, floors 1.05 n RL / Be (ULS)
+and 1.05 / Be (FLS); Tables 5.1 / 5.2 (classes A, B) and A5.3.1 / A5.3.2
+(classes C, D) for both portions; voided slabs with S < 2.0 m: shear DT x
+(S/2)^0.25 (5.6.5.1); Be from 5.5.2 (B by default). The FLS/SLS2 solid-slab
+shear row for n >= 2 is printed 3.20 + 0.10 Le (5.2) and 3.20 + 0.10/Le
+(A5.3.2): 3.20 + 0.10 Le is used for all classes (author's decision). Slab Fs
+(5.6.6.2 a: 1 + sin(2 psi - 10), 1 + 0.5 sin(...) when continuous, >= 1) acts on
+the dead loads of the exterior portion; item b) of that clause was not
+provided, so the live-load fraction takes no Fs.
+
+tests/test_v09.py: hand calculation of a 20 m simple slab (n = 3), every branch
+of Tables 5.1, 5.2, A5.3.1, A5.3.2, equivalent width and floors, Fs for simple
+and continuous slabs on the exterior dead load, per-metre application by zone,
+Excel sheet. 187 tests pass. Browser: voided-slab inputs (B, Be, S, Wc, skew),
+compact moment/shear tables, "per metre of width" caption, no console errors.
+
+## v0.9.3bis section properties module (verified 2026-10-01)
+
+Scope: Notion page "Module section properties (seul, mixte) 0.9.3bis".
+quickerbridge/section_props.py uses closed-form rectangles and bars (the
+section-properties package was not used: it needs a mesher, shapely and
+matplotlib, heavy or unavailable in Pyodide, and closed form is exact here).
+tests/test_v093bis.py reproduces the author's validated sheet (1200 mm girder,
+225 mm slab on a 50 mm haunch, be = 3110 mm, 15M @ 150, covers 35 / 60 there):
+steel A, centroid, Ix, S top/bottom, Iy, J, Cw; n = 6.90, Ec = 28 987 MPa
+(gamma_c = 24 kN/m3), Gc, Gs, net concrete area 691 457 mm2, bar areas and
+positions; 1n and 3n areas, neutral axes, inertias, S1 to S5 (S1 1n within
+0.08 %), J 1n; effective 1ne / 3ne inertias and moduli (FrQr = 0.85); section
+classes 1 / 1 / 2 and the 2dc/w reduced-moment flag. One value differs on
+purpose: Zx = 19.55e6 mm3 (sheet 19.0e6) because the plastic neutral axis lies
+in the bottom flange (45.4 mm above the bottom) while the sheet's formula
+assumes it in the web (its yp.bot = -146 mm is outside the web). Defaults:
+covers 60 top / 35 bottom (author's choice), 15M @ 300, tc 200, haunch 50,
+f'c 35 MPa. Composite data never changes the analysis or its cache key.
+
+Browser check (real Pyodide): window created on first use, slab toggle,
+reference values displayed, analysis not recalculated for slab inputs, copy of
+I 3n / I steel into M (2.640) followed by one recalculation, cut slab drawing
+with be dimension, spaced S labels, no horizontal overflow at 1024 px, no
+console errors.
+
+## v0.9.4 staged stresses over the depth (verified 2026-10-01)
+
+v0.9.3bis becomes the main line. A double-click on a diagram (or "σ ↗" in the
+readout; the single click still inspects the governing case after 260 ms)
+opens the stresses at that station: section in force there (tapers
+interpolated, slab of the plate-source section), moments split into girder
+self-weight (steel alone or 3n), other permanent loads (steel alone or 3n) and
+the live envelope max / min (1n, FT and factors as displayed). sigma = -M (y -
+ybar) / I per stage, concrete = steel-equivalent / n or 3n, composite stage
+under negative moment = cracked section (steel and bars). Slab data are sent
+with the request because they never trigger an analysis.
+
+tests/test_v094.py: steel and composite stresses by hand, 3n ratio, cracked
+negative section, additivity of stages, section in force along the default
+haunched model, moments of a request summing to the envelope value, stage
+choices, current slab data, steel-girder and non-thermal guards, fibre order.
+Browser: double-click without opening the governing case, stage selectors,
+table and profiles (M max and M min), no console errors.
+
+Correction requested by the author (2026-10-01): the user point S3 is given by
+its distance y below the elastic neutral axis (positive downward), not from the
+bottom flange: S3 = I / y for each section (steel, 3n, 1n) with its own axis;
+the reference value S3 1n = 51.8e6 mm3 is reproduced with y = 915 mm. In the
+drawing the y axis starts at the 1n (or steel) neutral axis; the stress fibre
+S3 is placed y below the 1n axis.

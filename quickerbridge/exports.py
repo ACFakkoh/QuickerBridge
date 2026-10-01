@@ -187,19 +187,34 @@ def distribution_sheet(wb, model, language):
     d = data["derived"]
     inputs = data["inputs"]
     sheet.append([])
-    for label, value in (
-        ("N", inputs["girders"]),
-        ("S (m)", inputs["spacing"]),
-        ("Sc (m)", inputs["overhang"]),
+    if "Be" in d:  # slab or voided slab: effects per metre of width
+        items = [
+            ("Type", inputs["bridge_type"]),
+            ("B (m)", d["B"]),
+            ("Be (m)", d["Be"]),
+        ]
+        if inputs["bridge_type"] == "voided_slab":
+            items.append(("S (m)", inputs["spacing"]))
+        items.append(
+            ("Unité / Unit", "par mètre de largeur" if fr else "per metre of width")
+        )
+    else:
+        items = [
+            ("N", inputs["girders"]),
+            ("S (m)", inputs["spacing"]),
+            ("Sc (m)", inputs["overhang"]),
+            ("B (m)", d["B"]),
+            ("DVE (m)", d["DVE"]),
+        ]
+    items += [
         ("Wc (m)", inputs["carriageway"]),
         ("ψ (°)", inputs["skew"]),
-        ("B (m)", d["B"]),
         ("n", d["n"]),
         ("RL", d["RL"]),
         ("We (m)", d["We"]),
         ("μ", d["mu"]),
-        ("DVE (m)", d["DVE"]),
-    ):
+    ]
+    for label, value in items:
         sheet.append([label, value])
 
 
@@ -440,8 +455,9 @@ def excel_bytes(result, language="en", model=None):
                     f"{z['x0']:.2f}–{z['x1']:.2f} m M×{z['FT_M']:.3f} V×{z['FT_V']:.3f}"
                     for z in ft["zones"]
                 )
-                + " · axle effects on V and M only / effets des essieux sur V et M seulement; "
-                "lane load, δ and R: one lane / charge de voie, δ et R : une voie",
+                + " · whole live load (trucks and lane) / toute la surcharge (camions et voie): "
+                "V × FT shear, M and δ × FT moment; R: one lane / une voie; "
+                "exterior girder: dead-load V × Fs / poutre ext. : V permanent × Fs",
             ]
         )
     simple = [

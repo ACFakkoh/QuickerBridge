@@ -259,3 +259,36 @@ def stiffness_profile(model: Model, samples: int = 97, jump_ratio: float = 1.15)
         eis.extend(values.tolist())
         start += span.length
     return {"x": xs, "EI": eis, "jumps": jumps}
+
+
+def section_at(model: Model, x: float, side: str = "right") -> Section:
+    """Section in force at global x (tapers: interpolated depth, plate source).
+
+    The returned section carries the composite slab of the section that
+    supplies the plates (start section of a constant zone).
+    """
+    start = 0.0
+    spans = model.spans
+    for i, span in enumerate(spans):
+        end = start + span.length
+        last = i == len(spans) - 1
+        if x < end - 1e-9 or (abs(x - end) <= 1e-9 and (side == "left" or last)):
+            break
+        start = end
+    local = min(max(x - start, 0.0), span.length) / span.length
+    if not model.nonprismatic or not span.zones:
+        return model.sections[span.section]
+    previous = 0.0
+    for zone in span.zones:
+        if local <= zone.end + 1e-12:
+            break
+        previous = zone.end
+    a = model.sections[zone.section]
+    b = model.sections[
+        zone.end_section if zone.end_section is not None else zone.section
+    ]
+    if zone.profile == "constant" or a == b:
+        return a
+    t = (local - previous) / (zone.end - previous) if zone.end > previous else 0.0
+    shape = float(profile_fraction(a, b, t, zone.profile))
+    return interpolate(a, b, shape, plate_source(zone, a, b))

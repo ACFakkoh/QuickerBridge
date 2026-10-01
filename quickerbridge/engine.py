@@ -333,17 +333,47 @@ class Basis:
         return np.r_[v, m, d, r, mr]
 
 
-def axle_scale(model, basis):
-    """Factor on the axle effects of every response column (V, M, D, R, Mr).
+def live_scale(model, basis):
+    """S6-25 FT per response column (V, M, D, R, Mr), or None if not applied.
 
-    Normally the user axle factor everywhere. With the S6-25 truck load
-    fraction applied, V and M take the shear and moment FT of their zone;
-    δ and the reactions keep one full lane (factor 1).
+    FT applies to the whole live-load effect of one lane (trucks and lane
+    load, ML and VL): V takes the shear FT of its zone, M and δ the moment FT;
+    reactions keep one full lane. Positive factors commute with the envelope,
+    so the live envelope is simply scaled column by column.
     """
     if not ft_applied(model):
-        return np.full(basis.nresponse, float(model.live.axle_factor))
-    fv, fm = station_factors(model, basis.x, basis.sides)
-    return np.r_[fv, fm, np.ones(basis.nresponse - 2 * basis.nx)]
+        return None
+    fv, fm, _ = station_factors(model, basis.x, basis.sides)
+    rv, rm, _ = support_factors(model, basis)
+    return np.r_[fv, fm, fm, rv, rm]
+
+
+def support_factors(model, basis):
+    """FT shear (R), FT moment (Mr) and Fs at each support.
+
+    A reaction is the jump of V at its support, so it takes the shear FT of
+    the zone holding the support (one M− zone over a continuous pier). Where
+    two zones meet (hinge between simple spans), the larger value is kept.
+    """
+    xs = np.repeat(basis.support_x, 2)
+    sides = ["left", "right"] * basis.ns
+    fv, fm, fs = (
+        np.asarray(f).reshape(-1, 2) for f in station_factors(model, xs, sides)
+    )
+    # Exterior supports only have one side on the bridge.
+    for f in (fv, fm, fs):
+        f[0, 0], f[-1, 1] = f[0, 1], f[-1, 0]
+    return fv.max(axis=1), fm.max(axis=1), fs.max(axis=1)
+
+
+def dead_scale(model, basis):
+    """Skew factor Fs on the dead-load shear and reactions of an exterior
+    girder (5.6.6.2)."""
+    if not ft_applied(model) or model.distribution.girder != "exterior":
+        return None
+    _, _, fs = station_factors(model, basis.x, basis.sides)
+    _, _, rs = support_factors(model, basis)
+    return np.r_[fs, np.ones(2 * basis.nx), rs, np.ones(basis.ns)]
 
 
 def displayed_axle_factor(model):
@@ -353,6 +383,8 @@ def displayed_axle_factor(model):
 
 def structure_key(model):
     data = model.model_dump()
+    for section in data["sections"]:
+        section.pop("composite", None)  # display-only section properties
     for key in (
         "live",
         "dead",
@@ -427,7 +459,7 @@ def analyse(model: Model):
     include_lane = model.live.case != "truck" and lane_style != "none"
     include_truck = model.live.case != "lane" or lane_style == "none"
     lane_lo = lane_hi = np.zeros(count)
-    scale = axle_scale(model, basis)
+    scale = displayed_axle_factor(model)
     if model.load_mode != "dead":
         if include_lane:
             if lane_style == "patterned":
@@ -539,6 +571,14 @@ def analyse(model: Model):
         and basis.ns > 2
     ):
         steps += two_truck_envelope(basis, model, low, high, info_low, info_high, step)
+    # S6-25 FT: per-girder live effects (whole live load, by zone) and Fs on
+    # the dead-load shear of an exterior girder.
+    ls, ds = live_scale(model, basis), dead_scale(model, basis)
+    if ls is not None and model.load_mode != "dead":
+        low *= ls
+        high *= ls
+    if ds is not None:
+        dead = dead * ds
     low += dead
     high += dead
     nx, ns = basis.nx, basis.ns
@@ -686,7 +726,7 @@ def two_truck_envelope(basis, model, low, high, info_low, info_high, step):
     if not len(indices):
         return 0
     lane_lo, lane_hi, _, _ = basis.lane(9.3)
-    scale = axle_scale(model, basis)
+    scale = displayed_axle_factor(model)
     factor = 1.33 if model.live.dynamic else 1.0
     directions = (
         ["forward", "reverse"]
@@ -753,7 +793,7 @@ def two_truck_envelope(basis, model, low, high, info_low, info_high, step):
                 value = (
                     0.9
                     * model.live.factor
-                    * (sense * best_score * factor * scale[index] + lane[index])
+                    * (sense * best_score * factor * scale + lane[index])
                 )
                 if sense * value <= sense * target[index] + 1e-10:
                     continue
@@ -903,7 +943,7 @@ def traverse(model, direction="forward", frames=60):
         base += basis.full_lane(lane_w * model.live.factor)
         lane = [{"start": 0.0, "end": basis.length, "w": lane_w * model.live.factor}]
     out = []
-    scale = axle_scale(model, basis) if ft_applied(model) else 1.0
+    ls, ds = live_scale(model, basis), dead_scale(model, basis)
     for position in np.linspace(begin, end, frames):
         record = position_record(model, float(position), direction)
         if patterned:
@@ -912,10 +952,11 @@ def traverse(model, direction="forward", frames=60):
             axles, frame_lane = snap["axles"], snap["lane"]
         else:
             axles = record_axles(model, record, basis.length)
-            axle_values = np.zeros(basis.nresponse)
+            values = base.copy()
             for axle in axles:
-                axle_values += basis.unit([axle["x"]])[0] * axle["load"]
-            values = base + axle_values * scale
+                values += basis.unit([axle["x"]])[0] * axle["load"]
+            if ls is not None:  # per-girder live effects (S6-25 FT by zone)
+                values = dead * (1 if ds is None else ds) + (values - dead) * ls
             frame_lane = lane
         out.append(
             {
@@ -953,11 +994,10 @@ def snapshot(model, record, target_index=None, sense="max"):
         sense = record["sense"]
     axles = record_axles(model, record, basis.length)
     # Physical arrangement first (equilibrium, reactions, graph); the S6-25
-    # zone fractions are applied to the axle part of V and M at the end.
-    axle_values = np.zeros(basis.nresponse)
+    # zone fractions are applied to the per-girder effects at the end.
+    values = dead.copy()
     for axle in axles:
-        axle_values += basis.unit([axle["x"]])[0] * axle["load"]
-    values = dead + axle_values
+        values += basis.unit([axle["x"]])[0] * axle["load"]
     lane_intervals = []
     lane_q = np.array([])
     lane_mass = np.array([])
@@ -1037,23 +1077,33 @@ def snapshot(model, record, target_index=None, sense="max"):
         gv -= cumulative[np.searchsorted(lane_q, gc, side="left")]
         before = np.searchsorted(lane_q, gx, side="left")
         gm -= gx * cumulative[before] - moments[before]
+    if ft_applied(model):
+        # Per-girder effects: the live part (trucks and lane load) takes the
+        # zone FT (V: shear, M and δ: moment), the dead-load shear of an
+        # exterior girder takes Fs. R and Mr stay physical, so the equilibrium
+        # check above is the one of the actual load arrangement.
+        rd = dead[3 * nx : 3 * nx + basis.ns]
+        mrd = dead[3 * nx + basis.ns :]
+        dv = rd @ (basis.support_x[:, None] < gc)
+        dm = rd @ np.maximum(gx[None, :] - basis.support_x[:, None], 0)
+        dm -= mrd @ (basis.support_x[:, None] < gc)
+        for load in intervals:
+            a, b, w = load["start"], load["end"], load["w"]
+            dv -= w * np.clip(gx - a, 0, b - a)
+            dm -= w / 2 * (np.maximum(gx - a, 0) ** 2 - np.maximum(gx - b, 0) ** 2)
+        fv, fm, fs = (
+            np.asarray(f)
+            for f in station_factors(model, gx, [s for _, s in graph_stations])
+        )
+        exterior = model.distribution.girder == "exterior"
+        gv = dv * (fs if exterior else 1) + (gv - dv) * fv
+        gm = dm + (gm - dm) * fm
+        ds = dead_scale(model, basis)
+        values = dead * (1 if ds is None else ds) + (values - dead) * live_scale(
+            model, basis
+        )
     ux, ui = np.unique(basis.x, return_index=True)
     gd = np.interp(gx, ux, values[2 * nx : 3 * nx][ui])
-    if ft_applied(model) and axles:
-        # Axle-only V and M by statics, scaled by the zone fractions; R, Mr
-        # and δ keep one full lane, so equilibrium stays the physical one.
-        ra = axle_values[3 * nx : 3 * nx + basis.ns]
-        mra = axle_values[3 * nx + basis.ns :]
-        av = ra @ (basis.support_x[:, None] < gc)
-        am = ra @ np.maximum(gx[None, :] - basis.support_x[:, None], 0)
-        am -= mra @ (basis.support_x[:, None] < gc)
-        for axle in axles:
-            av -= axle["load"] * (axle["x"] < gc)
-            am -= axle["load"] * np.maximum(gx - axle["x"], 0)
-        fv, fm = station_factors(model, gx, [s for _, s in graph_stations])
-        gv += (np.asarray(fv) - 1) * av
-        gm += (np.asarray(fm) - 1) * am
-        values = values + axle_values * (axle_scale(model, basis) - 1)
     graph = {
         "x": gx.tolist(),
         "sides": [side for x, side in graph_stations],
@@ -1066,8 +1116,10 @@ def snapshot(model, record, target_index=None, sense="max"):
         "V": values[:nx].tolist(),
         "M": values[nx : 2 * nx].tolist(),
         "D": values[2 * nx : 3 * nx].tolist(),
-        "R": r.tolist(),
-        "Mr": mr.tolist(),
+        # Per-girder reactions when FT applies; the equilibrium below stays the
+        # physical check of the actual load arrangement (r, mr).
+        "R": values[3 * nx : 3 * nx + basis.ns].tolist(),
+        "Mr": values[3 * nx + basis.ns :].tolist(),
         "plot": graph,
         "axles": axles,
         "lane": lane_intervals,
@@ -1078,3 +1130,50 @@ def snapshot(model, record, target_index=None, sense="max"):
             "moment": float(r @ basis.support_x + mr.sum() - total_moment),
         },
     }
+
+
+def stress_at(model, result, index, self_weight_stage="steel", dead_stage="3n"):
+    """Staged stresses over the depth at report station ``index`` (v0.9.4).
+
+    The girder self-weight acts on ``self_weight_stage``, the other permanent
+    loads on ``dead_stage`` (steel alone or composite 3n), the live load on
+    the composite 1n section, for the envelope maximum and minimum at the
+    station (FT and factors included, as displayed).
+    """
+    from .section_props import stress_profile
+    from .sections import section_at
+
+    nx = len(result["x"])
+    x, side = result["x"][index], result["sides"][index]
+    section = section_at(model, x, side)
+    if section.kind != "girder":
+        raise ValueError("stress.section_kind")  # needs plate dimensions
+    dead_total = result["dead"]["M"][index]
+    m_sw = 0.0
+    if model.load_mode != "live" and model.self_weight.apply:
+        only_sw = model.model_copy(deep=True)
+        only_sw.dead = []
+        basis = cached_basis(structure_key(model))
+        old = basis.model
+        basis.model = only_sw
+        values, _ = basis.static_dead()
+        basis.model = old
+        m_sw = float(values[nx + index])
+    m_dead = dead_total - m_sw
+    live_max = result["max"]["M"][index] - dead_total
+    live_min = result["min"]["M"][index] - dead_total
+    out = {"x": x, "side": side, "section": section.model_dump(), "cases": {}}
+    for case, live in (("max", live_max), ("min", live_min)):
+        moments = {"steel": 0.0, "3n": 0.0, "1n": live}
+        moments[self_weight_stage] += m_sw
+        moments[dead_stage] += m_dead
+        out["cases"][case] = stress_profile(section, moments)
+    out["moments"] = {
+        "self_weight": m_sw,
+        "dead": m_dead,
+        "live_max": live_max,
+        "live_min": live_min,
+        "self_weight_stage": self_weight_stage,
+        "dead_stage": dead_stage,
+    }
+    return out

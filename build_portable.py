@@ -87,6 +87,7 @@ def source_entries():
         "modes.js",
         "comparison.js",
         "axle.js",
+        "sections.js",
         "browser-solver.js",
         "version.js",
         "default-result.js",
@@ -128,9 +129,9 @@ def write_default_result() -> None:
 
     sys.path.insert(0, str(ROOT))
     from quickerbridge.engine import analyse
-    from quickerbridge.models import Model
+    from quickerbridge.models import default_model
 
-    model = Model()
+    model = default_model()
     payload = {
         "version": VERSION,
         "model": model.model_dump(),
@@ -179,6 +180,7 @@ def build_browser_assets() -> None:
         "modes.js",
         "comparison.js",
         "axle.js",
+        "sections.js",
     )
     for filename in script_names:
         html = html.replace(f'<script src="./{filename}" defer></script>', "")
@@ -236,6 +238,7 @@ def build_release() -> None:
             "modes.js",
             "comparison.js",
             "axle.js",
+            "sections.js",
             "browser-solver.js",
             "version.js",
             "default-result.js",

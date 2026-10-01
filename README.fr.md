@@ -1,4 +1,4 @@
-# QuickerBridge 0.9.1 — guide en français
+# QuickerBridge 0.9.4 — guide en français
 
 [English README](README.md)
 
@@ -11,7 +11,7 @@ compacte. Aucune installation de Python et aucun serveur local pour les utilisat
 ## Démarrer
 
 - **Sur le web :** https://acfakkoh.github.io/QuickerBridge/ (GitHub Pages, publié à chaque mise à jour de `main`).
-- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.9.1-2026-10-01.html`) dans un navigateur moderne. Si vous
+- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.9.4-2026-10-01.html`) dans un navigateur moderne. Si vous
   recevez l’archive portable, extrayez-la avant d’ouvrir le HTML.
 - Une connexion Internet est nécessaire au démarrage pour charger Pyodide et ses
   bibliothèques. Le cache peut accélérer les ouvertures suivantes; cette édition
@@ -50,14 +50,15 @@ pont ne sont pas envoyées à un serveur de calcul. Fermer l’onglet interrompt
    d’entretien 24 + 56 kN et un véhicule personnalisé de 1 à 7 essieux sont disponibles.
    Chaque charge permanente a son facteur. Le facteur routier multiplie tout le cas
    routier; le facteur d’essieu multiplie seulement les charges d’essieux.
-   **Facteur d’essieu FT (v0.9.1)** : la carte « S6-25 » sous les facteurs routiers
-   active la fraction de charge de camion d’un pont à dalle sur poutres (classes A
-   et B, CL-625 / CL-750-QC). On y choisit la poutre (intérieure ou extérieure) et
-   l’état limite (ÉLUL/ÉLUT1 ou ÉLF/ÉLUT2). Appliqué, FT multiplie les effets des
-   essieux sur M et V zone par zone : M par le FT moment, V par le FT cisaillement
-   de chaque zone M+ (travée) ou M− (0,20 L de part et d’autre d’une pile), comme Le
-   à la figure 5.1. Il remplace alors le facteur d’essieu saisi; la charge de voie,
-   la flèche et les réactions restent celles d’une voie. Les données du tablier (N,
+   **Facteur d’essieu FT (v0.9.2)** : sous-section « S6-25 » de l’onglet Charges,
+   pour un pont à dalle sur poutres (classes A/B ou C/D, CL-625 / CL-750-QC). On
+   choisit la poutre (intérieure ou extérieure) et l’état limite (ÉLUL/ÉLUT1 ou
+   ÉLF/ÉLUT2). Appliqué, FT multiplie toute la surcharge d’une voie (camions et
+   charge de voie) zone par zone : M et la flèche par le FT moment, V et les
+   réactions par le FT cisaillement de chaque zone M+ (travée) ou M− (0,20 L de
+   part et d’autre d’une pile), comme Le à la figure 5.1. Pour une poutre
+   extérieure, le cisaillement et les réactions permanents sont majorés par Fs.
+   FT remplace alors le facteur d’essieu saisi. Les données du tablier (N,
    S, Sc, Wc, biais, h des culées intégrales) et les tableaux compacts (Le, DT, λ,
    γc, γe, FT par zone) sont dans l’onglet « FT · S6-25 »; l’Excel a une feuille
    dédiée. DVE est borné à 3,0 m.
