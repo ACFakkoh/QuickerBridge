@@ -1,6 +1,6 @@
 # QuickerBridge — guide développeur
 
-Version 0.9.4 · Anthony Chéruel · 2026-10-01
+Version 0.9.5 · Anthony Chéruel · 2026-10-01
 
 ## Quel fichier utiliser ou envoyer ?
 

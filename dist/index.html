@@ -161,6 +161,8 @@
   }
   var MILESTONE={'Python / WebAssembly':.18,'NumPy · PyCBA':.5,'Excel':.7,'QuickerBridge':.82,engine:.92};
   function finish(){finished=true;target=progress=1;$('sp-bar').setAttribute('width',280);$('sp-stage').textContent=T.stages.done;
+    // v0.9.5: the workspace panels arrive one after the other as the intro fades.
+    document.body.classList.add('qb-reveal');setTimeout(function(){document.body.classList.remove('qb-reveal');},2800);
     root.classList.add('sp-out');setTimeout(function(){cancelAnimationFrame(raf);root.remove();},650);}
   var failed=false;
   window.QBSplash={

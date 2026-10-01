@@ -539,7 +539,7 @@ def slab_fraction(model: Model) -> dict:
     minimum = {"ULS": 1.05 * n * rl / Be, "FLS": 1.05 / Be}
     rows = []
 
-    def add(state, portion, effect, sign, where, le, rule):
+    def add(state, portion, effect, sign, where, le, rule, skew=1.0):
         if effect == "moment":
             dt, lam = slab_moment(state, n, le, d.road_class)
         else:
@@ -563,19 +563,27 @@ def slab_fraction(model: Model) -> dict:
                 "FT_min": minimum[state],
                 "FT": ft,
                 "minimum_governs": calc < minimum[state],
-                # Fs of slabs acts on the dead loads of the exterior portion
-                # (zones), not on the live-load fraction.
-                "Fs": 1.0,
-                "FT_Fs": ft,
+                # v0.9.5: the slab Fs also increases the live-load shear of
+                # the exterior portion (and its dead loads, through the zones).
+                "Fs": skew,
+                "FT_Fs": ft * skew,
             }
         )
 
     for state in STATES:
         for portion in ("interior", "exterior"):
             for effect in ("moment", "shear"):
+                exterior_shear = portion == "exterior" and effect == "shear"
                 for k, le, rule in positive:
                     add(
-                        state, portion, effect, "+", f"span:{k + 1}", clamp_le(le), rule
+                        state,
+                        portion,
+                        effect,
+                        "+",
+                        f"span:{k + 1}",
+                        clamp_le(le),
+                        rule,
+                        fs[k] if exterior_shear else 1.0,
                     )
                 for k, le, rule, kind, _ in negative:
                     if effect == "shear" and kind != "pier":
@@ -588,6 +596,7 @@ def slab_fraction(model: Model) -> dict:
                         f"support:{k + 1}",
                         clamp_le(le),
                         rule,
+                        max(fs[k - 1], fs[k]) if exterior_shear else 1.0,
                     )
     return {
         "kind": d.bridge_type,

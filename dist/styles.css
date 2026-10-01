@@ -173,4 +173,8 @@ input[type=number]{appearance:textfield;-moz-appearance:textfield}
 .st-dot.st-max{fill:#008378}.st-dot.st-min{fill:#c97a1c}
 .st-label{font-size:9px;font-weight:700}.st-max-text{fill:#008378}.st-min-text{fill:#c97a1c}.st-legend{font-size:10px;font-weight:600}
 .st-table td{font-size:.74rem}.st-table td[data-total]{font-weight:700}.st-tension{color:#a33329}.st-compression{color:#2f5f9e}
-.st-open{margin-left:auto;font-weight:700;color:#007f78;padding:0 6px}
+.st-open{margin-left:auto;font-weight:700;color:#007f78;padding:0 6px}/* v0.9.5: staggered arrival of the workspace panels after the intro */
+@keyframes qbArrive{from{opacity:0;transform:translateY(14px) scale(.985);filter:blur(4px)}to{opacity:1;transform:none;filter:none}}
+.qb-reveal .topbar,.qb-reveal .inputs,.qb-reveal .result-toolbar,.qb-reveal .structure-panel,.qb-reveal .metrics,.qb-reveal .chart-toolbar,.qb-reveal #diagrams-view,.qb-reveal .reactions-block,.qb-reveal .result-footer,.qb-reveal .warning{animation:qbArrive .75s cubic-bezier(.2,.75,.25,1) both}
+.qb-reveal .topbar{animation-delay:.05s}.qb-reveal .inputs{animation-delay:.18s}.qb-reveal .result-toolbar{animation-delay:.3s}.qb-reveal .structure-panel{animation-delay:.42s}.qb-reveal .metrics{animation-delay:.56s}.qb-reveal .chart-toolbar{animation-delay:.68s}.qb-reveal #diagrams-view{animation-delay:.8s}.qb-reveal .reactions-block{animation-delay:.95s}.qb-reveal .result-footer,.qb-reveal .warning{animation-delay:1.05s}
+@media (prefers-reduced-motion:reduce){.qb-reveal *{animation:none!important}}

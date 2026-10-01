@@ -563,9 +563,15 @@ def test_slab_skew_factor_on_exterior_dead_load():
     cont = D.truck_fraction(slab(skew=30, lengths=(15.0, 15.0)))
     assert simple["derived"]["spans"][0]["Fs"] == pytest.approx(1.766, abs=1e-3)
     assert cont["derived"]["spans"][0]["Fs"] == pytest.approx(1.383, abs=1e-3)
-    # Fs only on dead loads of the exterior portion; live FT unchanged.
+    # v0.9.5: Fs on the exterior-portion live-load shear too (and dead loads).
     row = pick(simple, "ULS", "exterior", "shear", "+", "span:1")
-    assert row["FT_Fs"] == row["FT"]
+    assert row["FT_Fs"] == pytest.approx(row["FT"] * 1.766, rel=1e-3)
+    inner = pick(simple, "ULS", "interior", "shear", "+", "span:1")
+    assert inner["FT_Fs"] == inner["FT"]
+    assert pick(simple, "ULS", "exterior", "moment", "+", "span:1")["Fs"] == 1.0
+    ext = D.truck_fraction(slab(skew=30, girder="exterior"))
+    assert ext["zones"][0]["FT_V"] == pytest.approx(row["FT_Fs"])
+    assert simple["zones"][0]["FT_V"] == pytest.approx(inner["FT"])
     m = slab(skew=30)
     m.load_mode = "dead"
     m.distribution.apply = True

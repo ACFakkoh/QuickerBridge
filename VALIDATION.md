@@ -1,4 +1,4 @@
-# Validation — QuickerBridge (v0.4 → v0.9.4)
+# Validation — QuickerBridge (v0.4 → v0.9.5)
 
 2026-09-15. Numerical checks are software regressions, not certification for bridge design.
 
@@ -445,3 +445,14 @@ bottom flange: S3 = I / y for each section (steel, 3n, 1n) with its own axis;
 the reference value S3 1n = 51.8e6 mm3 is reproduced with y = 915 mm. In the
 drawing the y axis starts at the 1n (or steel) neutral axis; the stress fibre
 S3 is placed y below the 1n axis.
+
+## v0.9.5 slab Fs on live load, panel arrival (verified 2026-10-01)
+
+The slab skew factor Fs (5.6.6.2) now also multiplies the exterior-portion
+live-load shear fraction (FT x Fs, as for slab-on-girder exterior girders), in
+addition to the exterior-portion dead-load shear and reactions. Interior
+portion and moments are unchanged. tests/test_v09.py checks the exterior and
+interior rows and the exterior zone factor. After the intro, the workspace
+panels arrive one after the other (fade, slight rise and blur, 50 to 1050 ms
+delays, 0.75 s each; disabled for reduced motion); checked in the browser by
+the animations attached when the intro ends. 205 tests pass.

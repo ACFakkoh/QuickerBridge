@@ -9,7 +9,7 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 
 ![QuickerBridge — envelopes of a two-span girder with rotational-spring abutments](docs/screenshots/envelopes.png)
 
-*Version 0.9.4 · 2026-10-01 · Anthony Chéruel · [Guide en français](README.fr.md)*
+*Version 0.9.5 · 2026-10-01 · Anthony Chéruel · [Guide en français](README.fr.md)*
 
 ---
 
