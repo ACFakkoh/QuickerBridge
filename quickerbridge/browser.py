@@ -31,10 +31,7 @@ def dispatch(raw: str) -> str:
         if result.get("kind") == "thermal":
             raise ValueError("thermal.stress")
         index = int(data.get("index", 0))
-        stages = (data.get("self_weight_stage", "steel"), data.get("dead_stage", "3n"))
-        if not 0 <= index < len(result["x"]) or any(
-            s not in ("steel", "3n") for s in stages
-        ):
+        if not 0 <= index < len(result["x"]):
             raise ValueError("stress.request")
         model = Model.model_validate(result["model"])
         # Slab data are display-only and never trigger an analysis: use the
@@ -48,9 +45,9 @@ def dispatch(raw: str) -> str:
                     None if slab is None else CompositeSlab.model_validate(slab)
                 )
         value = (
-            stress_all(model, result, *stages)
+            stress_all(model, result)
             if data.get("all")
-            else stress_at(model, result, index, *stages)
+            else stress_at(model, result, index)
         )
     elif action == "section_properties":
         # Loaded only when the user opens the section properties window.

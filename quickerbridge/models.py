@@ -158,6 +158,11 @@ class DeadLoad(InputModel):
     span: int = Field(default=-1, ge=-1)  # -1 = all spans
     start: float = Field(default=0, ge=0, lt=1)
     end: float = Field(default=1, gt=0, le=1)
+    # Stress diagrams (v0.9.6): section carrying this load. "steel": girder
+    # alone (e.g. slab weight, unshored construction); "3n": long-term
+    # composite (superimposed dead loads). The girder self-weight is always
+    # carried by the girder alone.
+    stage: Literal["steel", "3n"] = "3n"
 
     @model_validator(mode="after")
     def extent(self):
@@ -206,7 +211,15 @@ class LiveLoad(InputModel):
 class ThermalLoad(InputModel):
     delta_T: float = Field(default=15, ge=-100, le=100)  # T_top - T_bottom, deg C
     alpha_micro: float = Field(default=12, gt=0, le=100)  # 10^-6 / deg C
-    depth: float = Field(default=1200, gt=0, le=15000)  # thermal reference depth, mm
+    # v0.9.6: the reference depth comes from the sections (girder + haunch +
+    # slab when a slab is defined); "manual" keeps the depth below (direct-EI
+    # sections, projects saved before v0.9.6).
+    depth_source: Literal["sections", "manual"] = "sections"
+    depth: float = Field(default=1200, gt=0, le=15000)  # manual reference depth, mm
+    # Linear through the depth, or bilinear (S6-25 type, composite deck):
+    # slab_delta_T from the top of the slab to its bottom, constant below.
+    profile: Literal["linear", "bilinear"] = "linear"
+    slab_delta_T: float = Field(default=35, ge=-100, le=100)
 
 
 class Distribution(InputModel):
@@ -236,14 +249,9 @@ class Distribution(InputModel):
     h_right: float = Field(default=3.0, ge=0, le=30)
     girder: Literal["interior", "exterior"] = "interior"
     state: Literal["ULS", "FLS"] = "ULS"
-
-
-class StressStages(InputModel):
-    """Sections carrying the permanent loads in the stress diagrams (v0.9.6,
-    saved with the project): steel girder alone or composite 3n."""
-
-    self_weight: Literal["steel", "3n"] = "steel"
-    dead: Literal["steel", "3n"] = "3n"
+    # Skew factor Fs on the permanent-load shear and reactions of the
+    # exterior girder / exterior slab portion (5.6.6.2), when FT is applied.
+    fs_dead: bool = True
 
 
 class ModalSettings(InputModel):
@@ -274,7 +282,6 @@ class Model(InputModel):
     thermal: ThermalLoad = Field(default_factory=ThermalLoad)
     modal: ModalSettings = Field(default_factory=ModalSettings)
     distribution: Distribution = Field(default_factory=Distribution)
-    stress: StressStages = Field(default_factory=StressStages)
     load_mode: Literal["dead", "live", "both", "thermal"] = "both"
     subdivisions: int = Field(default=10, ge=2, le=100)
     precision: Literal["standard", "fine"] = "standard"

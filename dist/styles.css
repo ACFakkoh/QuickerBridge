@@ -217,3 +217,6 @@ input[type=number]{appearance:textfield;-moz-appearance:textfield}
 .axle-state{margin:6px 0;font-size:.82rem;font-weight:650;padding:6px 9px;border-radius:6px}.axle-state.off{background:#f1f4f6;color:#5d7d8c}.axle-state.computed{background:#fff6e5;color:#8a5a00}.axle-state.applied{background:#e6f6f3;color:#006b62}
 .axle-choice-summary{margin:4px 0;font-size:.8rem;color:#486777}.axle-open-button{width:100%;margin-top:8px;border-color:#0a8f84;color:#006b62;font-size:.8rem}
 .peak-label{transition:opacity .12s}.peak-label.peak-dim{opacity:.12}
+/* v0.9.6: floating, draggable, non-modal windows */
+dialog.qb-float{position:fixed;inset:auto;margin:0;max-height:calc(100vh - 24px);overflow:auto;box-shadow:0 18px 50px #0b1e2b40,0 0 0 1px #c9d8e0;resize:both}
+dialog.qb-float .sp-head{cursor:move;user-select:none}dialog.qb-float.dragging{opacity:.94;box-shadow:0 24px 60px #0b1e2b55}

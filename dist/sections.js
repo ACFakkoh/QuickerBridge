@@ -31,13 +31,12 @@ function spSci(v,unit){
 function spDialog(){
  let dlg=$('#section-dialog');if(dlg)return dlg;
  dlg=document.createElement('dialog');dlg.id='section-dialog';dlg.className='section-dialog';document.body.appendChild(dlg);
- dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close();});
  dlg.addEventListener('close',()=>{spIndex=null;});
  return dlg;
 }
 // A steel girder always gets a composite block (slab off) so that Fy, y and
 // the region can be set for the steel section alone.
-function openSectionProps(i){spIndex=i;const s=model.sections[i];if(s&&['girder','nebt'].includes(s.kind)&&!s.composite)s.composite={...spDefaults(),enabled:false};const dlg=spDialog();renderSectionDialog();if(!dlg.open)dlg.showModal();spRequest();}
+function openSectionProps(i){spIndex=i;const s=model.sections[i];if(s&&['girder','nebt'].includes(s.kind)&&!s.composite)s.composite={...spDefaults(),enabled:false};const dlg=spDialog();renderSectionDialog();qbFloat(dlg);spRequest();}
 function spField(key,sub,value,opts={}){return field(key,`sections.${spIndex}.composite.${sub}`,value,'',opts);}
 const spRegionOf=c=>c&&c.region==='negative'?'negative':'positive';
 const spY=(c,k)=>c['y_'+k]??c.y3;
@@ -172,23 +171,25 @@ Object.assign(words.en,{stOpen:'σ Stresses ↗',stCta:'σ Stresses',stCtaTitle:
 Object.assign(words.fr,{stComp:'Compression',stTens:'Traction',stNotSteel:'Contraintes disponibles pour les poutres en I en acier et les poutres NEBT.',stPeekHint:'Double-clic : fenêtre complète',stPeekTitle:'Contraintes σ',stScaleNote:'Échelle fixe : traction et compression extrêmes du pont',stS1:'S1 · armature sup.'});
 Object.assign(words.en,{stComp:'Compression',stTens:'Tension',stNotSteel:'Stresses are available for steel I-girders and NEBT girders.',stPeekHint:'Double-click: full window',stPeekTitle:'Stresses σ',stScaleNote:'Fixed scale: extreme tension and compression of the bridge',stS1:'S1 · top bars'});
 let stIndex=null,stData=null,stToken=0,stTimer=null;
-const stStages=()=>{if(!model.stress)model.stress={self_weight:'steel',dead:'3n'};return model.stress;};
+// v0.9.6: the stage is chosen per permanent load (Loads); the key follows
+// the loads, so changing a stage refreshes the cache.
+const stLoadsKey=()=>JSON.stringify(model.dead.map(d=>[d.w,d.factor,d.span,d.start,d.end,d.stage||'3n']));
 const ST_HIDDEN=new Set(['slab_top','slab_bottom','bar_bottom']);
 const ST_KINDS=['girder','nebt'];
 function stDialog(){
  let dlg=$('#stress-dialog');if(dlg)return dlg;
  dlg=document.createElement('dialog');dlg.id='stress-dialog';dlg.className='section-dialog stress-dialog';document.body.appendChild(dlg);
- dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close();});dlg.addEventListener('close',()=>{if(!dlg.open)stIndex=null;});
+ dlg.addEventListener('close',()=>{if(!dlg.open)stIndex=null;});
  return dlg;
 }
 function openStress(index){
  if(!result||result.kind==='thermal'||!jobId)return;
- stPeekHide();stIndex=Math.max(0,Math.min(result.x.length-1,index));const dlg=stDialog();stData=null;dlg.innerHTML='';renderStress();if(!dlg.open)dlg.showModal();stRequest();stAllLoad().then(()=>{if(stIndex!==null&&stData)renderStress();});
+ stPeekHide();stIndex=Math.max(0,Math.min(result.x.length-1,index));const dlg=stDialog();stData=null;dlg.innerHTML='';renderStress();qbFloat(dlg);stRequest();stAllLoad().then(()=>{if(stIndex!==null&&stData)renderStress();});
 }
 const stComposites=()=>model.sections.map(s=>s.composite?clone(s.composite):null);
 async function stRequest(){
- clearTimeout(stTimer);const token=++stToken,st=stStages();
- try{const data=await solver.request('stress',{job:jobId,index:stIndex,self_weight_stage:st.self_weight,dead_stage:st.dead,composites:stComposites()});if(token!==stToken)return;stData=data;}
+ clearTimeout(stTimer);if(!result||!jobId)return;const token=++stToken;
+ try{const data=await solver.request('stress',{job:jobId,index:stIndex,composites:stComposites()});if(token!==stToken)return;stData=data;}
  catch(e){if(token!==stToken)return;stData={error:String(e)};}
  renderStress();
 }
@@ -197,12 +198,12 @@ function stRequestSoon(){clearTimeout(stTimer);stTimer=setTimeout(stRequest,140)
 let stAll={key:null,data:null,promise:null};
 // The key follows the analysis, the stages and every section (geometry and
 // slab), so a changed girder never keeps the previous stress extremes.
-function stAllKey(){const st=stStages();return `${jobId}|${st.self_weight}|${st.dead}|${JSON.stringify(model.sections)}`;}
+function stAllKey(){return `${jobId}|${stLoadsKey()}|${JSON.stringify(model.sections)}`;}
 function stAllLoad(){
  if(!result||result.kind==='thermal'||!jobId)return Promise.resolve(null);
  const key=stAllKey();if(stAll.key===key)return stAll.promise;
- const st=stStages();stAll={key,data:null,promise:null};
- stAll.promise=solver.request('stress',{job:jobId,all:true,self_weight_stage:st.self_weight,dead_stage:st.dead,composites:stComposites()}).then(data=>{if(stAll.key===key)stAll.data=data;return data;}).catch(err=>{console.error(err);if(stAll.key===key)stAll.data={error:String(err)};return null;});
+ stAll={key,data:null,promise:null};
+ stAll.promise=solver.request('stress',{job:jobId,all:true,composites:stComposites()}).then(data=>{if(stAll.key===key)stAll.data=data;return data;}).catch(err=>{console.error(err);if(stAll.key===key)stAll.data={error:String(err)};return null;});
  return stAll.promise;
 }
 // σ scale: zero placed so that the compression side spans |C| and the tension
@@ -221,11 +222,10 @@ const stSectionIndex=d=>d&&d.section?model.sections.findIndex(s=>s.name===d.sect
 // The window is a fixed shell (controls keep focus and the slider can be
 // dragged); only the title, the control values and the body are refreshed.
 function renderStress(){
- const dlg=$('#stress-dialog');if(!dlg||stIndex===null)return;
+ const dlg=$('#stress-dialog');if(!dlg||stIndex===null||!result)return;
  if(!dlg.querySelector('#st-content')){
-  const st=stStages(),stageSel=(key,path,val)=>`<label class="field"><span>${t(key)}</span><select data-st-stage="${path}"><option value="steel" ${val==='steel'?'selected':''}>${t('stSteel')}</option><option value="3n" ${val==='3n'?'selected':''}>${t('st3n')}</option></select></label>`;
   dlg.innerHTML=`<div class="sp-head"><span class="axle-badge">σ</span><div><b id="st-title"></b><small>${t('stSign')}</small></div><button class="icon-button sp-close" data-st-close title="${t('spClose')}">×</button></div>
-<div class="st-controls"><div class="field st-station"><span>${t('stStation')}</span><div class="st-station-row"><button class="icon-button" data-st-step="-1" title="${t('stPrev')}" aria-label="${t('stPrev')}">◀</button><input id="st-x" type="number" step="any" min="0" max="${result.x.at(-1)}"><button class="icon-button" data-st-step="1" title="${t('stNext')}" aria-label="${t('stNext')}">▶</button><input id="st-slider" type="range" min="0" max="${result.x.length-1}" step="1" aria-label="${t('stStation')}"></div></div><label class="field st-y"><span id="st-y-label">${t('stY1n')}</span><input id="st-y" type="number" min="0.001" max="15000" step="any" disabled></label>${stageSel('stSelfStage','self_weight',st.self_weight)}${stageSel('stDeadStage','dead',st.dead)}</div><div id="st-content"></div>`;
+<div class="st-controls"><div class="field st-station"><span>${t('stStation')}</span><div class="st-station-row"><button class="icon-button" data-st-step="-1" title="${t('stPrev')}" aria-label="${t('stPrev')}">◀</button><input id="st-x" type="number" step="any" min="0" max="${result.x.at(-1)}"><button class="icon-button" data-st-step="1" title="${t('stNext')}" aria-label="${t('stNext')}">▶</button><input id="st-slider" type="range" min="0" max="${result.x.length-1}" step="1" aria-label="${t('stStation')}"></div></div><label class="field st-y"><span id="st-y-label">${t('stY1n')}</span><input id="st-y" type="number" min="0.001" max="15000" step="any" disabled></label><p class="help st-stage-note">${t('stStageNote')}</p></div><div id="st-content"></div>`;
  }
  const x=result.x[stIndex],sec=stData&&!stData.error?stData.section:null,mx=sec?stData.cases.max:null;
  dlg.querySelector('#st-title').innerHTML=`${t('stTitle')} · x = ${fmt(x)} m${sec?` · ${esc(sec.name)} · h ${fmt(mx.depth,0)} mm`:''}`;
@@ -244,8 +244,8 @@ function stBody(d){
  const mx=d.cases.max,mn=d.cases.min,mo=d.moments;
  let h='';
  if(!mx.composite){const i=stSectionIndex(d);h+=`<p class="axle-warning">⚠ ${t('stNoSlab')}${i>=0&&ST_KINDS.includes(model.sections[i].kind)?` <button class="text-button" data-section-props="${i}">${t('stDefine')}</button>`:''}</p>`;}
- h+=`<div class="st-body"><div class="sp-figure">${stSvg(d)}</div><div>`;
- h+=`<h3>${t('stMoments')}</h3><table class="sp-table"><tbody><tr><th>${t('stSelf')} · ${t(mo.self_weight_stage==='steel'?'stSteel':'st3n')}</th><td>${fmt(mo.self_weight,1)}</td></tr><tr><th>${t('stDead')} · ${t(mo.dead_stage==='steel'?'stSteel':'st3n')}</th><td>${fmt(mo.dead,1)}</td></tr><tr><th>${t('stLiveMax')} · 1n</th><td>${fmt(mo.live_max,1)}</td></tr><tr><th>${t('stLiveMin')} · 1n</th><td>${fmt(mo.live_min,1)}</td></tr></tbody></table>`;
+ h+=`<div class="st-body"><div class="sp-figure" id="st-fig">${stSvg(d)}</div><div>`;
+ h+=`<h3>${t('stMoments')}</h3><table class="sp-table"><tbody><tr><th>${t('stSelf')} · ${t('stSteel')}</th><td>${fmt(mo.self_weight,1)}</td></tr><tr><th>${t('stDeadSteel')} · ${t('stSteel')}</th><td>${fmt(mo.dead_steel,1)}</td></tr><tr><th>${t('stDead')} · ${t('st3n')}</th><td>${fmt(mo.dead_3n,1)}</td></tr><tr><th>${t('stLiveMax')} · 1n</th><td>${fmt(mo.live_max,1)}</td></tr><tr><th>${t('stLiveMin')} · 1n</th><td>${fmt(mo.live_min,1)}</td></tr></tbody></table>`;
  const st=k=>mx.stages[k],cr=k=>st(k).cracked?` <small>(${t('stCracked')})</small>`:'';
  h+=`<h3>σ (MPa)</h3><table class="sp-table st-table"><thead><tr><th>${t('stFibre')}</th><th>${t('stSteel')}</th><th>3n${cr('3n')}</th><th>1n${cr('1n')}</th><th>${t('stCaseMax')}</th><th>${t('stCaseMin')}</th></tr></thead><tbody>`;
  [...mx.fibres].reverse().filter(f=>!ST_HIDDEN.has(f.name)).forEach(f=>{const v=(c,k)=>c.stages[k].sigma[f.name];const cell=s=>`<td class="${s>1e-9?'st-tension':s<-1e-9?'st-compression':''}">${fmt(s,1)}</td>`;const name=f.name==='bar_top'?'stS1':f.name==='S3'&&mx.s3_ref==='steel'?'stS3s':mx.kind==='nebt'&&(f.name==='S2'||f.name==='S5')?f.name==='S2'?'stS2n':'stS5n':ST_NAMES[f.name]||f.name;h+=`<tr><th>${t(name)}</th>${cell(v(mx,'steel'))}${cell(v(mx,'3n'))}${cell(v(mx,'1n'))}${cell(mx.total[f.name]).replace('<td','<td data-total')}${cell(mn.total[f.name]).replace('<td','<td data-total')}</tr>`;});
@@ -279,26 +279,32 @@ function stSectionSvg(sec,composite,depth,X,Y,wMax){
  if(composite&&c){const bw=Math.min(c.effective_width,wMax);g+=`<rect x="${X(-G.top_width/2)}" y="${Y(depth+c.haunch)}" width="${X(G.top_width/2)-X(-G.top_width/2)}" height="${Y(depth)-Y(depth+c.haunch)}" class="sp-haunch"/><rect x="${X(-bw/2)}" y="${Y(depth+c.haunch+c.slab_thickness)}" width="${X(bw/2)-X(-bw/2)}" height="${Y(depth+c.haunch)-Y(depth+c.haunch+c.slab_thickness)}" class="sp-concrete"/>`;}
  return g;
 }
-// Full window: section with S1–S5, both cases, neutral axes, fixed scale.
-function stSvg(d){
- const mx=d.cases.max,mn=d.cases.min,s=d.section,H=mx.height,d0=mx.depth,vw=580,vh=390,top=46,bot=32,sy=(vh-top-bot)/H,Y=y=>vh-bot-y*sy;
- const G=qbGirder(s),c=s.composite&&s.composite.enabled?s.composite:null,wMax=2*Math.max(G.top_width,G.bottom_width),w=Math.max(G.top_width,G.bottom_width,c&&mx.composite?Math.min(c.effective_width,wMax):0),sx=Math.min(120/w,sy),cx=118,X=v=>cx+v*sx;
- const left=215,right=vw-14,sc=stScale(left,right,[...Object.values(mx.total),...Object.values(mn.total)]),SX=sc.SX,ox=sc.ox;
- let g=stZones(sc,left,right,top-10,vh-bot+6,11)+stSectionSvg(s,mx.composite,d0,X,Y,wMax);
+// Full window: section with S1–S5, both cases, fixed σ scale and a fixed
+// height scale (deepest girder + slab of the model: over a haunch the girder
+// grows, the slab keeps its thickness). Drawn from plain data so the slider
+// can redraw instantly from the all-stations cache.
+function stSvg(d){const mx=d.cases.max;return stDraw({fib:Object.fromEntries(mx.fibres.map(f=>[f.name,f.y])),max:mx.total,min:d.cases.min.total,sec:d.section,composite:mx.composite,height:mx.height});}
+function stHeightMax(h){return Math.max(h,...model.sections.filter(q=>ST_KINDS.includes(q.kind)).map(q=>qbGirder(q).depth+(q.composite&&q.composite.enabled?q.composite.haunch+q.composite.slab_thickness:0)));}
+function stDraw({fib,max,min,sec,composite}){
+ const s=sec,G=qbGirder(s),d0=G.depth,vw=580,vh=390,top=46,bot=32,hmax=stHeightMax(d0+(composite&&s.composite?s.composite.haunch+s.composite.slab_thickness:0)),sy=(vh-top-bot)/hmax,Y=y=>vh-bot-y*sy;
+ const c=s.composite&&s.composite.enabled?s.composite:null,wMax=2*Math.max(G.top_width,G.bottom_width),w=Math.max(G.top_width,G.bottom_width,c&&composite?Math.min(c.effective_width,wMax):0),sx=Math.min(120/w,sy),cx=118,X=v=>cx+v*sx;
+ const left=215,right=vw-14,sc=stScale(left,right,[...Object.values(max),...Object.values(min)]),SX=sc.SX,ox=sc.ox;
+ let g=stZones(sc,left,right,top-10,vh-bot+6,11)+stSectionSvg(s,composite,d0,X,Y,wMax);
  g+=`<line x1="${ox}" x2="${ox}" y1="${top-10}" y2="${vh-bot+6}" class="sp-axis"/><text x="${ox}" y="${vh-10}" class="sp-dim">0</text><text x="${right}" y="${vh-10}" style="text-anchor:end" class="sp-dim st-tension-text">+${fmt(sc.T,0)} MPa</text><text x="${left}" y="${vh-10}" style="text-anchor:start" class="sp-dim st-compression-text">−${fmt(sc.C,0)} MPa</text>`;
- const fib=Object.fromEntries(mx.fibres.map(f=>[f.name,f.y]));
- // S1 (top bars) to S5: tick, name left of the section, dotted guide.
  const pts=[['S1',fib.bar_top],['S2',fib.S2],['S3',fib.S3],['S4',fib.S4],['S5',fib.S5]].filter(([,y])=>y!==undefined).sort((a,b)=>b[1]-a[1]);
  let lastL=-Infinity;
  pts.forEach(([k,y])=>{const yy=Y(y),yl=Math.max(yy+3,lastL+12);lastL=yl;g+=`<line x1="${X(-w/2)-4}" x2="${right}" y1="${yy}" y2="${yy}" class="st-spoint"/><circle cx="${X(-w/2)-4}" cy="${yy}" r="2.4" class="st-spoint-dot"/><text x="${X(-w/2)-10}" y="${yl}" text-anchor="end" class="st-spoint-label">${k}</text>`;});
- [[mn,'st-min'],[mx,'st-max']].forEach(([cs,cls])=>{const p=stCasePath(cs.total,fib,s,cs.composite,d0,Y,SX,ox);g+=`<path d="${p.path}" class="${cls} st-area"/>`;if(p.band)g+=`<path d="${p.band}" class="${cls} st-bar-band"/>`;});
- let last=-Infinity;
- stAxes(d).sort((a,b)=>b.y-a.y).forEach(a=>{const yy=Y(a.y),yl=Math.max(yy-3,last+11);last=yl;g+=`<line x1="${X(-w/2)-6}" x2="${right}" y1="${yy}" y2="${yy}" class="st-ena"/><text x="${right-2}" y="${yl}" text-anchor="end" class="st-ena-label">${esc(a.label)}</text>`;});
- // Values at the girder faces, the top bars and the slab top, both cases.
- const keys=['S5','S2'].concat(mx.composite?['bar_top','slab_top']:[]);
- [mx,mn].forEach((cs,n)=>keys.forEach(k=>{const v=cs.total[k];if(v===undefined||Math.abs(v)<.5)return;g+=`<text x="${SX(v)+(v>=0?5:-5)}" y="${Y(fib[k])+(n?13:-4)}" text-anchor="${v>=0?'start':'end'}" class="st-val ${stSignCls(v)}">${stVal(v)}</text>`;}));
+ [[min,'st-min'],[max,'st-max']].forEach(([tot,cls])=>{const p=stCasePath(tot,fib,s,composite,d0,Y,SX,ox);g+=`<path d="${p.path}" class="${cls} st-area"/>`;if(p.band)g+=`<path d="${p.band}" class="${cls} st-bar-band"/>`;});
+ const keys=['S5','S2'].concat(composite?['bar_top','slab_top']:[]);
+ [max,min].forEach((tot,n)=>keys.forEach(k=>{const v=tot[k];if(v===undefined||Math.abs(v)<.5)return;g+=`<text x="${SX(v)+(v>=0?5:-5)}" y="${Y(fib[k])+(n?13:-4)}" text-anchor="${v>=0?'start':'end'}" class="st-val ${stSignCls(v)}">${stVal(v)}</text>`;}));
  g+=`<text x="6" y="14" class="st-legend st-max-text">— ${t('stCaseMax')}</text><text x="6" y="28" class="st-legend st-min-text">— ${t('stCaseMin')}</text>${sc.fixed?`<text x="${right}" y="14" text-anchor="end" class="st-scale-note">${t('stScaleNote')}</text>`:''}`;
  return `<svg viewBox="0 0 ${vw} ${vh}" class="sp-svg" role="img" aria-label="${t('stTitle')}">${g}</svg>`;
+}
+// Instant redraw of the window figure from the cache while the station moves.
+function stLiveFigure(){
+ const fig=$('#st-fig'),a=stAll.data;if(!fig||!a||a.error||stAll.key!==stAllKey())return;
+ const st=a.stations[stIndex];if(!st)return;
+ fig.innerHTML=stDraw({fib:Object.fromEntries(st.fibres),max:st.max,min:st.min,sec:a.sections[st.s],composite:st.composite});
 }
 // --- Hover preview -------------------------------------------------------------
 // Moving over the envelope diagrams shows the stress profile at the station,
@@ -356,12 +362,12 @@ $('#charts')?.addEventListener('pointerenter',()=>{if(display==='envelope')stAll
 document.addEventListener('click',e=>{
  const open=e.target.closest('[data-stress-index]');if(open){openStress(Number(open.dataset.stressIndex));return;}
  if(e.target.closest('#stress-cta')){if(!result||result.kind==='thermal'||!jobId){$('#status').textContent=t('stNotSteel');return;}const M=result.max.M.map((v,k)=>Math.max(Math.abs(v),Math.abs(result.min.M[k])));openStress(stLastHover??M.indexOf(Math.max(...M)));return;}
- const step=e.target.closest('[data-st-step]');if(step&&stIndex!==null){stIndex=Math.max(0,Math.min(result.x.length-1,stIndex+Number(step.dataset.stStep)));renderStress();stRequestSoon();return;}
+ const step=e.target.closest('[data-st-step]');if(step&&stIndex!==null){stIndex=Math.max(0,Math.min(result.x.length-1,stIndex+Number(step.dataset.stStep)));const sl=$('#st-slider');if(sl)sl.value=stIndex;stLiveTitle();stLiveFigure();stRequestSoon();return;}
  if(e.target.closest('[data-st-close]')){$('#stress-dialog')?.close();}
 });
-document.addEventListener('input',e=>{if(e.target.id==='st-slider'&&stIndex!==null){stIndex=Number(e.target.value);renderStress();stRequestSoon();}});
+document.addEventListener('input',e=>{if(e.target.id==='st-slider'&&stIndex!==null){stIndex=Number(e.target.value);stLiveTitle();stLiveFigure();stRequestSoon();}});
+function stLiveTitle(){const dlg=$('#stress-dialog');if(!dlg||!result)return;const x=result.x[stIndex],xi=dlg.querySelector('#st-x');if(xi&&document.activeElement!==xi)xi.value=Number(x.toFixed(3));const tt=dlg.querySelector('#st-title');if(tt)tt.innerHTML=tt.innerHTML.replace(/x = [^·]*m/,`x = ${fmt(x)} m`);}
 document.addEventListener('change',e=>{
- const sel=e.target.closest?.('[data-st-stage]');if(sel){stStages()[sel.dataset.stStage]=sel.value;updateProjectState();stRequest();stAllLoad().then(()=>renderStress());return;}
  if(e.target.id==='st-x'&&stIndex!==null&&e.target.validity.valid&&e.target.value!==''){stIndex=nearest(Number(e.target.value));e.target.blur();renderStress();stRequest();return;}
  if(e.target.id==='st-y'&&stData&&!stData.error&&e.target.validity.valid&&e.target.value!==''){
   const i=stSectionIndex(stData);if(i<0)return;const s=model.sections[i];if(!s.composite)s.composite={...spDefaults(),enabled:false};
@@ -377,3 +383,5 @@ document.addEventListener('dblclick',e=>{
 Object.assign(words.fr,{spGirderNebt:'Poutre préfabriquée NEBT',spGirderAlone:'Poutre seule',spNebtHelp:'Propriétés tabulées (MTQ) : A, I, yb, h. Section mixte : n = Eg/Ec pour la dalle, m = Es/Eg pour les armatures.'});
 Object.assign(words.en,{spGirderNebt:'Precast NEBT girder',spGirderAlone:'Girder alone',spNebtHelp:'Tabulated properties (MTQ): A, I, yb, h. Composite section: n = Eg/Ec for the slab, m = Es/Eg for the bars.'});
 Object.assign(words.fr,{stS2n:'S2 · haut de la poutre',stS5n:'S5 · bas de la poutre'});Object.assign(words.en,{stS2n:'S2 · top of girder',stS5n:'S5 · bottom of girder'});
+Object.assign(words.fr,{stDeadSteel:'Permanentes « poutre seule »',stStageNote:'Poids propre et charges « poutre seule » sur la poutre seule; autres permanentes sur la section mixte 3n; surcharge sur 1n. Le choix se fait pour chaque charge permanente (onglet Charges).'});
+Object.assign(words.en,{stDeadSteel:'“Girder alone” permanent loads',stStageNote:'Self-weight and “girder alone” loads on the girder alone; other permanent loads on composite 3n; live load on 1n. The choice is made for each permanent load (Loads tab).'});

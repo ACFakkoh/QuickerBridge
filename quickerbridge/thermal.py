@@ -17,9 +17,87 @@ from .sections import member_deflection, stiffness_profile, properties, span_ei
 
 
 def thermal_curvature(model: Model) -> float:
-    """Return PyCBA curvature; positive top heating bows upward in app coordinates."""
+    """Return PyCBA curvature; positive top heating bows upward in app coordinates.
+
+    Linear gradient over the manual reference depth (``thermal.depth``).
+    """
     thermal = model.thermal
     return -(thermal.alpha_micro * 1e-6) * thermal.delta_T / (thermal.depth / 1000)
+
+
+def section_depth(section) -> float | None:
+    """Total depth (mm) for the thermal gradient: girder, plus haunch and slab
+    when a composite slab is defined. None for a direct-EI section."""
+    from .section_props import girder_base
+
+    if section.kind == "ei":
+        return None
+    depth = girder_base(section)["depth"]
+    slab = section.composite
+    if slab is not None and slab.enabled:
+        depth += slab.haunch + slab.slab_thickness
+    return depth
+
+
+def free_curvature(model: Model, section) -> float:
+    """Free thermal curvature (1/m, positive when the top is hotter).
+
+    Linear: α ΔT / h with h from the section (or the manual depth).
+    Bilinear (S6-25 type): T falls linearly from slab_delta_T at the top of the
+    slab to 0 at its bottom and stays 0 below; κ = α Σ T (y − ȳ) dA / I on the
+    composite 1n section (slab / n, bars × m).
+    """
+    th = model.thermal
+    alpha = th.alpha_micro * 1e-6
+    if th.profile == "bilinear":
+        from .section_props import composite_properties, girder_base
+
+        slab = section.composite
+        if section.kind == "ei" or slab is None or not slab.enabled:
+            raise ValueError("thermal.needs_slab")
+        comp = composite_properties(section, slab)
+        c1 = comp["1n"]
+        ybar, inertia = c1["y_bottom"], c1["I"]
+        base = girder_base(section)["depth"] + slab.haunch
+        tc = slab.slab_thickness
+        width = comp["concrete_area"] / comp["n"] / tc  # transformed width, mm
+        e = base - ybar
+        # ∫0..tc T(s) (e + s) b ds with T = T0 s / tc
+        moment = width * th.slab_delta_T / tc * (e * tc**2 / 2 + tc**3 / 3)
+        for bar in comp["bars"]:
+            s = bar["y_in_slab"]
+            moment += bar["area"] * comp["m"] * th.slab_delta_T * s / tc * (e + s)
+        return alpha * moment / inertia * 1000.0
+    if th.depth_source == "manual":
+        depth = th.depth
+    else:
+        depth = section_depth(section)
+        if depth is None:
+            depth = th.depth  # direct EI: no geometry, manual depth
+    return alpha * th.delta_T / (depth / 1000)
+
+
+def span_curvatures(model: Model) -> list[float]:
+    """PyCBA imposed curvature per span: mean of the free curvature along the
+    span (sections sampled every 1/40 of the span, tapers included)."""
+    from .sections import section_at
+
+    out, start = [], 0.0
+    for span in model.spans:
+        xs = np.linspace(0.0, span.length, 41)
+        k = np.array(
+            [
+                free_curvature(
+                    model,
+                    section_at(model, start + x, "right" if x < span.length else "left"),
+                )
+                for x in xs
+            ]
+        )
+        mean = float(np.sum((k[1:] + k[:-1]) / 2 * np.diff(xs)) / span.length)
+        out.append(-mean)
+        start += span.length
+    return out
 
 
 def analyse_thermal(model: Model) -> dict:
@@ -35,8 +113,8 @@ def analyse_thermal(model: Model) -> dict:
         supports=pycba_supports(model),
         eletype=member_types(model),
     )
-    kappa = thermal_curvature(model)
-    for member in range(1, len(lengths) + 1):
+    kappas = span_curvatures(model)
+    for member, kappa in enumerate(kappas, start=1):
         ba.add_ic(member, kappa)
     npts = 480 if model.precision == "standard" else 960
     ba.analyze(npts=npts)
@@ -49,7 +127,7 @@ def analyse_thermal(model: Model) -> dict:
         shear.extend(np.interp(query, physical_x, result.V[1:-1]))
         moment.extend(np.interp(query, physical_x, result.M[1:-1]))
         local_x = physical_x - support_x[i]
-        refined = member_deflection(local_x, result.M[1:-1], eis[i], kappa)
+        refined = member_deflection(local_x, result.M[1:-1], eis[i], kappas[i])
         if refined is not None:
             fine_x, fine_d = refined
             deflection.extend(-1000 * np.interp(query - support_x[i], fine_x, fine_d))
@@ -136,7 +214,8 @@ def analyse_thermal(model: Model) -> dict:
         "sections": [properties(section) for section in model.sections],
         "meta": {
             "elapsed": round(time.perf_counter() - started, 3),
-            "curvature": kappa,
+            "curvature": float(np.mean(kappas)),
+            "curvatures": kappas,
             "equilibrium_error": max(max_force_error, max_moment_error),
             "pycba": cba.__version__,
             "precision": model.precision,

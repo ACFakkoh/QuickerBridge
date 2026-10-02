@@ -255,7 +255,7 @@ def test_distribution_changes_the_analysis_only_when_applied_and_round_trips():
     assert analyse(plain)["max"]["M"] == analyse(on)["max"]["M"]
     assert analyse(on)["ft"] is None
     reopened = validate_project(json.dumps(create_project(on, "FT")))
-    assert reopened["schema_version"] == 9
+    assert reopened["schema_version"] == 10
     assert reopened["model"]["distribution"]["skew"] == 17.7
     old = create_project(plain, "Old")
     old["schema_version"] = 5

@@ -16,7 +16,7 @@ function axleIntegral(){const s=model.supports,n=model.spans.length;return [['fi
 function axleWhere(where){const [kind,k]=where.split(':');return `${t(kind==='span'?'axleSpan':'axleSupport')} ${k}`;}
 function axleChoice(){
  const d=axleSettings();
- return `<div class="field-row">${select(axleSlab()?'portionType':'girderType','distribution.girder',d.girder,[['interior',t('interiorGirder')],['exterior',t('exteriorGirder')]])}${select('limitState','distribution.state',d.state,[['ULS',t('ulsState')],['FLS',t('flsState')]])}</div><label class="toggle-row axle-apply"><input type="checkbox" data-path="distribution.apply" ${d.apply?'checked':''}>${t('axleApply')}</label>`;
+ return `<div class="field-row">${select(axleSlab()?'portionType':'girderType','distribution.girder',d.girder,[['interior',t('interiorGirder')],['exterior',t('exteriorGirder')]])}${select('limitState','distribution.state',d.state,[['ULS',t('ulsState')],['FLS',t('flsState')]])}</div><label class="toggle-row axle-apply"><input type="checkbox" data-path="distribution.apply" ${d.apply?'checked':''}>${t('axleApply')}</label>${d.girder==='exterior'?`<label class="toggle-row"><input type="checkbox" data-path="distribution.fs_dead" ${d.fs_dead!==false?'checked':''}>${t('fsDead')}</label>`:''}`;
 }
 // Left panel: switch, the two choices and a link; the deck data live in the tab.
 function axleGroupMeta(){

@@ -369,7 +369,8 @@ def support_factors(model, basis):
 def dead_scale(model, basis):
     """Skew factor Fs on the dead-load shear and reactions of an exterior
     girder (5.6.6.2)."""
-    if not ft_applied(model) or model.distribution.girder != "exterior":
+    d = model.distribution
+    if not ft_applied(model) or d.girder != "exterior" or not d.fs_dead:
         return None
     _, _, fs = station_factors(model, basis.x, basis.sides)
     _, _, rs = support_factors(model, basis)
@@ -393,7 +394,6 @@ def structure_key(model):
         "load_mode",
         "modal",
         "distribution",
-        "stress",
     ):
         data.pop(key)
     return json.dumps(data, sort_keys=True)
@@ -1133,69 +1133,79 @@ def snapshot(model, record, target_index=None, sense="max"):
     }
 
 
-def stress_at(model, result, index, self_weight_stage="steel", dead_stage="3n"):
-    """Staged stresses over the depth at report station ``index`` (v0.9.4).
-
-    The girder self-weight acts on ``self_weight_stage``, the other permanent
-    loads on ``dead_stage`` (steel alone or composite 3n), the live load on
-    the composite 1n section, for the envelope maximum and minimum at the
-    station (FT and factors included, as displayed).
-    """
-    from .section_props import stress_profile
-    from .sections import section_at
-
+def _static_moments(model, result, self_weight: bool, loads):
+    """Moments (kN·m) at every report station of a subset of permanent loads."""
     nx = len(result["x"])
-    x, side = result["x"][index], result["sides"][index]
-    section = section_at(model, x, side)
-    if section.kind not in ("girder", "nebt"):
-        raise ValueError("stress.section_kind")  # needs a known section
-    dead_total = result["dead"]["M"][index]
-    m_sw = 0.0
-    if model.load_mode != "live" and model.self_weight.apply:
-        only_sw = model.model_copy(deep=True)
-        only_sw.dead = []
-        basis = cached_basis(structure_key(model))
-        old = basis.model
-        basis.model = only_sw
-        values, _ = basis.static_dead()
-        basis.model = old
-        m_sw = float(values[nx + index])
-    m_dead = dead_total - m_sw
-    live_max = result["max"]["M"][index] - dead_total
-    live_min = result["min"]["M"][index] - dead_total
-    out = {"x": x, "side": side, "section": section.model_dump(), "cases": {}}
-    for case, live in (("max", live_max), ("min", live_min)):
-        moments = {"steel": 0.0, "3n": 0.0, "1n": live}
-        moments[self_weight_stage] += m_sw
-        moments[dead_stage] += m_dead
-        out["cases"][case] = stress_profile(section, moments)
-    out["moments"] = {
-        "self_weight": m_sw,
-        "dead": m_dead,
-        "live_max": live_max,
-        "live_min": live_min,
-        "self_weight_stage": self_weight_stage,
-        "dead_stage": dead_stage,
-    }
-    return out
-
-
-def _self_weight_moments(model, result):
-    """Girder self-weight moments at every report station (kN·m)."""
-    nx = len(result["x"])
-    if model.load_mode == "live" or not model.self_weight.apply:
+    with_sw = self_weight and model.self_weight.apply
+    if model.load_mode == "live" or (not loads and not with_sw):
         return [0.0] * nx
-    only_sw = model.model_copy(deep=True)
-    only_sw.dead = []
+    subset = model.model_copy(deep=True)
+    subset.dead = [load.model_copy() for load in loads]
+    subset.self_weight.apply = with_sw
     basis = cached_basis(structure_key(model))
     old = basis.model
-    basis.model = only_sw
+    basis.model = subset
     values, _ = basis.static_dead()
     basis.model = old
     return [float(v) for v in values[nx : 2 * nx]]
 
 
-def stress_all(model, result, self_weight_stage="steel", dead_stage="3n"):
+def stage_moments(model, result):
+    """Permanent-load moments per stage at every station (v0.9.6).
+
+    The girder self-weight and the loads marked "steel" (slab weight in
+    unshored construction) act on the girder alone; the other permanent
+    loads on the composite 3n section.
+    """
+    nx = len(result["x"])
+    if model.load_mode == "live":
+        zero = [0.0] * nx
+        return zero, zero, zero
+    m_sw = _static_moments(model, result, True, [])
+    steel_loads = [d for d in model.dead if d.stage == "steel"]
+    m_steel = _static_moments(model, result, False, steel_loads)
+    m_3n = [result["dead"]["M"][i] - m_sw[i] - m_steel[i] for i in range(nx)]
+    return m_sw, m_steel, m_3n
+
+
+def stress_at(model, result, index, moments=None):
+    """Staged stresses over the depth at report station ``index``.
+
+    Self-weight and "steel" permanent loads on the girder alone, the other
+    permanent loads on the composite 3n section, the live load on the 1n
+    section, for the envelope maximum and minimum at the station (FT and
+    factors included, as displayed).
+    """
+    from .section_props import stress_profile
+    from .sections import section_at
+
+    x, side = result["x"][index], result["sides"][index]
+    section = section_at(model, x, side)
+    if section.kind not in ("girder", "nebt"):
+        raise ValueError("stress.section_kind")  # needs a known section
+    m_sw, m_steel, m_3n = moments or stage_moments(model, result)
+    dead_total = result["dead"]["M"][index]
+    live_max = result["max"]["M"][index] - dead_total
+    live_min = result["min"]["M"][index] - dead_total
+    out = {"x": x, "side": side, "section": section.model_dump(), "cases": {}}
+    for case, live in (("max", live_max), ("min", live_min)):
+        stage = {
+            "steel": m_sw[index] + m_steel[index],
+            "3n": m_3n[index],
+            "1n": live,
+        }
+        out["cases"][case] = stress_profile(section, stage)
+    out["moments"] = {
+        "self_weight": m_sw[index],
+        "dead_steel": m_steel[index],
+        "dead_3n": m_3n[index],
+        "live_max": live_max,
+        "live_min": live_min,
+    }
+    return out
+
+
+def stress_all(model, result):
     """Total stresses (M max and M min cases) at every station (v0.9.6).
 
     Feeds the hover preview and the fixed stress scale: per station the
@@ -1208,7 +1218,7 @@ def stress_all(model, result, self_weight_stage="steel", dead_stage="3n"):
     from .section_props import composite_properties, stress_profile
     from .sections import section_at
 
-    m_sw = _self_weight_moments(model, result)
+    m_sw, m_steel, m_3n = stage_moments(model, result)
     sections, keys, comps, stations = [], {}, {}, []
     t_max, c_max = 0.0, 0.0
     for i, (x, side) in enumerate(zip(result["x"], result["sides"])):
@@ -1227,12 +1237,13 @@ def stress_all(model, result, self_weight_stage="steel", dead_stage="3n"):
                 else None
             )
         dead_total = result["dead"]["M"][i]
-        m_dead = dead_total - m_sw[i]
         out = {"s": keys[key]}
         for case in ("max", "min"):
-            moments = {"steel": 0.0, "3n": 0.0, "1n": result[case]["M"][i] - dead_total}
-            moments[self_weight_stage] += m_sw[i]
-            moments[dead_stage] += m_dead
+            moments = {
+                "steel": m_sw[i] + m_steel[i],
+                "3n": m_3n[i],
+                "1n": result[case]["M"][i] - dead_total,
+            }
             prof = stress_profile(section, moments, comps[key])
             out[case] = prof["total"]
             if case == "max":

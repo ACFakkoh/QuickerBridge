@@ -527,3 +527,25 @@ Scope: Notion pages "QuickerBridge 0.9.6 fix" and "Astra audit indépendant".
 - FT: settings only in the FT tab (enable, girder, limit state, apply, deck
   data); the left panel shows the state (off / computed / applied) and opens
   the tab.
+
+### v0.9.6 complement 2: load stages, Fs on dead loads, thermal, windows (2026-10-02)
+
+- Slab FLS shear n ≥ 2: 3.20 + 0.10 Le for every class (A5.3.2 "0.10 / Le"
+  treated as a typo, author's decision).
+- Stress stages: each permanent load is carried by the girder alone (slab
+  weight, unshored construction) or the composite 3n; the self-weight is
+  always on the girder alone. stage_moments splits the dead moment (test: the
+  two stage moments are proportional to their loads and add up to the dead
+  moment). Schema 10: a schema-9 global "dead on steel" moves to every load.
+  "+ Slab weight" adds γc (be tc + bt haunch) on the girder alone.
+- Fs on the permanent-load V and R of the exterior girder can be switched off
+  (distribution.fs_dead); M unchanged (test).
+- Thermal: reference depth from the sections (girder + haunch + slab when
+  defined), κ averaged over each span; manual depth kept for older projects
+  and direct-EI sections. Bilinear profile (S6-25 type): ΔT in the slab only,
+  κ = α Σ T (y − ȳ) dA / I on the 1n section, hand-checked; needs a slab.
+- Stress window: no neutral axes, no global stage choice, fixed height scale,
+  slider redraw from the all-stations cache in about 3 ms. Δ mode: Δ value
+  next to the dot. Section, stress and method windows float (non-modal,
+  draggable, no dark backdrop, Escape closes the front one).
+- 225 tests native; 209 + 1 skipped in browser mode.

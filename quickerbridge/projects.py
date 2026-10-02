@@ -10,7 +10,7 @@ from .version import APP_VERSION
 
 
 FORMAT = "QuickerBridgeProject"
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 MAX_PROJECT_BYTES = 1024 * 1024
 
 
@@ -55,6 +55,19 @@ def validate_project(text: str) -> dict:
         distribution = raw["model"].get("distribution")
         if isinstance(distribution, dict):
             distribution.pop("effect", None)
+    if version < 10 and isinstance(raw.get("model"), dict):
+        model = raw["model"]
+        # v0.9.6 (schema 9) stored the stress stages globally; they are now
+        # one choice per permanent load, the self-weight on the girder alone.
+        stress = model.pop("stress", None)
+        if isinstance(stress, dict) and stress.get("dead") == "steel":
+            for load in model.get("dead") or []:
+                if isinstance(load, dict):
+                    load.setdefault("stage", "steel")
+        # The thermal reference depth now comes from the sections; older
+        # projects keep the depth they were saved with.
+        if isinstance(model.get("thermal"), dict):
+            model["thermal"].setdefault("depth_source", "manual")
     if isinstance(raw.get("model"), dict):
         # v0.9.5 briefly had a constant support section (support_length); it
         # overrode the non-prismatic zones and was removed in v0.9.6.
@@ -92,7 +105,7 @@ def validate_project(text: str) -> dict:
                     ):
                         raise ValueError("project.legacy_taper")
         raw["schema_version"] = SCHEMA_VERSION
-    elif version in (2, 3, 4, 5, 6, 7, 8):
+    elif version in (2, 3, 4, 5, 6, 7, 8, 9):
         # v0.4 files: zones without ``plates`` keep the start-section
         # convention, which is the default. Pin/roller supports are unchanged.
         raw["schema_version"] = SCHEMA_VERSION

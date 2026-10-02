@@ -84,26 +84,15 @@ def test_stress_request_reproduces_the_envelope_moments():
     i = int(np.argmax(result["max"]["M"]))
     out = request("stress", {"job": "stress-test", "index": i})
     mo = out["moments"]
-    total_max = mo["self_weight"] + mo["dead"] + mo["live_max"]
+    total_max = mo["self_weight"] + mo["dead_steel"] + mo["dead_3n"] + mo["live_max"]
     assert total_max == pytest.approx(result["max"]["M"][i])
     case = out["cases"]["max"]
-    assert case["stages"]["steel"]["M"] == pytest.approx(mo["self_weight"])
-    assert case["stages"]["3n"]["M"] == pytest.approx(mo["dead"])
+    assert case["stages"]["steel"]["M"] == pytest.approx(mo["self_weight"] + mo["dead_steel"])
+    assert case["stages"]["3n"]["M"] == pytest.approx(mo["dead_3n"])
     assert case["stages"]["1n"]["M"] == pytest.approx(mo["live_max"])
     assert case["composite"] and case["total"]["S5"] > 0
-    # Both permanent loads on the steel section when requested.
-    alt = request(
-        "stress",
-        {
-            "job": "stress-test",
-            "index": i,
-            "self_weight_stage": "steel",
-            "dead_stage": "steel",
-        },
-    )
-    assert alt["cases"]["max"]["stages"]["3n"]["M"] == 0
     with pytest.raises(ValueError):
-        request("stress", {"job": "stress-test", "index": i, "dead_stage": "1n"})
+        request("stress", {"job": "stress-test", "index": 10_000})
 
 
 def test_stress_needs_a_known_girder_and_no_thermal():

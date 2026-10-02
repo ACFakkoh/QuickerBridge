@@ -31,15 +31,21 @@ def test_bars_must_lie_inside_the_slab():
 
 
 def test_stress_stages_are_saved_with_the_project():
-    # Audit P2: the load stages are part of the model and survive a save.
+    # Audit P2, v0.9.6 form: the stage is a choice of each permanent load,
+    # saved with it; the self-weight is always on the girder alone.
     m = default_model()
-    m.stress.self_weight = "3n"
-    m.stress.dead = "steel"
+    m.dead[0].stage = "steel"
     reopened = validate_project(json.dumps(create_project(m, "p")))
-    assert reopened["model"]["stress"] == {"self_weight": "3n", "dead": "steel"}
-    assert reopened["schema_version"] == 9
-    # Display choice only: never part of the analysis key.
-    assert structure_key(m) == structure_key(default_model())
+    assert reopened["model"]["dead"][0]["stage"] == "steel"
+    assert reopened["schema_version"] == 10
+    # Schema 9 files: a global "dead on steel" choice moves to every load.
+    old = create_project(default_model(), "p")
+    old["schema_version"] = 9
+    old["model"]["stress"] = {"self_weight": "steel", "dead": "steel"}
+    for load in old["model"]["dead"]:
+        load.pop("stage")
+    out = validate_project(json.dumps(old))["model"]
+    assert "stress" not in out and out["dead"][0]["stage"] == "steel"
 
 
 def test_variable_depth_stress_sections_match_the_analysis():
@@ -141,7 +147,7 @@ def test_stress_all_matches_station_requests():
 def test_slab_fls_shear_follows_each_printed_table():
     le = 20.0
     assert slab_shear("FLS", 2, le, False, 3.0, "AB")[0] == pytest.approx(3.20 + 0.10 * le)
-    assert slab_shear("FLS", 2, le, False, 3.0, "CD")[0] == pytest.approx(3.20 + 0.10 / le)
+    assert slab_shear("FLS", 2, le, False, 3.0, "CD")[0] == pytest.approx(3.20 + 0.10 * le)  # A5.3.2 typo
     assert slab_shear("ULS", 2, le, False, 3.0, "AB")[0] == pytest.approx(
         2.35 + 0.35 * math.sqrt(le)
     )
@@ -179,3 +185,79 @@ def test_stress_profile_on_steel_unchanged_by_refactor():
     assert comp["m"] == 1.0
     y_bar = next(f["y"] for f in out["fibres"] if f["name"] == "bar_top")
     assert out["total"]["bar_top"] == pytest.approx(-1000e6 * (y_bar - st["ybar"]) / st["I"])
+
+
+# --- Permanent-load stages, Fs on dead loads, thermal (0.9.6 complement) ------
+
+
+def test_slab_weight_on_girder_alone_and_self_weight_always_on_steel():
+    from quickerbridge.models import DeadLoad
+    from quickerbridge.engine import stage_moments
+
+    m = default_model()
+    for s in m.sections:
+        s.composite = CompositeSlab()
+    m.dead = [DeadLoad(name="slab", w=15, stage="steel"), DeadLoad(name="wearing", w=5)]
+    r = analyse(m)
+    m_sw, m_steel, m_3n = stage_moments(m, r)
+    i = int(max(range(len(r["x"])), key=lambda k: r["dead"]["M"][k]))
+    # Linear analysis: moments are proportional to the uniform loads.
+    assert m_steel[i] / m_3n[i] == pytest.approx(15 / 5, rel=1e-6)
+    assert m_sw[i] + m_steel[i] + m_3n[i] == pytest.approx(r["dead"]["M"][i])
+    out = stress_at(m, r, i)
+    st = out["cases"]["max"]["stages"]
+    assert st["steel"]["M"] == pytest.approx(m_sw[i] + m_steel[i])
+    assert st["3n"]["M"] == pytest.approx(m_3n[i])
+
+
+def test_fs_on_dead_loads_can_be_switched_off():
+    import numpy as np
+
+    m = default_model()
+    m.distribution.enabled = m.distribution.apply = True
+    m.distribution.girder = "exterior"
+    m.load_mode = "dead"
+    on = analyse(m)
+    m.distribution.fs_dead = False
+    off = analyse(m)
+    assert max(on["max"]["V"]) > max(off["max"]["V"])
+    np.testing.assert_allclose(on["max"]["M"], off["max"]["M"])
+
+
+def test_thermal_depth_from_sections_and_bilinear_gradient():
+    from quickerbridge.thermal import free_curvature, span_curvatures
+
+    m = Model(load_mode="thermal")
+    s = m.sections[0]
+    alpha = m.thermal.alpha_micro * 1e-6
+    # Linear: h = girder depth (no slab), then + haunch + slab.
+    assert free_curvature(m, s) == pytest.approx(alpha * 15 / 1.2)
+    s.composite = CompositeSlab()
+    assert free_curvature(m, s) == pytest.approx(alpha * 15 / 1.45)
+    assert span_curvatures(m)[0] == pytest.approx(-alpha * 15 / 1.45)
+    m.thermal.depth_source = "manual"
+    m.thermal.depth = 1800
+    assert free_curvature(m, s) == pytest.approx(alpha * 15 / 1.8)
+    # Bilinear: hand integration over the slab (T linear, 0 at its bottom).
+    m.thermal.profile = "bilinear"
+    comp = section_properties(s)["composite"]
+    c1, tc = comp["1n"], 200.0
+    b = comp["concrete_area"] / comp["n"] / tc
+    e = 1250.0 - c1["y_bottom"]
+    q = b * 35 / tc * (e * tc**2 / 2 + tc**3 / 3)
+    q += sum(bar["area"] * comp["m"] * 35 * bar["y_in_slab"] / tc * (e + bar["y_in_slab"]) for bar in comp["bars"])
+    assert free_curvature(m, s) == pytest.approx(alpha * q / c1["I"] * 1000)
+    r = analyse(m)
+    assert r["kind"] == "thermal" and max(abs(v) for v in r["values"]["M"]) > 0
+    s.composite = None
+    with pytest.raises(ValueError, match="thermal.needs_slab"):
+        analyse(m)
+
+
+def test_old_projects_keep_the_manual_thermal_depth():
+    old = create_project(Model(), "p")
+    old["schema_version"] = 9
+    old["model"]["thermal"].pop("depth_source")
+    old["model"]["thermal"]["depth"] = 1800
+    out = validate_project(json.dumps(old))["model"]["thermal"]
+    assert out["depth_source"] == "manual" and out["depth"] == 1800
