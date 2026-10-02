@@ -195,7 +195,9 @@ async function stRequest(){
 function stRequestSoon(){clearTimeout(stTimer);stTimer=setTimeout(stRequest,140);}
 // --- Every station at once: preview cache and fixed scale ---------------------
 let stAll={key:null,data:null,promise:null};
-function stAllKey(){const st=stStages();return `${jobId}|${st.self_weight}|${st.dead}|${JSON.stringify(stComposites())}`;}
+// The key follows the analysis, the stages and every section (geometry and
+// slab), so a changed girder never keeps the previous stress extremes.
+function stAllKey(){const st=stStages();return `${jobId}|${st.self_weight}|${st.dead}|${JSON.stringify(model.sections)}`;}
 function stAllLoad(){
  if(!result||result.kind==='thermal'||!jobId)return Promise.resolve(null);
  const key=stAllKey();if(stAll.key===key)return stAll.promise;
@@ -207,7 +209,8 @@ function stAllLoad(){
 // side T (same MPa per pixel), from the bridge extremes when known.
 function stScale(left,right,localValues){
  const a=stAll.key===stAllKey()&&stAll.data&&!stAll.data.error?stAll.data:null;
- let T=a?a.tension:Math.max(0,...localValues),C=a?-a.compression:Math.max(0,...localValues.map(v=>-v));
+ // Never smaller than the values drawn: a value is never clipped by the scale.
+ let T=Math.max(a?a.tension:0,0,...localValues),C=Math.max(a?-a.compression:0,0,...localValues.map(v=>-v));
  T=Math.max(T,1);C=Math.max(C,1);const k=(right-left)/(T+C),ox=left+C*k;
  return {ox,T,C,fixed:!!a,SX:v=>ox+Math.max(-C,Math.min(T,v))*k};
 }
@@ -234,6 +237,8 @@ function renderStress(){
  else if(stData.error)body=`<p class="help">${t(stData.error.includes('section_kind')?'stNotSteel':stData.error.includes('composite.bars')?'composite.bars':'failed')}</p>`;
  else body=stBody(stData);
  dlg.querySelector('#st-content').innerHTML=body;
+ // A new analysis or section: reload the bridge extremes, then redraw.
+ if(stData&&!stData.error&&stAll.key!==stAllKey())stAllLoad().then(()=>{if(stIndex!==null)renderStress();});
 }
 function stBody(d){
  const mx=d.cases.max,mn=d.cases.min,mo=d.moments;

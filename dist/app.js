@@ -316,6 +316,7 @@ async function calculate(token) {
   const key=String(token),data=await solver.request('analyse',{model:clone(model),job:key});
   if(token!==revision)return;
   window.QBSplash?.done();result=data;jobId=key;snap=null;influenceData=null;traverseData=null;display='envelope';
+  if(typeof stIndex!=='undefined'&&stIndex!==null&&typeof stRequest==='function'){stIndex=Math.min(stIndex,result.x.length-1);stRequest();}
   $('#status').textContent=`${t('ready')} · ${fmt(result.meta.elapsed,2)} s`;
   $('#status').classList.remove('busy');$('#charts').classList.remove('stale');$('#excel').disabled=false;
   renderResults();renderBeam();
@@ -656,6 +657,8 @@ function nearest(x,xs=result.x) {let best=0;for(let i=1;i<xs.length;i++)if(Math.
 function currentGraph(){return snap&&display==='snapshot'?(snap.plot||snap):null;}
 function pointerStation(e) {const rect=e.currentTarget.getBoundingClientRect();return nearest(Math.max(0,Math.min(1,((e.clientX-rect.left)/rect.width*926-26)/874))*result.x.at(-1),currentGraph()?.x||result.x);}
 function eiValue(x,side='right'){const st=result.stiffness;if(!st)return null;let j=0;while(j<st.x.length-1&&st.x[j]<x-1e-8)j++;if(Math.abs(st.x[j]-x)<1e-8){if(side==='right')while(j+1<st.x.length&&Math.abs(st.x[j+1]-x)<1e-8)j++;return st.EI[j];}const a=Math.max(0,j-1),f=(x-st.x[a])/(st.x[j]-st.x[a]);return st.EI[a]+f*(st.EI[j]-st.EI[a]);}
+// v0.9.6: readout precision, V and M without decimals, deflection to 0.1 mm.
+function qbFmtEffect(key,v){return fmt(v,key==='D'?1:0);}
 function chartHover(e) {
  if(!result)return;const graph=display==='influence'?null:currentGraph(),i=e.currentTarget.classList.contains('stiffness-plot')?nearest(pointerX(e)):pointerStation(e),x=(graph?.x||result.x)[i],sx=26+x/result.x.at(-1)*874;
  $('.stiffness-plot')?.addEventListener('pointermove',chartHover);
@@ -665,17 +668,27 @@ function chartHover(e) {
   const lo=graph?graph[key][i]:thermal?result.values[key][i]:result.min[key][i],hi=graph?graph[key][i]:thermal?result.values[key][i]:result.max[key][i],Y=v=>G.mid+Number(svg.dataset.sign)*v/Number(svg.dataset.amp)*G.half;
   const line=svg.querySelector('.cursor');line.setAttribute('x1',sx);line.setAttribute('x2',sx);line.setAttribute('visibility','visible');
   [['.cursor-high',hi],['.cursor-low',lo]].forEach(([cl,v])=>{const circle=svg.querySelector(cl);if(circle){circle.setAttribute('cx',sx);circle.setAttribute('cy',Y(v));circle.setAttribute('visibility','visible')}});
-  // v0.9.6: values follow the dots, in the colour of the diagram.
+  // v0.9.6: values follow the dots, in the colour of the diagram. The upper
+  // dot's value goes above it and the lower one's below, kept apart and inside
+  // the plot so the two values stay readable at every station.
   const color=svg.closest('.chart-row')?.querySelector('.chart-label')?.style.color||'#17374b';
-  [['hi',hi,-1],['lo',lo,1]].forEach(([k,v,dir])=>{let tx=svg.querySelector('.cursor-val-'+k);if(!tx){tx=document.createElementNS('http://www.w3.org/2000/svg','text');tx.setAttribute('class','cursor-val cursor-val-'+k);svg.appendChild(tx);}
-   const same=k==='lo'&&Math.abs(hi-lo)<1e-9;tx.setAttribute('visibility',same?'hidden':'visible');if(same)return;
-   const right=sx>700;tx.setAttribute('x',sx+(right?-G.u(7):G.u(7)));tx.setAttribute('y',Y(v)+(dir<0?-G.u(7):G.u(15)));tx.setAttribute('text-anchor',right?'end':'start');tx.style.fill=color;tx.textContent=fmt(v,key==='D'?2:1);});
+  const same=Math.abs(hi-lo)<1e-9,marks=[{k:'hi',v:hi,y:Y(hi)},{k:'lo',v:lo,y:Y(lo)}].sort((a,b)=>a.y-b.y);
+  let yUp=marks[0].y-G.u(8),yDown=marks[1].y+G.u(19);
+  if(yUp<G.u(13)){yUp=G.u(13);}
+  if(yDown>G.H-G.u(2)){yDown=G.H-G.u(2);}
+  if(yDown-yUp<G.u(17)){yDown=yUp+G.u(17);}
+  marks.forEach((m,n)=>{let tx=svg.querySelector('.cursor-val-'+m.k);if(!tx){tx=document.createElementNS('http://www.w3.org/2000/svg','text');tx.setAttribute('class','cursor-val cursor-val-'+m.k);svg.appendChild(tx);}
+   const hide=same&&m.k==='lo';tx.setAttribute('visibility',hide?'hidden':'visible');if(hide)return;
+   const right=sx>700;tx.setAttribute('x',sx+(right?-G.u(8):G.u(8)));tx.setAttribute('y',same?m.y-G.u(8):n?yDown:yUp);tx.setAttribute('text-anchor',right?'end':'start');tx.style.fill=color;tx.textContent=qbFmtEffect(key,m.v);});
+  // Static extreme labels under a moving value are dimmed, never overlapped.
+  const boxes=[...svg.querySelectorAll('.cursor-val')].filter(x=>x.getAttribute('visibility')!=='hidden').map(x=>x.getBoundingClientRect());
+  svg.querySelectorAll('.peak-label').forEach(pl=>{const b=pl.getBoundingClientRect(),hit=boxes.some(c=>!(c.right<b.left-2||b.right<c.left-2||c.bottom<b.top-1||b.bottom<c.top-1));pl.classList.toggle('peak-dim',hit);});
  });
- const side=(graph?.sides||result.sides)[i],ei=eiValue(x,side),eiSvg=$('.stiffness-plot');if(eiSvg&&ei!==null){const line=eiSvg.querySelector('.cursor'),dot=eiSvg.querySelector('.cursor-ei'),G=plotGeom();line.setAttribute('x1',sx);line.setAttribute('x2',sx);line.setAttribute('visibility','visible');dot.setAttribute('cx',sx);dot.setAttribute('cy',G.bot-ei/(Number(eiSvg.dataset.max)*1.08)*(G.bot-G.top));dot.setAttribute('visibility','visible');}
+ const side=(graph?.sides||result.sides)[i],ei=eiValue(x,side),eiSvg=$('.stiffness-plot');if(eiSvg&&ei!==null){const line=eiSvg.querySelector('.cursor'),dot=eiSvg.querySelector('.cursor-ei'),G=plotGeom();line.setAttribute('x1',sx);line.setAttribute('x2',sx);line.setAttribute('visibility','visible');dot.setAttribute('cx',sx);dot.setAttribute('cy',G.bot-ei/(Number(eiSvg.dataset.max)*1.08)*(G.bot-G.top));{const cy=G.bot-ei/(Number(eiSvg.dataset.max)*1.08)*(G.bot-G.top);let tx=eiSvg.querySelector('.cursor-val-ei');if(!tx){tx=document.createElementNS('http://www.w3.org/2000/svg','text');tx.setAttribute('class','cursor-val cursor-val-ei');eiSvg.appendChild(tx);}const right=sx>700;tx.setAttribute('x',sx+(right?-G.u(8):G.u(8)));tx.setAttribute('y',Math.max(G.u(13),cy-G.u(8)));tx.setAttribute('text-anchor',right?'end':'start');tx.setAttribute('visibility','visible');tx.style.fill=eiSvg.closest('.chart-row')?.querySelector('.chart-label')?.style.color||'#7a5bb5';tx.textContent=fmt(ei/1e6,3);}dot.setAttribute('visibility','visible');}
  $('#station-readout').innerHTML=`<span>x <b>${fmt(x)} m</b> · ${t((graph?.sides||result.sides)[i])}</span>${result.kind!=='thermal'&&typeof openStress==='function'?`<button class="text-button st-open" data-stress-index="${graph?nearest(x):i}" title="${t('stHint')}">${t('stOpen')}</button>`:''}`+['V','M','D'].map(k=>{const unit=k==='M'?'kN·m':k==='V'?'kN':'mm',name=k==='D'?'δ':k;
-  if(deltaActive())return `<span>Δ${name} <b>${fmt(result.max[k][i]-result.min[k][i])}</b> ${unit} <small>(${fmt(result.min[k][i])} / ${fmt(result.max[k][i])})</small></span>`;
+  if(deltaActive())return `<span>Δ${name} <b>${qbFmtEffect(k,result.max[k][i]-result.min[k][i])}</b> ${unit} <small>(${qbFmtEffect(k,result.min[k][i])} / ${qbFmtEffect(k,result.max[k][i])})</small></span>`;
   const col=$(`#charts svg.plot[data-effect="${k}"]`)?.closest('.chart-row')?.querySelector('.chart-label')?.style.color||'';
-  return `<span class="ro-val" style="--c:${col}">${name} <b>${graph?fmt(graph[k][i]):result.kind==='thermal'?fmt(result.values[k][i]):fmt(result.min[k][i])+' / '+fmt(result.max[k][i])}</b> ${unit}</span>`;}).join('')+(ei===null?'':`<span>EI <b>${fmt(ei/1e6,3)}</b> ×10⁶ kN·m²</span>`);
+  const f=v=>qbFmtEffect(k,v);return `<span class="ro-val" style="--c:${col}">${name} <b>${graph?f(graph[k][i]):result.kind==='thermal'?f(result.values[k][i]):f(result.min[k][i])+' / '+f(result.max[k][i])}</b> ${unit}</span>`;}).join('')+(ei===null?'':`<span class="ro-val" style="--c:${$('.stiffness-plot')?.closest('.chart-row')?.querySelector('.chart-label')?.style.color||'#7a5bb5'}">EI <b>${fmt(ei/1e6,3)}</b> ×10⁶ kN·m²</span>`);
  if(typeof stPeek==='function')stPeek(graph?nearest(x):i,e);
 }
 function chartClick(e) {

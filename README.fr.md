@@ -285,3 +285,4 @@ GitHub Pages, consultez [le guide développeur](README_DEVELOPER.md).
 - Contraintes : aperçu instantané au survol, échelle fixe selon la traction et la compression extrêmes du pont, valeurs en MPa sur le dessin colorées selon le signe, S1 à S5 repérés dans la fenêtre complète.
 - Onglet FT toujours visible, aucun facteur d’essieu par défaut. Cisaillement ÉLF des dalles, n ≥ 2 : formule imprimée de chaque tableau (A/B : 3,20 + 0,10 Le; C/D : 3,20 + 0,10/Le). Feuille Excel FT complète.
 - Valeurs de lecture aux couleurs des diagrammes et à côté des points; fenêtre « Méthode et hypothèses » en haut à droite; explication de la précision standard / fine.
+- Complément : lecture V et M sans décimale, flèche à 0,1 mm; les deux valeurs de chaque diagramme (et EI) suivent les points sans jamais se superposer; l’échelle des contraintes suit tout changement de section; réglages FT réunis dans l’onglet FT, la carte de gauche n’affiche que l’état.

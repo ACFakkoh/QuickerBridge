@@ -23,11 +23,15 @@ function axleGroupMeta(){
  const d=axleSettings();if(!d.enabled)return t('offShort');
  return `${d.apply?'✓ ':''}${t(d.girder==='interior'?'interiorGirder':'exteriorGirder')} · ${t(d.state==='ULS'?'ulsState':'flsState')}`;
 }
+// v0.9.6: one place for the FT settings, the FT tab. The left panel only
+// shows the state (off, computed, applied) and opens the tab.
 function axleCard(){
  const d=axleSettings();
- let html=`<section class="axle-card${d.enabled?' on':''}"><small class="axle-sub">${t('axleSub')}</small><label class="toggle-row"><input type="checkbox" data-path="distribution.enabled" ${d.enabled?'checked':''}>${t('axleEnable')}</label>`;
- if(!d.enabled)return html+(axleCanadian()?'':`<p class="help">${t('axleOnlyCanadian')}</p>`)+`</section>`;
- return html+axleChoice()+`<div class="axle-mini" id="axle-mini">${axleMiniHtml()}</div><button class="text-button axle-open" data-view="axle">${t('axleOpen')}</button></section>`;
+ const state=!d.enabled?t('axleStateOff'):d.apply?t('axleStateApplied'):t('axleStateComputed');
+ let html=`<section class="axle-card${d.enabled?' on':''}"><small class="axle-sub">${t('axleSub')}</small><p class="axle-state ${!d.enabled?'off':d.apply?'applied':'computed'}">${state}</p>`;
+ if(d.enabled)html+=`<p class="axle-choice-summary">${t(d.girder==='interior'?'interiorGirder':'exteriorGirder')} · ${t(d.state==='ULS'?'ulsState':'flsState')}</p><div class="axle-mini" id="axle-mini">${axleMiniHtml()}</div>`;
+ else if(!axleCanadian())html+=`<p class="help">${t('axleOnlyCanadian')}</p>`;
+ return html+`<button class="axle-open-button" data-view="axle">${t('axleSettingsOpen')}</button></section>`;
 }
 function axleRange(values){const lo=Math.min(...values),hi=Math.max(...values);return Math.abs(hi-lo)<5e-4?fmt(lo,3):`${fmt(lo,3)}–${fmt(hi,3)}`;}
 function axleMiniHtml(){
@@ -191,3 +195,5 @@ Object.assign(words.fr,{axleSlabShearInt:'FT portion int.',axleSlabShearExt:'FT 
 Object.assign(words.en,{axleSlabShearInt:'FT interior portion',axleSlabShearExt:'FT exterior portion × Fs'});
 Object.assign(words.fr,{axleOffHint:'Aucun facteur d’essieu par défaut : cochez « Calculer la fraction de charge de camion » pour le calculer, puis « Appliquer » pour l’appliquer aux enveloppes.'});
 Object.assign(words.en,{axleOffHint:'No axle factor by default: tick “Compute the truck load fraction” to compute it, then “Apply” to apply it to the envelopes.'});
+Object.assign(words.fr,{axleStateOff:'Non activé : aucun facteur d’essieu sur les résultats.',axleStateComputed:'Calculé, non appliqué aux enveloppes.',axleStateApplied:'Appliqué aux enveloppes.',axleSettingsOpen:'Régler le FT dans l’onglet FT · S6-25 ↗'});
+Object.assign(words.en,{axleStateOff:'Off: no axle factor on the results.',axleStateComputed:'Computed, not applied to the envelopes.',axleStateApplied:'Applied to the envelopes.',axleSettingsOpen:'Set FT in the FT · S6-25 tab ↗'});

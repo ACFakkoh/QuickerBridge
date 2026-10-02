@@ -213,3 +213,7 @@ input[type=number]{appearance:textfield;-moz-appearance:textfield}
 .plot text.cursor-val{font-size:calc(13px / var(--k,1));font-weight:750;paint-order:stroke;stroke:#fff;stroke-width:calc(3.5px / var(--k,1));pointer-events:none}
 .method-open{background:transparent;border:1px solid #4b6373;color:#c5d8e0;font-size:.78rem;padding:6px 11px;border-radius:999px}.method-open:hover:not(:disabled){background:#17384c;color:#fff}
 .method-dialog{width:min(860px,94vw)}.method-dialog-body{padding:6px 22px 18px}.method-dialog-body .method-content{max-height:none}
+/* v0.9.6: FT summary in the left panel, settings in the tab */
+.axle-state{margin:6px 0;font-size:.82rem;font-weight:650;padding:6px 9px;border-radius:6px}.axle-state.off{background:#f1f4f6;color:#5d7d8c}.axle-state.computed{background:#fff6e5;color:#8a5a00}.axle-state.applied{background:#e6f6f3;color:#006b62}
+.axle-choice-summary{margin:4px 0;font-size:.8rem;color:#486777}.axle-open-button{width:100%;margin-top:8px;border-color:#0a8f84;color:#006b62;font-size:.8rem}
+.peak-label{transition:opacity .12s}.peak-label.peak-dim{opacity:.12}

@@ -513,3 +513,17 @@ Scope: Notion pages "QuickerBridge 0.9.6 fix" and "Astra audit indépendant".
 - Precision: default model, fine vs standard below 0.01 % on extreme M, V,
   deflection and reactions, about 1.5 times slower.
 - 221 tests native; 205 + 1 skipped in browser mode.
+
+### v0.9.6 complement: readout, labels, stress scale, FT settings (2026-10-02)
+
+- Readout and moving values: V and M without decimals, deflection to 0.1 mm;
+  EI value follows its dot in the EI colour. The two values of each diagram
+  are placed above the upper dot and below the lower one, at least one line
+  apart and inside the plot: sweep of 80 stations, no overlap and no label
+  outside a plot. Static extreme labels under a moving value are dimmed.
+- Stress scale: the all-stations key includes every section (geometry and
+  slab); the scale is never smaller than the values drawn; an open stress
+  window reloads after a recalculation (checked: job 0 → 1, 304 → 313 MPa).
+- FT: settings only in the FT tab (enable, girder, limit state, apply, deck
+  data); the left panel shows the state (off / computed / applied) and opens
+  the tab.
