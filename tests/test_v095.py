@@ -5,11 +5,9 @@ import json
 import pytest
 
 from quickerbridge.browser import dispatch
-from quickerbridge.engine import analyse
 from quickerbridge.models import CompositeSlab, Section, default_model
 from quickerbridge.projects import create_project, validate_project
 from quickerbridge.section_props import section_properties
-from quickerbridge.sections import properties, span_ei, span_zones
 
 # Reference sheet slab of test_v093bis (225 mm slab, 15M @ 150, y = 915 mm).
 REFERENCE = CompositeSlab(
@@ -84,44 +82,17 @@ def test_steel_only_y_and_region_without_slab():
     assert out["steel"]["S"]["S3"] == pytest.approx(out["steel"]["Ix"] / 250)
 
 
-def test_constant_support_section_default_400_mm():
+def test_support_section_removed_and_old_files_open():
+    # v0.9.6: the constant support section (v0.9.5) overrode the user's zones;
+    # it is removed and schema-8 files that carry it still open.
     m = default_model()
-    assert m.support_length == 400
-    left, right = span_zones(m, 0), span_zones(m, 1)
-    L = m.spans[0].length
-    # 200 mm each side of the pier at the deep support section S2.
-    assert right[0].profile == "constant" and right[0].section == 1
-    assert right[0].end * L == pytest.approx(0.2)
-    assert left[-1].profile == "constant" and left[-1].section == 1
-    assert (1 - left[-2].end) * L == pytest.approx(0.2)
-    deep = properties(m.sections[1])["EI"]
-    e1, e2 = span_ei(m, 0), span_ei(m, 1)
-    for x in (0.0, 0.1, 0.19):
-        assert e2(x) == pytest.approx(deep) and e1(L - x) == pytest.approx(deep)
-    assert e2(0.5) < deep
-    # The user's zones are unchanged; 0 restores haunches up to the support.
-    assert len(m.spans[1].zones) == 2
-    m0 = m.model_copy(update={"support_length": 0})
-    assert span_zones(m0, 1) == list(m0.spans[1].zones)
-    assert span_ei(m0, 1)(0.1) < deep
-
-
-def test_support_section_changes_the_analysis_slightly():
-    m = default_model()
-    a = analyse(m)
-    b = analyse(m.model_copy(update={"support_length": 0}))
-    ma, mb = min(a["min"]["M"]), min(b["min"]["M"])
-    assert ma != mb and abs(ma - mb) < 0.02 * abs(mb)
-
-
-def test_older_projects_keep_haunches_up_to_the_support():
-    m = default_model()
+    assert "support_length" not in m.model_dump()
     project = create_project(m, "p")
-    assert project["schema_version"] == 8
-    assert validate_project(json.dumps(project))["model"]["support_length"] == 400
-    project["schema_version"] = 7
-    project["model"].pop("support_length")
-    assert validate_project(json.dumps(project))["model"]["support_length"] == 0
+    assert project["schema_version"] == 9
+    project["schema_version"] = 8
+    project["model"]["support_length"] = 400
+    assert "support_length" not in validate_project(json.dumps(project))["model"]
+
 
 def test_stress_s3_fibre_steel_alone_and_reference():
     from quickerbridge.section_props import stress_profile

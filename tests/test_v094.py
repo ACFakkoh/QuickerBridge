@@ -106,11 +106,12 @@ def test_stress_request_reproduces_the_envelope_moments():
         request("stress", {"job": "stress-test", "index": i, "dead_stage": "1n"})
 
 
-def test_stress_needs_a_steel_girder_and_no_thermal():
-    m = Model.model_validate({"sections": [{"kind": "nebt"}]})
-    request("analyse", {"model": m.model_dump(), "job": "stress-nebt"})
+def test_stress_needs_a_known_girder_and_no_thermal():
+    # v0.9.6: NEBT girders have stresses too; a direct-EI section does not.
+    m = Model.model_validate({"sections": [{"kind": "ei"}]})
+    request("analyse", {"model": m.model_dump(), "job": "stress-ei"})
     with pytest.raises(ValueError):
-        request("stress", {"job": "stress-nebt", "index": 10})
+        request("stress", {"job": "stress-ei", "index": 10})
     t = Model(load_mode="thermal")
     request("analyse", {"model": t.model_dump(), "job": "stress-thermal"})
     with pytest.raises(ValueError):

@@ -9,6 +9,9 @@ class InputModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+BAR_DIAMETERS = {"10M": 11.3, "15M": 16.0, "20M": 19.5}  # mm
+
+
 class CompositeSlab(BaseModel):
     """Concrete deck acting with a steel girder, for section properties only.
 
@@ -43,6 +46,22 @@ class CompositeSlab(BaseModel):
     # Region shown in the section properties window: positive moment (steel,
     # 3n, 1n) or negative moment (steel and I' = steel + bars in tension).
     region: Literal["positive", "negative"] = "positive"
+
+    @model_validator(mode="after")
+    def bars_in_slab(self):
+        # v0.9.6: both layers inside the concrete, top above bottom, no
+        # overlap; the field limits alone do not check their compatibility.
+        dt, db = BAR_DIAMETERS[self.bar_top], BAR_DIAMETERS[self.bar_bottom]
+        top = self.slab_thickness - self.cover_top - dt / 2
+        bottom = self.cover_bottom + db / 2
+        if (
+            self.cover_top + dt > self.slab_thickness
+            or self.cover_bottom + db > self.slab_thickness
+            or top - dt / 2 < bottom + db / 2
+            or min(self.spacing_top, self.spacing_bottom) < max(dt, db)
+        ):
+            raise ValueError("composite.bars")
+        return self
 
     def y_of(self, config: str) -> float:
         value = getattr(self, f"y_{config}")
@@ -219,6 +238,14 @@ class Distribution(InputModel):
     state: Literal["ULS", "FLS"] = "ULS"
 
 
+class StressStages(InputModel):
+    """Sections carrying the permanent loads in the stress diagrams (v0.9.6,
+    saved with the project): steel girder alone or composite 3n."""
+
+    self_weight: Literal["steel", "3n"] = "steel"
+    dead: Literal["steel", "3n"] = "3n"
+
+
 class ModalSettings(InputModel):
     """Free-vibration settings. The mass is not a load: it only feeds the
     eigenvalue analysis and never changes the static results."""
@@ -241,15 +268,13 @@ class Model(InputModel):
         default_factory=lambda: [Section()], min_length=1, max_length=20
     )
     nonprismatic: bool = False
-    # Non-prismatic: length (mm) of constant-depth support section centred on
-    # every interior support; varying zones start beyond it (v0.9.5).
-    support_length: float = Field(default=400, ge=0, le=20000)
     dead: list[DeadLoad] = Field(default_factory=lambda: [DeadLoad()], max_length=30)
     self_weight: SelfWeight = Field(default_factory=SelfWeight)
     live: LiveLoad = Field(default_factory=LiveLoad)
     thermal: ThermalLoad = Field(default_factory=ThermalLoad)
     modal: ModalSettings = Field(default_factory=ModalSettings)
     distribution: Distribution = Field(default_factory=Distribution)
+    stress: StressStages = Field(default_factory=StressStages)
     load_mode: Literal["dead", "live", "both", "thermal"] = "both"
     subdivisions: int = Field(default=10, ge=2, le=100)
     precision: Literal["standard", "fine"] = "standard"
@@ -258,6 +283,9 @@ class Model(InputModel):
     def consistency(self):
         if len(self.supports) != len(self.spans) + 1:
             raise ValueError("model.supports")
+        if self.nonprismatic and any(s.kind == "nebt" for s in self.sections):
+            # v0.9.6: precast NEBT girders have a constant tabulated section.
+            raise ValueError("model.nebt_nonprismatic")
         if "spring" in self.supports:
             # One rotational stiffness per support (kN m/rad); only the
             # "spring" entries are used, the others are ignored.
@@ -319,7 +347,6 @@ def default_model() -> Model:
     model = Model(
         nonprismatic=True,
         sections=[Section(), Section(name="S2", depth=1560)],
-        distribution=Distribution(enabled=True, apply=True),
     )
     apply_default_haunches(model)
     return Model.model_validate(model.model_dump())

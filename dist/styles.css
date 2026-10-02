@@ -200,3 +200,16 @@ input[type=number]{appearance:textfield;-moz-appearance:textfield}
 .st-zone-c{fill:#2f5f9e0d}.st-zone-t{fill:#a333290b}.st-zone-label{font-weight:700;letter-spacing:.02em}.st-compression-text{fill:#2f5f9e}.st-tension-text{fill:#a33329}
 .st-ena{stroke:#6a4fa3;stroke-width:1;stroke-dasharray:5 3}.st-ena-label{font-size:9.5px;font-weight:600;fill:#6a4fa3;paint-order:stroke;stroke:#fbfcfd;stroke-width:3px}
 .st-bar-band{stroke-width:1.2;stroke-linejoin:round}.st-bar-band.st-max{fill:#008378aa}.st-bar-band.st-min{fill:#c97a1caa}
+/* v0.9.6: stress values coloured by sign, S1–S5 guides, wider preview */
+.st-val{font-size:11px;font-weight:700;paint-order:stroke;stroke:#fbfcfd;stroke-width:3px}.st-val-mini{font-size:12px}
+.st-v-t{fill:#b3261e}.st-v-c{fill:#1f5fae}.st-v-0{fill:#5d7d8c}
+.st-spoint{stroke:#9fb3be;stroke-width:.8;stroke-dasharray:1.5 3}.st-spoint-dot{fill:#c0392b}.st-spoint-label{font-size:11px;font-weight:700;fill:#c0392b}
+.st-scale-note{font-size:9.5px;fill:#5d7d8c}
+.st-peek{width:340px}.st-peek-hint{font-size:.72rem}
+.axle-enable{margin:0 0 0 auto;font-weight:600}.axle-off{padding:12px 14px;background:#f6f9fb;border:1px dashed #b9cbd5;border-radius:8px;color:#486777;font-size:.85rem}
+.toggle-row.disabled{opacity:.55}
+/* v0.9.6: readout in the diagram colours, values next to the dots, method window */
+.station-readout{font-size:.85rem;gap:22px}.station-readout .ro-val b{color:var(--c,#17374b);font-size:1.08rem;font-weight:750}.station-readout .ro-val{color:var(--c,#5d7d8c)}
+.plot text.cursor-val{font-size:calc(13px / var(--k,1));font-weight:750;paint-order:stroke;stroke:#fff;stroke-width:calc(3.5px / var(--k,1));pointer-events:none}
+.method-open{background:transparent;border:1px solid #4b6373;color:#c5d8e0;font-size:.78rem;padding:6px 11px;border-radius:999px}.method-open:hover:not(:disabled){background:#17384c;color:#fff}
+.method-dialog{width:min(860px,94vw)}.method-dialog-body{padding:6px 22px 18px}.method-dialog-body .method-content{max-height:none}

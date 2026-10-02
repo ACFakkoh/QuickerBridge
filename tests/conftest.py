@@ -21,7 +21,13 @@ if os.environ.get("QB_SCIPY_LITE"):
 # self-weight itself is verified in test_v086.py, which keeps the default.
 @pytest.fixture(autouse=True)
 def _user_loads_only_before_v086(request, monkeypatch):
-    if request.module.__name__.rsplit(".", 1)[-1] in ("test_v086",):
+    # Suites from v0.9.4 on run with the default self-weight (audit 2026-10-01).
+    if request.module.__name__.rsplit(".", 1)[-1] in (
+        "test_v086",
+        "test_v094",
+        "test_v095",
+        "test_v096",
+    ):
         return
     import quickerbridge.loads as loads
     import quickerbridge.modal as modal

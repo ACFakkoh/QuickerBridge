@@ -25,7 +25,7 @@ def dispatch(raw: str) -> str:
             for key in list(_results)[:-3]:
                 del _results[key]
     elif action == "stress":
-        from .engine import stress_at
+        from .engine import stress_all, stress_at
 
         result = _results[data["job"]]
         if result.get("kind") == "thermal":
@@ -47,7 +47,11 @@ def dispatch(raw: str) -> str:
                 section.composite = (
                     None if slab is None else CompositeSlab.model_validate(slab)
                 )
-        value = stress_at(model, result, index, *stages)
+        value = (
+            stress_all(model, result, *stages)
+            if data.get("all")
+            else stress_at(model, result, index, *stages)
+        )
     elif action == "section_properties":
         # Loaded only when the user opens the section properties window.
         from .models import Section

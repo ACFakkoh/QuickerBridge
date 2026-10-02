@@ -477,9 +477,9 @@ def slab_moment(state, n, le, road_class="AB"):
 def slab_shear(state, n, le, voided, spacing, road_class="AB"):
     """DT for shear (λ = 0), Table 5.2 (A, B) or Table A5.3.2 (C, D).
 
-    The SLS2/FLS solid-slab row for n ≥ 2 is printed 3.20 + 0.10 Le in Table
-    5.2 and 3.20 + 0.10 / Le in Table A5.3.2; 3.20 + 0.10 Le is used for both
-    (author's decision, v0.9.3). For voided slabs with web lines closer than
+    The SLS2/FLS solid-slab row for n ≥ 2 follows each printed table (v0.9.6):
+    3.20 + 0.10 Le in Table 5.2 (classes A, B) and 3.20 + 0.10 / Le in Table
+    A5.3.2 (classes C, D). Up to v0.9.5, 3.20 + 0.10 Le was used for both. For voided slabs with web lines closer than
     2.0 m, DT is multiplied by (S / 2.0)^0.25 (5.6.5.1, classes A and B).
     """
     cd = road_class == "CD"
@@ -497,7 +497,7 @@ def slab_shear(state, n, le, voided, spacing, road_class="AB"):
     if n == 1:
         return 2.60 + 0.45 * root, 0.0
     if state == "FLS":
-        return 3.20 + 0.10 * le, 0.0
+        return (3.20 + 0.10 / le if cd else 3.20 + 0.10 * le), 0.0
     return (2.45 + 0.40 * root if cd else 2.35 + 0.35 * root), 0.0
 
 

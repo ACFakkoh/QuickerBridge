@@ -3,7 +3,7 @@
 import numpy as np
 import pycba as cba
 
-from .models import Model, Section, Zone, plate_source
+from .models import Model, Section, plate_source
 
 
 class LinearSectionEI(cba.SectionEI):
@@ -94,37 +94,6 @@ def properties(section: Section) -> dict:
     }
 
 
-def span_zones(model: Model, index: int) -> list[Zone]:
-    """Zones of a span with the constant support section (v0.9.5).
-
-    Over each interior support the depth is held constant over
-    ``model.support_length`` (mm) centred on the support: a varying zone that
-    touches an interior support starts (or ends) with a constant piece of half
-    that length at the support section, then varies over the rest of the zone.
-    The half-length is capped at half of the zone.
-    """
-    span = model.spans[index]
-    zones = list(span.zones)
-    half = model.support_length / 2000 / span.length  # fraction of the span
-    if half <= 0 or not zones:
-        return zones
-    last = len(model.spans) - 1
-    if index > 0 and zones[0].profile != "constant":
-        # The varying zone keeps its end; it now starts at the cut.
-        cut = min(half, zones[0].end / 2)
-        zones.insert(0, Zone(end=cut, section=zones[0].section))
-    if index < last and zones[-1].profile != "constant":
-        z = zones[-1]
-        previous = zones[-2].end if len(zones) > 1 else 0.0
-        cut = min(half, (1 - previous) / 2)
-        support = z.end_section if z.end_section is not None else z.section
-        zones[-1:] = [
-            z.model_copy(update={"end": 1 - cut}),
-            Zone(end=1, section=support),
-        ]
-    return zones
-
-
 def self_weight_pieces(model: Model, pieces_per_taper: int = 6):
     """Nominal girder weight per span as ``(span, a, b, w kN/m, section)``.
 
@@ -140,7 +109,7 @@ def self_weight_pieces(model: Model, pieces_per_taper: int = 6):
             out.append((i, 0.0, length, properties(section)["w"], section))
             continue
         start = 0.0
-        for zone in span_zones(model, i):
+        for zone in span.zones:
             end = zone.end * length
             a = model.sections[zone.section]
             b = model.sections[
@@ -185,7 +154,7 @@ def span_ei(model: Model, index: int):
         return properties(model.sections[span.section])["EI"]
     sec = LinearSectionEI()
     start = 0.0
-    for zone in span_zones(model, index):
+    for zone in span.zones:
         end = zone.end * span.length
         a = model.sections[zone.section]
         b = model.sections[
@@ -310,7 +279,7 @@ def section_at(model: Model, x: float, side: str = "right") -> Section:
     if not model.nonprismatic or not span.zones:
         return model.sections[span.section]
     previous = 0.0
-    for zone in span_zones(model, i):
+    for zone in span.zones:
         if local <= zone.end + 1e-12:
             break
         previous = zone.end

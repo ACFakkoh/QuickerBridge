@@ -46,7 +46,7 @@ function updateProjectState() {
 function safeFilename(name){return (name||'QuickerBridge').normalize('NFKD').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-|-$/g,'').slice(0,70)||'QuickerBridge'}
 function saveProject() {
  if($$('input[data-path][type="number"]').some(el=>!el.validity.valid||el.value==='')){invalidate(t('invalid'));return false}
- const envelope={format:'QuickerBridgeProject',schema_version:6,app_version:QB_META.version,name:projectName||t('untitled'),saved_at:new Date().toISOString(),model:clone(model)};
+ const envelope={format:'QuickerBridgeProject',schema_version:QB_META.schema||9,app_version:QB_META.version,name:projectName||t('untitled'),saved_at:new Date().toISOString(),model:clone(model)};
  // Standard vehicles are fully defined by their name: keep axle lists only for a custom vehicle.
  if(envelope.model.live.vehicle!=='custom'){delete envelope.model.live.weights;delete envelope.model.live.spacings;}
  const url=URL.createObjectURL(new Blob([JSON.stringify(envelope,null,2)],{type:'application/json'}));
@@ -127,7 +127,7 @@ function selfWeightIntervals(){
  model.spans.forEach((span,i)=>{
   const L=span.length;
   if(!model.nonprismatic||!span.zones.length)out.push({span:i,start,end:start+L,w:weight(model.sections[span.section]||model.sections[0])});
-  else{let previous=0;qbZones(i).forEach(z=>{const a=model.sections[z.section]||model.sections[0],b=model.sections[z.end_section??z.section]||a,src=z.plates==='end'?b:z.plates==='deep'&&b.depth>a.depth?b:a;
+  else{let previous=0;span.zones.forEach(z=>{const a=model.sections[z.section]||model.sections[0],b=model.sections[z.end_section??z.section]||a,src=z.plates==='end'?b:z.plates==='deep'&&b.depth>a.depth?b:a;
    if(z.profile==='constant'||a===b)out.push({span:i,start:start+previous*L,end:start+z.end*L,w:weight(a)});
    else for(let k=0;k<6;k++){const u=(k+.5)/6,f=z.profile==='parabolic'?(a.depth>b.depth?1-(1-u)**2:u*u):u;out.push({span:i,start:start+L*(previous+(z.end-previous)*k/6),end:start+L*(previous+(z.end-previous)*(k+1)/6),w:weight({...src,depth:a.depth*(1-f)+b.depth*f})});}
    previous=z.end;});}
@@ -161,12 +161,6 @@ document.addEventListener('toggle',e=>{if(e.target.matches?.('details.input-grou
 // Default non-prismatic layout: parabolic haunches to the deeper section over
 // 20 % of each span next to an interior support only (mirrors models.apply_default_haunches).
 function defaultHaunches(n,deep=1,len=.2){return Array.from({length:n},(_,i)=>{const z=[];if(i>0)z.push({end:len,section:deep,end_section:0,profile:'parabolic',plates:'deep'});if(i<n-1){z.push({end:1-len,section:0,end_section:null,profile:'constant',plates:'start'});z.push({end:1,section:0,end_section:deep,profile:'parabolic',plates:'deep'});}else z.push({end:1,section:0,end_section:null,profile:'constant',plates:'start'});return z;});}
-// Zones as analysed (mirrors sections.span_zones): over each interior support a
-// constant support section of support_length (mm) centred on the support.
-function qbZones(i){const s=model.spans[i],z=s.zones.map(q=>({...q})),half=(model.support_length??400)/2000/s.length;if(!(half>0)||!z.length)return z;
- if(i>0&&z[0].profile!=='constant')z.unshift({end:Math.min(half,z[0].end/2),section:z[0].section,end_section:null,profile:'constant',plates:'start'});
- if(i<model.spans.length-1&&z.at(-1).profile!=='constant'){const q=z.at(-1),prev=z.length>1?z.at(-2).end:0,cut=Math.min(half,(1-prev)/2);q.end=1-cut;z.push({end:1,section:q.end_section??q.section,end_section:null,profile:'constant',plates:'start'});}
- return z;}
 function zoneSignature(spans){return JSON.stringify(spans.map(s=>s.zones.map(z=>[z.end,z.section,z.end_section??z.section,z.profile,z.plates||'start'])));}
 function isDefaultHaunches(n){return zoneSignature(model.spans)===zoneSignature(defaultHaunches(n).map(zones=>({zones})));}
 function renderInputs() {
@@ -181,14 +175,14 @@ function renderInputs() {
   let supports=model.supports.map((s,i)=>`<div class="support-row"><label for="support-${i}">${t('support')} ${i+1}</label><select id="support-${i}" data-path="supports.${i}"><option value="pin" ${s==='pin'?'selected':''}>${t('pin')}</option><option value="roller" ${s==='roller'?'selected':''}>${t('roller')}</option><option value="fixed" ${s==='fixed'?'selected':''}>${t('fixed')}</option><option value="spring" ${s==='spring'?'selected':''}>${t('spring')}</option></select></div>${s==='spring'?`<div class="spring-row"><label class="field"><span>${t('springK')}</span><input type="number" step="any" min="1" max="10000000000000" data-path="support_springs.${i}" value="${+(model.support_springs?.[i]||0).toPrecision(12)}"></label><span class="fixity" id="fixity-${i}">${springFixityText(i)}</span></div>`:''}`).join('');
   supports+=`${model.supports.includes('fixed')?`<p class="note fixed-note">${t('fixedHelp')}</p>`:''}${model.supports.includes('spring')?`<p class="note fixed-note">${t('springHelp')}</p>`:''}`;
   html+=inputGroup('geo-supports',t('supports'),supports,true);
-  html+=inputGroup('geo-precision',t('resolution'),select('resolution','precision',model.precision,[['standard',t('standard')],['fine',t('fine')]]),true,t(model.precision));
+  html+=inputGroup('geo-precision',t('resolution'),select('resolution','precision',model.precision,[['standard',t('standard')],['fine',t('fine')]])+`<p class="help">${t('precisionHelp')}</p>`,true,t(model.precision));
  } else if(inputPanel==="sections") {
-  let cards=`<label class="toggle-row"><input type="checkbox" data-path="nonprismatic" ${model.nonprismatic?'checked':''}>${t('nonprismatic')}</label>`;
-  cards+=model.sections.map((s,i)=>{const common=`${field('E',`sections.${i}.E`,s.E,'',{min:0.1,max:1000})}${field('inertiaModifier',`sections.${i}.inertia_modifier`,s.inertia_modifier??1,'',{min:0.000001,max:1000})}`;return `<section class="section-card"><div class="card-head"><input aria-label="${t('name')}" data-path="sections.${i}.name" value="${esc(s.name)}" maxlength="60"><button data-remove-section="${i}" class="icon-button" title="${t('remove')}" ${model.sections.length===1?'disabled':''}>×</button></div>${select('sectionType',`sections.${i}.kind`,s.kind||'girder',[['girder',t('girder')],['nebt',t('nebt')],['ei',t('directEI')]])}${s.kind==='nebt'?select('nebtType',`sections.${i}.nebt`,s.nebt||'NEBT1400',Object.keys(NEBT_DATA).map(k=>[k,`${k.replace('NEBT','NEBT ')} · h ${NEBT_DATA[k].h} mm`])):''}${sectionSvg(s)}<div class="section-props">${sectionPropsHtml(s)}</div>${s.kind==='girder'?`<button class="text-button sp-open" data-section-props="${i}">${t('spOpen')}${s.composite?.enabled?' · '+t('spMixed1').split(' ')[0]:''}</button>`:''}${s.kind==='ei'?field('directEI',`sections.${i}.EI`,s.EI,'',{min:0.000001,max:1e15}):s.kind==='nebt'?`${common}<p class="help">${t('nebtHelp')}</p>`:`${common}<div class="field-row dimensions">${['depth','web_thickness','top_width','top_thickness','bottom_width','bottom_thickness'].map(key=>field(key,`sections.${i}.${key}`,s[key],'',{min:.1,max:20000})).join('')}</div>`}</section>`}).join('');
+  const hasNebt=model.sections.some(s=>s.kind==='nebt');
+  let cards=`<label class="toggle-row${hasNebt?' disabled':''}" title="${hasNebt?t('nebtNoTaper'):''}"><input type="checkbox" data-path="nonprismatic" ${model.nonprismatic?'checked':''} ${hasNebt?'disabled':''}>${t('nonprismatic')}</label>${hasNebt?`<p class="help">${t('nebtNoTaper')}</p>`:''}`;
+  cards+=model.sections.map((s,i)=>{const common=`${field('E',`sections.${i}.E`,s.E,'',{min:0.1,max:1000})}${field('inertiaModifier',`sections.${i}.inertia_modifier`,s.inertia_modifier??1,'',{min:0.000001,max:1000})}`;return `<section class="section-card"><div class="card-head"><input aria-label="${t('name')}" data-path="sections.${i}.name" value="${esc(s.name)}" maxlength="60"><button data-remove-section="${i}" class="icon-button" title="${t('remove')}" ${model.sections.length===1?'disabled':''}>×</button></div>${select('sectionType',`sections.${i}.kind`,s.kind||'girder',[['girder',t('girder')],['nebt',t('nebt')],['ei',t('directEI')]])}${s.kind==='nebt'?select('nebtType',`sections.${i}.nebt`,s.nebt||'NEBT1400',Object.keys(NEBT_DATA).map(k=>[k,`${k.replace('NEBT','NEBT ')} · h ${NEBT_DATA[k].h} mm`])):''}${sectionSvg(s)}<div class="section-props">${sectionPropsHtml(s)}</div>${['girder','nebt'].includes(s.kind)?`<button class="text-button sp-open" data-section-props="${i}">${t('spOpen')}${s.composite?.enabled?' · '+t('spMixed1').split(' ')[0]:''}</button>`:''}${s.kind==='ei'?field('directEI',`sections.${i}.EI`,s.EI,'',{min:0.000001,max:1e15}):s.kind==='nebt'?`${common}<p class="help">${t('nebtHelp')}</p>`:`${common}<div class="field-row dimensions">${['depth','web_thickness','top_width','top_thickness','bottom_width','bottom_thickness'].map(key=>field(key,`sections.${i}.${key}`,s[key],'',{min:.1,max:20000})).join('')}</div>`}</section>`}).join('');
   cards+=`<button class="add-button" id="add-section">${t('addSection')}</button>`;
   html+=inputGroup('sec-model',t('sectionMode'),cards,true,`${model.sections.length} · ${model.nonprismatic?t('variableShort'):t('prismaticShort')}`);
   let spans=model.spans.map((s,i)=>`<section class="section-card"><b>${t('span')} ${i+1} · ${fmt(s.length)} m</b>${model.nonprismatic?`<div>${s.zones.map((z,j)=>`<div class="zone"><div class="zone-heading">${t('zone')} ${j+1}<button class="icon-button" data-remove-zone="${i},${j}" ${s.zones.length===1?'disabled':''} title="${t('remove')}">×</button></div>${field('zoneEnd',`spans.${i}.zones.${j}.end`,z.end,'',{scale:.01,min:.1,max:100})}${select('profile',`spans.${i}.zones.${j}.profile`,z.profile,['ei','nebt'].includes(model.sections[z.section].kind)?[['constant',t('constant')]]:[['constant',t('constant')],['linear',t('linear')],['parabolic',t('parabolic')]])}${select('startSection',`spans.${i}.zones.${j}.section`,z.section,sectionOptions())}${z.profile!=='constant'?select('endSection',`spans.${i}.zones.${j}.end_section`,z.end_section??z.section,sectionOptions())+select('platesFrom',`spans.${i}.zones.${j}.plates`,z.plates||'start',[['start',t('platesStart')],['end',t('platesEnd')],['deep',t('platesDeep')]]):''}</div>`).join('')}</div><button class="add-button" data-add-zone="${i}" ${s.zones.length>=12?'disabled':''}>${t('addZone')}</button>`:select('section',`spans.${i}.section`,s.section,sectionOptions())}</section>`).join('');
-  if(model.nonprismatic)spans=`<div class="field-row">${field('supportLength','support_length',model.support_length??400,'',{min:0,max:20000})}</div><p class="help">${t('supportLengthHelp')}</p>`+spans;
   if(model.nonprismatic)spans+=`<p class="help">${t('zoneHelp')}</p><p class="note">${t('platesHelp')}</p>`;
   html+=inputGroup('sec-spans',t('spanSection'),spans,true);
  } else if(model.load_mode==='thermal') {
@@ -276,7 +270,7 @@ function onInput(event) {
  const previousKind=path.endsWith('.kind')?model.sections[Number(path.split('.')[1])].kind:null;
  setValue(path,value);
  // Concrete NEBT and steel girders each start from their usual modulus.
- if(previousKind&&previousKind!==value){const s=model.sections[Number(path.split('.')[1])];if(value==='nebt'&&s.E===200)s.E=28;else if(value==='girder'&&[28,30].includes(s.E))s.E=200;if(value==='nebt'&&!s.nebt)s.nebt='NEBT1400';}
+ if(previousKind&&previousKind!==value){const s=model.sections[Number(path.split('.')[1])];if(value==='nebt'&&model.nonprismatic){model.nonprismatic=false;model.spans.forEach(sp=>sp.zones=[]);$('#status').textContent=t('nebtNoTaper');}if(value==='nebt'&&s.E===200)s.E=28;else if(value==='girder'&&[28,30].includes(s.E))s.E=200;if(value==='nebt'&&!s.nebt)s.nebt='NEBT1400';}
  if(path.startsWith('self_weight.')&&el.type==='number'){const box=$('.self-weight-card .case-breakdown');if(box)box.innerHTML=selfWeightBreakdown();}
  if(path.startsWith('supports.')){if(model.supports.includes('spring')){const k=model.support_springs||[];model.support_springs=model.supports.map((s,i)=>s==='spring'?(k[i]>0?k[i]:defaultSpring(i)):0);}else model.support_springs=[];}
  if(path==='live.vehicle'&&value==='custom'&&!['custom','Cooper'].includes(previousVehicle)&&previousPattern){model.live.weights=previousPattern.weights.slice(0,7);model.live.spacings=previousPattern.spaces.slice(0,model.live.weights.length-1);}
@@ -361,7 +355,7 @@ function renderBeam() {
  let svg=`<defs><marker id="arrow" markerWidth="6" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0 0L5 3L0 6Z" fill="#ecb46a"/></marker><marker id="dl-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0 0L5 2.5L0 5Z" fill="#7aabb9"/></marker><linearGradient id="thermal-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${hot}"/><stop offset=".52" stop-color="#f2d6b1"/><stop offset="1" stop-color="${cold}"/></linearGradient></defs>`;
  model.spans.forEach((s,i)=>{
   const outline=[];let previous=0;
-  const zones=model.nonprismatic&&s.zones.length?qbZones(i):[{end:1,section:s.section,end_section:s.section,profile:'constant'}];
+  const zones=model.nonprismatic&&s.zones.length?s.zones:[{end:1,section:s.section,end_section:s.section,profile:'constant'}];
   zones.forEach(z=>{const a=model.sections[z.section]||model.sections[0],b=model.sections[z.end_section??z.section]||a;
    for(let j=0;j<=16;j++){const f=j/16,shape=z.profile==='constant'?0:z.profile==='parabolic'?(a.depth>b.depth?1-(1-f)**2:f*f):f;outline.push([xp(starts[i]+s.length*(previous+(z.end-previous)*f)),65+(beamDepth(a)*(1-shape)+beamDepth(b)*shape)*depthScale])}previous=z.end;
   });
@@ -439,7 +433,7 @@ function renderResults() {
  $('.reaction-title').textContent=t('supportReactions')+' · '+t(thermal?'thermalCase':snap&&display==='snapshot'?'snapshot':'envelope');
  $('#excel').title=excelAvailable?t(thermal?'thermalCase':'envelope'):t('excelUnavailable');$('#excel').classList.toggle('excel-off',!excelAvailable);
  $('#reactions').title=thermal?t('thermalCase'):t('reactionHelp');
- $('#precision-note').textContent=thermal?`PyCBA ${result.meta.pycba} · ${t('curvature')} κ = ${Number(result.meta.curvature).toExponential(3)} 1/m`:`PyCBA ${result.meta.pycba} · Δx ${fmt(result.meta.travel_step,2)} m · ${fmt(result.meta.positions,0)} ${t('positions')} · ${result.meta.groups} ${t('groups')}`;
+ const precisionNote=thermal?`PyCBA ${result.meta.pycba} · ${t('curvature')} κ = ${Number(result.meta.curvature).toExponential(3)} 1/m`:`PyCBA ${result.meta.pycba} · Δx ${fmt(result.meta.travel_step,2)} m · ${fmt(result.meta.positions,0)} ${t('positions')} · ${result.meta.groups} ${t('groups')}`;
  renderCharts();renderTable();renderMethod();if(typeof renderComparison==='function')renderComparison();showView(view);
  $('#display-controls').classList.toggle('hidden',thermal);$$('[data-display]').forEach(b=>b.classList.toggle('active',b.dataset.display===display));$('#position-controls').classList.toggle('hidden',thermal||display!=='snapshot');$('#play').textContent=t(playTimer?'stop':'play');
  if(!thermal)syncPositionControls(snap?.record.position);
@@ -671,11 +665,17 @@ function chartHover(e) {
   const lo=graph?graph[key][i]:thermal?result.values[key][i]:result.min[key][i],hi=graph?graph[key][i]:thermal?result.values[key][i]:result.max[key][i],Y=v=>G.mid+Number(svg.dataset.sign)*v/Number(svg.dataset.amp)*G.half;
   const line=svg.querySelector('.cursor');line.setAttribute('x1',sx);line.setAttribute('x2',sx);line.setAttribute('visibility','visible');
   [['.cursor-high',hi],['.cursor-low',lo]].forEach(([cl,v])=>{const circle=svg.querySelector(cl);if(circle){circle.setAttribute('cx',sx);circle.setAttribute('cy',Y(v));circle.setAttribute('visibility','visible')}});
+  // v0.9.6: values follow the dots, in the colour of the diagram.
+  const color=svg.closest('.chart-row')?.querySelector('.chart-label')?.style.color||'#17374b';
+  [['hi',hi,-1],['lo',lo,1]].forEach(([k,v,dir])=>{let tx=svg.querySelector('.cursor-val-'+k);if(!tx){tx=document.createElementNS('http://www.w3.org/2000/svg','text');tx.setAttribute('class','cursor-val cursor-val-'+k);svg.appendChild(tx);}
+   const same=k==='lo'&&Math.abs(hi-lo)<1e-9;tx.setAttribute('visibility',same?'hidden':'visible');if(same)return;
+   const right=sx>700;tx.setAttribute('x',sx+(right?-G.u(7):G.u(7)));tx.setAttribute('y',Y(v)+(dir<0?-G.u(7):G.u(15)));tx.setAttribute('text-anchor',right?'end':'start');tx.style.fill=color;tx.textContent=fmt(v,key==='D'?2:1);});
  });
  const side=(graph?.sides||result.sides)[i],ei=eiValue(x,side),eiSvg=$('.stiffness-plot');if(eiSvg&&ei!==null){const line=eiSvg.querySelector('.cursor'),dot=eiSvg.querySelector('.cursor-ei'),G=plotGeom();line.setAttribute('x1',sx);line.setAttribute('x2',sx);line.setAttribute('visibility','visible');dot.setAttribute('cx',sx);dot.setAttribute('cy',G.bot-ei/(Number(eiSvg.dataset.max)*1.08)*(G.bot-G.top));dot.setAttribute('visibility','visible');}
  $('#station-readout').innerHTML=`<span>x <b>${fmt(x)} m</b> · ${t((graph?.sides||result.sides)[i])}</span>${result.kind!=='thermal'&&typeof openStress==='function'?`<button class="text-button st-open" data-stress-index="${graph?nearest(x):i}" title="${t('stHint')}">${t('stOpen')}</button>`:''}`+['V','M','D'].map(k=>{const unit=k==='M'?'kN·m':k==='V'?'kN':'mm',name=k==='D'?'δ':k;
   if(deltaActive())return `<span>Δ${name} <b>${fmt(result.max[k][i]-result.min[k][i])}</b> ${unit} <small>(${fmt(result.min[k][i])} / ${fmt(result.max[k][i])})</small></span>`;
-  return `<span>${name} <b>${graph?fmt(graph[k][i]):result.kind==='thermal'?fmt(result.values[k][i]):fmt(result.min[k][i])+' / '+fmt(result.max[k][i])}</b> ${unit}</span>`;}).join('')+(ei===null?'':`<span>EI <b>${fmt(ei/1e6,3)}</b> ×10⁶ kN·m²</span>`);
+  const col=$(`#charts svg.plot[data-effect="${k}"]`)?.closest('.chart-row')?.querySelector('.chart-label')?.style.color||'';
+  return `<span class="ro-val" style="--c:${col}">${name} <b>${graph?fmt(graph[k][i]):result.kind==='thermal'?fmt(result.values[k][i]):fmt(result.min[k][i])+' / '+fmt(result.max[k][i])}</b> ${unit}</span>`;}).join('')+(ei===null?'':`<span>EI <b>${fmt(ei/1e6,3)}</b> ×10⁶ kN·m²</span>`);
  if(typeof stPeek==='function')stPeek(graph?nearest(x):i,e);
 }
 function chartClick(e) {
@@ -704,7 +704,7 @@ function renderTable() {
 function renderMethod() {
  const thermal=result?.kind==='thermal',sections=thermal?[['methodTitle','methodBody'],['thermalNotes','thermalBody'],['sectionNotes','sectionBody'],['unitsTitle','unitsBody']]:[['methodTitle','methodBody'],['sectionNotes','sectionBody'],['selfWeightNotes','selfWeightBody'],['loadNotes','loadBodyCurrent'],['methodScope','scopeBodyCurrent'],['precisionTitle','precisionBody'],['unitsTitle','unitsBody']];
  const source=model?.live?.vehicle==='CL750QC'?`CAN/CSA S6-25 · 3.8.4.5.3<br>MTQ · Info-structures A2023-05 · 2023-02-17<br>`:model?.live?.vehicle==='CL625'?`CAN/CSA S6-25 · 3.8.4.5.3<br>`:model?.live?.vehicle==='HL93Truck'||model?.live?.vehicle==='HL93Tandem'?`AASHTO LRFD HL-93 · PyCBA VehicleLibrary.US<br>`:model?.live?.vehicle==='Cooper'?`AREA / AREMA Cooper E · PyCBA VehicleLibrary.US<br>`:'';
- $('#method-view').innerHTML=`<div class="method-content">${sections.map(([h,p])=>`<h3>${t(h)}</h3><p>${t(p)}</p>`).join('')}<h3>${t('sourceTitle')}</h3><p>${thermal?'':source}<a href="https://ccaprani.github.io/pycba/" target="_blank" rel="noreferrer">PyCBA · ${result?result.meta.pycba:'1.0.1'}</a></p></div>`;
+ $('#method-view').innerHTML=`<div class="method-content">${sections.map(([h,p])=>`<h3>${t(h)}</h3><p>${t(p)}</p>`).join('')}<h3>${t('sourceTitle')}</h3><p>${thermal?'':source}<a href="https://ccaprani.github.io/pycba/" target="_blank" rel="noreferrer">PyCBA · ${result?result.meta.pycba:'1.0.1'}</a></p>${result?`<h3>${t('runTitle')}</h3><p>${esc(result.kind==='thermal'?`κ = ${Number(result.meta.curvature).toExponential(3)} 1/m`:`Δx ${fmt(result.meta.travel_step,2)} m · ${fmt(result.meta.positions,0)} ${t('positions')} · ${result.meta.groups} ${t('groups')}`)} · ${t('signsShort')}</p>`:''}</div>`;
 }
 function restoreEnvelope() {stopAnimation();snapRevision++;snap=null;display='envelope';renderResults();renderBeam();}
 document.addEventListener('keydown',e=>{if(e.target.type==='number'&&['ArrowUp','ArrowDown'].includes(e.key))e.preventDefault()});
@@ -789,5 +789,13 @@ $('#replace-dialog').addEventListener('close',()=>{const choice=$('#replace-dial
 // All modules must be initialized before the first render in the combined HTML.
 document.addEventListener('DOMContentLoaded',init,{once:true});
 
-Object.assign(words.fr,{supportLength:'Section d’appui à hauteur constante (mm)',supportLengthHelp:'Longueur centrée sur chaque appui intermédiaire où la hauteur reste celle de la section d’appui; les goussets commencent au-delà (200 mm de part et d’autre par défaut). 0 : goussets jusqu’à l’appui.'});
-Object.assign(words.en,{supportLength:'Constant-depth support section (mm)',supportLengthHelp:'Length centred on every interior support over which the depth stays that of the support section; haunches start beyond it (200 mm each side by default). 0: haunches up to the support.'});
+Object.assign(words.fr,{nebtNoTaper:'Poutres NEBT : section préfabriquée constante, le mode non prismatique n’est pas disponible.','model.nebt_nonprismatic':'Poutres NEBT : le pont ne peut pas être non prismatique.','composite.bars':'Armatures hors du béton ou qui se chevauchent : vérifiez épaisseur de dalle, recouvrements, barres et espacements.'});
+Object.assign(words.en,{nebtNoTaper:'NEBT girders: constant precast section, the non-prismatic mode is not available.','model.nebt_nonprismatic':'NEBT girders: the bridge cannot be non-prismatic.','composite.bars':'Bars outside the concrete or overlapping: check slab thickness, covers, bars and spacings.'});
+// v0.9.6: method and assumptions in a window opened from the header.
+document.addEventListener('click',e=>{
+ if(e.target.closest('#method-open')){renderMethod();const d=$('#method-dialog');if(d&&!d.open)d.showModal();return;}
+ if(e.target.closest('[data-method-close]')||e.target.id==='method-dialog')$('#method-dialog')?.close();
+});
+Object.assign(words.fr,{methodOpen:'Méthode et hypothèses',methodSub:'Comment QuickerBridge calcule',runTitle:'Ce calcul',signsShort:'M positif en travée · flèche positive vers le bas',precisionHelp:'Standard : passage du camion tous les 0,25 m, 48 échantillons d’influence par travée, intégration des flèches sur 480 points, profils EI sur 33 points par zone variable. Fin : 0,10 m, 96, 960 et 65 points, environ 1,5 à 3 fois plus long. Les écarts sont faibles (modèle par défaut : moins de 0,01 % sur M, V, flèche et réactions); le mode fin est utile pour les travées courtes, les essieux rapprochés, les goussets marqués et pour confirmer une valeur proche d’une limite.'});
+Object.assign(words.en,{methodOpen:'Method and assumptions',methodSub:'How QuickerBridge calculates',runTitle:'This calculation',signsShort:'Sagging M positive · deflection downward positive',precisionHelp:'Standard: truck moved every 0.25 m, 48 influence samples per span, deflections integrated on 480 points, EI profiles on 33 points per tapered zone. Fine: 0.10 m, 96, 960 and 65 points, about 1.5 to 3 times slower. Differences are small (default model: below 0.01% on M, V, deflection and reactions); fine is useful for short spans, closely spaced axles, deep haunches and to confirm a value near a limit.'});
+

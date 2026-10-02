@@ -10,7 +10,7 @@ from .version import APP_VERSION
 
 
 FORMAT = "QuickerBridgeProject"
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 MAX_PROJECT_BYTES = 1024 * 1024
 
 
@@ -55,10 +55,10 @@ def validate_project(text: str) -> dict:
         distribution = raw["model"].get("distribution")
         if isinstance(distribution, dict):
             distribution.pop("effect", None)
-    if version < 8 and isinstance(raw.get("model"), dict):
-        # Before v0.9.5 tapers ran right up to the interior supports; older
-        # projects keep that geometry (no constant support section).
-        raw["model"].setdefault("support_length", 0)
+    if isinstance(raw.get("model"), dict):
+        # v0.9.5 briefly had a constant support section (support_length); it
+        # overrode the non-prismatic zones and was removed in v0.9.6.
+        raw["model"].pop("support_length", None)
     if version < 5 and isinstance(raw.get("model"), dict):
         # Before v0.8.6 the girder self-weight was never added automatically;
         # older projects keep the results they were saved with.
@@ -92,7 +92,7 @@ def validate_project(text: str) -> dict:
                     ):
                         raise ValueError("project.legacy_taper")
         raw["schema_version"] = SCHEMA_VERSION
-    elif version in (2, 3, 4, 5, 6, 7):
+    elif version in (2, 3, 4, 5, 6, 7, 8):
         # v0.4 files: zones without ``plates`` keep the start-section
         # convention, which is the default. Pin/roller supports are unchanged.
         raw["schema_version"] = SCHEMA_VERSION

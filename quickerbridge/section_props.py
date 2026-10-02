@@ -170,28 +170,90 @@ def bars(c: CompositeSlab):
     return out
 
 
+# --- Girder of the composite section: steel I or precast NEBT (v0.9.6) -------
+
+ES_BARS = 200_000.0  # MPa, reinforcing bars
+NEBT_TOP_WIDTH = 1200.0  # mm, NEBT top flange (MTQ)
+
+
+def girder_base(s: Section) -> dict:
+    """Parts (area, centroid, own I) of the girder alone, depth, top width and
+    modulus Eg (MPa). Steel: three plates; NEBT: tabulated A, I, yb, h."""
+    if s.kind == "nebt":
+        from .sections import NEBT
+
+        data = NEBT[s.nebt]
+        return {
+            "kind": "nebt",
+            "parts": [(float(data["A"]), float(data["yb"]), data["I"] * 1e6)],
+            "depth": float(data["h"]),
+            "top_width": NEBT_TOP_WIDTH,
+            "Eg": s.E * 1000.0,
+        }
+    return {
+        "kind": "girder",
+        "parts": [(b * t, y, b * t**3 / 12) for b, t, y in _plates(s)],
+        "depth": s.depth,
+        "top_width": s.top_width,
+        "Eg": s.E * 1000.0,
+    }
+
+
+def nebt_properties(s: Section, y3: float | None = None) -> dict:
+    """NEBT girder alone (tabulated): A, ȳ, I and S at S2 (top), S5 (bottom)."""
+    g = girder_base(s)
+    area, ybar, ix = g["parts"][0]
+    d = g["depth"]
+    points = {"S2": d, "S5": 0.0}
+    if y3 is not None:
+        points["S3"] = ybar - y3
+    return {
+        "kind": "nebt",
+        "A": area,
+        "y_bottom": ybar,
+        "y_top": d - ybar,
+        "Ix": ix,
+        "S": {k: ix / abs(y - ybar) for k, y in points.items() if abs(y - ybar) > 1e-9},
+        "S_top": ix / (d - ybar),
+        "S_bot": ix / ybar,
+        "depth": d,
+    }
+
+
+def girder_properties(s: Section, fy: float, y3: float | None) -> dict:
+    return nebt_properties(s, y3) if s.kind == "nebt" else steel_properties(s, fy, y3)
+
+
 def composite_properties(s: Section, c: CompositeSlab) -> dict:
-    es = s.E * 1000.0  # GPa -> MPa
+    """Girder + slab, 3n and 1n. n = Eg / Ec (slab transformed by 1/n, or
+    1/3n); bars transformed by m = Es / Eg (m = 1 for a steel girder)."""
+    g = girder_base(s)
+    eg = g["Eg"]
     ec = concrete_modulus(c.fc, c.unit_weight * 1000 / 9.81)
-    n = es / ec
-    gc, gs = ec / (2 * (1 + NU_CONCRETE)), es / (2 * (1 + NU_STEEL))
-    steel = steel_properties(s, c.fy, c.y_of("steel"))
-    d = s.depth
+    n = eg / ec
+    m = ES_BARS / eg
+    steel_girder = g["kind"] == "girder"
+    gc, gs = ec / (2 * (1 + NU_CONCRETE)), eg / (2 * (1 + NU_STEEL))
+    girder = girder_properties(s, c.fy, c.y_of("steel"))
+    d = g["depth"]
     base = d + c.haunch  # slab bottom
     height = base + c.slab_thickness
     reinf = bars(c)
-    gross = c.effective_width * c.slab_thickness
-    net = gross - sum(b["area"] for b in reinf)
-    steel_parts = [(b * t, y, b * t**3 / 12) for b, t, y in _plates(s)]
+    net = c.effective_width * c.slab_thickness - sum(b["area"] for b in reinf)
+    rebar = [(b["area"] * m, base + b["y_in_slab"], 0.0) for b in reinf]
     out = {
+        "kind": g["kind"],
         "n": n,
+        "m": m,
         "Ec": ec,
+        "Eg": eg,
         "Gc": gc,
         "Gs": gs,
         "concrete_area": net,
         "bars": reinf,
         "height": height,
-        "steel": steel,
+        "depth": d,
+        "steel": girder,
     }
     for label, ratio in (("1n", n), ("3n", 3 * n)):
         slab = (
@@ -199,17 +261,16 @@ def composite_properties(s: Section, c: CompositeSlab) -> dict:
             base + c.slab_thickness / 2,
             net / ratio * c.slab_thickness**2 / 12,
         )
-        rebar = [(b["area"], base + b["y_in_slab"], 0.0) for b in reinf]
-        area, ybar, inertia = _combine(steel_parts + [slab] + rebar)
+        area, ybar, inertia = _combine(g["parts"] + [slab] + rebar)
         # S3: y below this section's own elastic neutral axis.
-        top_bar = base + reinf[0]["y_in_slab"]
         points = {
-            "S1": top_bar,
+            "S1": base + reinf[0]["y_in_slab"],
             "S2": d,
             "S3": ybar - c.y_of(label),
-            "S4": s.bottom_thickness,
-            "S5": 0.0,
         }
+        if steel_girder:
+            points["S4"] = s.bottom_thickness
+        points["S5"] = 0.0
         out[label] = {
             "A": area,
             "y_bottom": ybar,
@@ -222,66 +283,74 @@ def composite_properties(s: Section, c: CompositeSlab) -> dict:
             },
             "points": points,
         }
-    out["1n"]["J"] = (
-        steel["J"] + c.effective_width * c.slab_thickness**3 / 6 * gc / gs
-    )
-    fq = c.frqr
-    for label in ("1n", "3n"):
-        comp = out[label]
-        out[label + "e"] = {
-            "I": steel["Ix"] + fq * (comp["I"] - steel["Ix"]),
-            "S_top": steel["S_top"] + fq * (comp["S"]["S2"] - steel["S_top"]),
-            "S_bot": steel["S_bot"] + fq * (comp["S"]["S5"] - steel["S_bot"]),
-        }
-    out["negative"] = negative_properties(s, c, steel)
+    if steel_girder:
+        out["1n"]["J"] = (
+            girder["J"] + c.effective_width * c.slab_thickness**3 / 6 * gc / gs
+        )
+        fq = c.frqr
+        for label in ("1n", "3n"):
+            comp = out[label]
+            out[label + "e"] = {
+                "I": girder["Ix"] + fq * (comp["I"] - girder["Ix"]),
+                "S_top": girder["S_top"] + fq * (comp["S"]["S2"] - girder["S_top"]),
+                "S_bot": girder["S_bot"] + fq * (comp["S"]["S5"] - girder["S_bot"]),
+            }
+    out["negative"] = negative_properties(s, c, girder)
     return out
 
 
-def negative_properties(s: Section, c: CompositeSlab, steel: dict) -> dict:
-    """Negative-moment region I': steel girder + both bar layers, no concrete.
+def negative_properties(s: Section, c: CompositeSlab, girder: dict) -> dict:
+    """Negative-moment region I': girder + both bar layers, no concrete.
 
-    The bars are in tension and count as steel (full area); the cracked slab
-    and the haunch are ignored. Web in compression from the bottom flange:
-    dc = ȳ' − tb for the 2dc/w check (10.10.2.1).
+    The bars are in tension (transformed by m = Es/Eg, 1 for steel); the
+    cracked slab and the haunch are ignored. Steel girder: web compressed from
+    the bottom flange, dc = ȳ' − tb for the 2dc/w check (10.10.2.1).
     """
-    base = s.depth + c.haunch
+    g = girder_base(s)
+    m = ES_BARS / g["Eg"]
+    base = g["depth"] + c.haunch
     reinf = bars(c)
-    parts = [(b * t, y, b * t**3 / 12) for b, t, y in _plates(s)]
-    parts += [(b["area"], base + b["y_in_slab"], 0.0) for b in reinf]
+    parts = g["parts"] + [(b["area"] * m, base + b["y_in_slab"], 0.0) for b in reinf]
     area, ybar, inertia = _combine(parts)
     points = {
         "S1": base + reinf[0]["y_in_slab"],
-        "S2": s.depth,
+        "S2": g["depth"],
         "S3": ybar - c.y_of("neg"),
-        "S4": s.bottom_thickness,
-        "S5": 0.0,
     }
-    dc = ybar - s.bottom_thickness
-    root = math.sqrt(c.fy)
-    return {
+    if g["kind"] == "girder":
+        points["S4"] = s.bottom_thickness
+    points["S5"] = 0.0
+    out = {
         "A": area,
         "y_bottom": ybar,
         "y_top_bars": points["S1"] - ybar,
         "I": inertia,
         "S": {
-            k: inertia / abs(y - ybar) for k, y in points.items() if abs(y - ybar) > 1e-9
+            k: inertia / abs(y - ybar)
+            for k, y in points.items()
+            if abs(y - ybar) > 1e-9
         },
         "points": points,
         "bars_area": sum(b["area"] for b in reinf),
-        "ratio": inertia / steel["Ix"],
-        "web_2dc": (2 * dc / s.web_thickness, 2 * dc / s.web_thickness > 1900 / root),
+        "ratio": inertia / girder["Ix"],
     }
+    if g["kind"] == "girder":
+        dc = ybar - s.bottom_thickness
+        root = math.sqrt(c.fy)
+        out["web_2dc"] = (
+            2 * dc / s.web_thickness,
+            2 * dc / s.web_thickness > 1900 / root,
+        )
+    return out
 
 
 def section_properties(section: Section) -> dict:
-    """Worker entry: steel alone, plus composite results when a slab is set.
-
-    ``region`` echoes the region chosen for display (positive / negative);
-    with a slab, both the positive (3n, 1n) and negative (I') results are given.
-    """
+    """Worker entry: girder alone (steel I or NEBT), plus composite results
+    when a slab is set. ``region`` echoes the region chosen for display."""
     composite = section.composite or CompositeSlab()
     result = {
-        "steel": steel_properties(section, composite.fy, composite.y_of("steel")),
+        "kind": section.kind,
+        "steel": girder_properties(section, composite.fy, composite.y_of("steel")),
         "region": composite.region,
     }
     if section.composite is not None and section.composite.enabled:
@@ -289,21 +358,22 @@ def section_properties(section: Section) -> dict:
     return result
 
 
-# --- Stresses over the depth (v0.9.4) ----------------------------------------
+# --- Stresses over the depth (v0.9.4, NEBT v0.9.6) ----------------------------
 #
 # Staged elastic stresses: each moment acts on the section of its stage and
 # the stresses add. σ = −M (y − ȳ) / I (sagging M > 0 compresses the top),
-# concrete σ = steel-equivalent σ / ratio (n or 3n). A composite stage under a
-# negative moment uses the cracked section (steel and bars, concrete ignored).
+# in girder-material units: slab concrete σ / ratio (n or 3n), bars σ × m. A
+# composite stage under a negative moment uses the cracked section (girder and
+# bars, concrete ignored).
 
 STAGES = ("steel", "3n", "1n")
 
 
 def stage_section(section: Section, stage: str, moment: float, comp: dict | None):
     """I, ȳ, concrete ratio (None: concrete not acting) and bars acting."""
-    steel_parts = [(b * t, y, b * t**3 / 12) for b, t, y in _plates(section)]
+    g = girder_base(section)
     if stage == "steel" or comp is None:
-        area, ybar, inertia = _combine(steel_parts)
+        _, ybar, inertia = _combine(g["parts"])
         return {
             "I": inertia,
             "ybar": ybar,
@@ -312,10 +382,12 @@ def stage_section(section: Section, stage: str, moment: float, comp: dict | None
             "cracked": False,
         }
     c = section.composite
-    base = section.depth + c.haunch
+    base = g["depth"] + c.haunch
     if moment < 0:
-        bars_parts = [(b["area"], base + b["y_in_slab"], 0.0) for b in comp["bars"]]
-        area, ybar, inertia = _combine(steel_parts + bars_parts)
+        parts = g["parts"] + [
+            (b["area"] * comp["m"], base + b["y_in_slab"], 0.0) for b in comp["bars"]
+        ]
+        _, ybar, inertia = _combine(parts)
         return {
             "I": inertia,
             "ybar": ybar,
@@ -334,52 +406,50 @@ def stage_section(section: Section, stage: str, moment: float, comp: dict | None
     }
 
 
-def stress_profile(section: Section, moments: dict) -> dict:
-    """Staged stresses (MPa) for moments in kN·m per stage: steel, 3n, 1n.
-
-    Returns the stresses at the usual fibres and a profile over the depth,
-    with the contribution of each stage.
-    """
-    comp = (
-        composite_properties(section, section.composite)
-        if section.composite is not None and section.composite.enabled
-        else None
-    )
-    d, tb = section.depth, section.bottom_thickness
-    fibres = [("S5", 0.0, "steel"), ("S4", tb, "steel"), ("S2", d, "steel")]
+def stress_fibres(section: Section, comp: dict | None):
+    """Fibres (name, y from the bottom, material), bottom to top."""
+    g = girder_base(section)
+    d = g["depth"]
+    fibres = [("S5", 0.0, "steel"), ("S2", d, "steel")]
+    if g["kind"] == "girder":
+        fibres.append(("S4", section.bottom_thickness, "steel"))
     if comp is None and section.composite is not None:
-        # v0.9.5: steel alone, S3 at y_steel below the steel neutral axis.
-        _, ybar, _ = _combine(
-            [(b * t, y, b * t**3 / 12) for b, t, y in _plates(section)]
-        )
+        # Girder alone: S3 at y_steel below its neutral axis.
+        _, ybar, _ = _combine(g["parts"])
         y3 = ybar - section.composite.y_of("steel")
         if 0 <= y3 <= d:
             fibres.append(("S3", y3, "steel"))
     if comp is not None:
         c = section.composite
         base = d + c.haunch
-        fibres = (
-            [
-                ("S5", 0.0, "steel"),
-                ("S4", tb, "steel"),
-                ("S2", d, "steel"),
-            ]
-            # S3 placed at y below the composite 1n elastic neutral axis.
-            + [
-                ("S3", comp["1n"]["points"]["S3"], "steel")
-                for _ in [0]
-                if 0 <= comp["1n"]["points"]["S3"] <= d
-            ]
-            + [
-                (f"bar_{b['layer']}", base + b["y_in_slab"], "bar")
-                for b in reversed(comp["bars"])
-            ]
-            + [
-                ("slab_bottom", base, "concrete"),
-                ("slab_top", base + c.slab_thickness, "concrete"),
-            ]
+        y3 = comp["1n"]["points"]["S3"]  # y below the composite 1n axis
+        if 0 <= y3 <= d:
+            fibres.append(("S3", y3, "steel"))
+        fibres += [
+            (f"bar_{b['layer']}", base + b["y_in_slab"], "bar") for b in comp["bars"]
+        ]
+        fibres += [
+            ("slab_bottom", base, "concrete"),
+            ("slab_top", base + c.slab_thickness, "concrete"),
+        ]
+    fibres.sort(key=lambda f: f[1])
+    return fibres
+
+
+def stress_profile(section: Section, moments: dict, comp="auto") -> dict:
+    """Staged stresses (MPa) for moments in kN·m per stage: steel, 3n, 1n.
+
+    Returns the stresses at the usual fibres and the contribution of each
+    stage. ``comp`` may pass precomputed composite properties.
+    """
+    if comp == "auto":
+        comp = (
+            composite_properties(section, section.composite)
+            if section.composite is not None and section.composite.enabled
+            else None
         )
-    fibres.sort(key=lambda f: f[1])  # bottom to top
+    g = girder_base(section)
+    fibres = stress_fibres(section, comp)
     stages = {}
     for stage in STAGES:
         m = float(moments.get(stage, 0.0))
@@ -389,8 +459,8 @@ def stress_profile(section: Section, moments: dict) -> dict:
             sigma = -m * 1e6 * (y - props["ybar"]) / props["I"]
             if material == "concrete":
                 sigma = sigma / props["ratio"] if props["ratio"] else 0.0
-            elif material == "bar" and not props["bars"]:
-                sigma = 0.0
+            elif material == "bar":
+                sigma = sigma * comp["m"] if props["bars"] else 0.0
             values[name] = sigma
         stages[stage] = {"M": m, **props, "sigma": values}
     total = {
@@ -401,8 +471,10 @@ def stress_profile(section: Section, moments: dict) -> dict:
         "stages": stages,
         "total": total,
         "composite": comp is not None,
-        "height": comp["height"] if comp else d,
-        # Reference of the S3 fibre: y below the 1n axis, or the steel axis.
+        "kind": g["kind"],
+        "depth": g["depth"],
+        "height": comp["height"] if comp else g["depth"],
+        # Reference of the S3 fibre: y below the 1n axis, or the girder axis.
         "s3_ref": "1n" if comp is not None else "steel",
         "s3_y": (
             section.composite.y_of("1n" if comp is not None else "steel")

@@ -1,4 +1,4 @@
-# QuickerBridge 0.9.5 — guide en français
+# QuickerBridge 0.9.6 — guide en français
 
 [English README](README.md)
 
@@ -11,7 +11,7 @@ compacte. Aucune installation de Python et aucun serveur local pour les utilisat
 ## Démarrer
 
 - **Sur le web :** https://acfakkoh.github.io/QuickerBridge/ (GitHub Pages, publié à chaque mise à jour de `main`).
-- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.9.5-2026-10-01.html`) dans un navigateur moderne. Si vous
+- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.9.6-2026-10-02.html`) dans un navigateur moderne. Si vous
   recevez l’archive portable, extrayez-la avant d’ouvrir le HTML.
 - Une connexion Internet est nécessaire au démarrage pour charger Pyodide et ses
   bibliothèques. Le cache peut accélérer les ouvertures suivantes; cette édition
@@ -277,3 +277,11 @@ GitHub Pages, consultez [le guide développeur](README_DEVELOPER.md).
   fenêtre complète, où l’on change la station (◀ ▶, x, curseur) et le y de S3.
   Profils en trait continu depuis σ = 0, ANE en pointillés; lignes dessus /
   dessous de dalle et armature inf. retirées du tableau.
+
+## Nouveautés 0.9.6
+
+- Corrections d’audit : la section d’appui constante de la 0.9.5 est retirée (elle écrasait les zones non prismatiques; les anciens fichiers s’ouvrent toujours); les armatures doivent être dans la dalle; les étapes de chargement des contraintes sont enregistrées dans le projet; un seul schéma de projet (9).
+- Poutres NEBT : propriétés de section (A, I, yb, h tabulés; section mixte avec n = Eg/Ec et armatures m = Es/Eg; région négative I′) et contraintes comme pour l’acier. Un pont en NEBT ne peut pas être non prismatique.
+- Contraintes : aperçu instantané au survol, échelle fixe selon la traction et la compression extrêmes du pont, valeurs en MPa sur le dessin colorées selon le signe, S1 à S5 repérés dans la fenêtre complète.
+- Onglet FT toujours visible, aucun facteur d’essieu par défaut. Cisaillement ÉLF des dalles, n ≥ 2 : formule imprimée de chaque tableau (A/B : 3,20 + 0,10 Le; C/D : 3,20 + 0,10/Le). Feuille Excel FT complète.
+- Valeurs de lecture aux couleurs des diagrammes et à côté des points; fenêtre « Méthode et hypothèses » en haut à droite; explication de la précision standard / fine.

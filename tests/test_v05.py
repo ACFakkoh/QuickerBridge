@@ -219,7 +219,7 @@ def test_project_round_trip_with_fixed_supports_and_plates():
         Zone(end=1, section=0),
     ]
     project = create_project(model, "Integral")
-    assert project["schema_version"] == 8
+    assert project["schema_version"] == 9
     reopened = validate_project(json.dumps(project))
     assert reopened["model"] == model.model_dump(mode="json")
     # v0.4 (schema 2) files still open: no plates key, default "start".
@@ -272,7 +272,6 @@ def test_plate_options_make_swapped_haunches_mirror(left, right):
 
 def test_default_plate_option_keeps_v04_behaviour():
     m = taper_model("start", "start")
-    m.support_length = 0  # tapers up to the support, as in v0.4
     e1, e2 = span_ei(m, 0), span_ei(m, 1)
     assert e1(34.79) / e2(0.01) > 2  # the asymmetric v0.4 interpretation
 

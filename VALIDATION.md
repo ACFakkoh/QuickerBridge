@@ -1,4 +1,4 @@
-# Validation — QuickerBridge (v0.4 → v0.9.5)
+# Validation — QuickerBridge (v0.4 → v0.9.6)
 
 2026-09-15. Numerical checks are software regressions, not certification for bridge design.
 
@@ -489,3 +489,27 @@ hover preview at a fixed height scale (deepest girder: the girder grows over
 haunches, the slab keeps its thickness) and without neutral axes; reopening
 right after closing keeps the station. No console
 errors.
+
+## v0.9.6 audit fixes, NEBT, stresses, FT (verified 2026-10-02)
+
+Scope: Notion pages "QuickerBridge 0.9.6 fix" and "Astra audit indépendant".
+- Audit P1 (support section): span_zones and support_length removed; schema 9
+  drops support_length from schema-8 files. P1 (bars): CompositeSlab rejects
+  bars outside the concrete, overlapping layers and spacing below the bar
+  diameter ("composite.bars", shown in the window). P2: model.stress
+  (self_weight / dead stage) saved and excluded from the analysis key; the
+  browser writes the schema of projects.py (QB_META.schema). Suites 0.9.4 to
+  0.9.6 now run with the default self-weight.
+- Variable depth (user check): in the tapers the stress section has the
+  interpolated depth and the plates of the deeper section; its I and ȳ equal
+  the analysis EI / E at every station of the default model (test).
+- NEBT: tabulated girder, n = Eg/Ec, bars × Es/Eg, hand-checked 1n A and ȳ;
+  stresses with S1, S2, S3, S5; non-prismatic rejected.
+- stress_all: totals of every station equal stress_at (test); 162 stations in
+  0.02 s natively; hover redraw 3.6 ms in the browser.
+- FT: Table 5.2 (A, B) 3.20 + 0.10 Le, Table A5.3.2 (C, D) 3.20 + 0.10 / Le;
+  default model without FT; Excel sheet lists class, girder, state, applied,
+  curb, FT min, h, L and Fs per span, Le per zone, zone FT M / FT V.
+- Precision: default model, fine vs standard below 0.01 % on extreme M, V,
+  deflection and reactions, about 1.5 times slower.
+- 221 tests native; 205 + 1 skipped in browser mode.

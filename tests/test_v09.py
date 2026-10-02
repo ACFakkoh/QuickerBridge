@@ -255,7 +255,7 @@ def test_distribution_changes_the_analysis_only_when_applied_and_round_trips():
     assert analyse(plain)["max"]["M"] == analyse(on)["max"]["M"]
     assert analyse(on)["ft"] is None
     reopened = validate_project(json.dumps(create_project(on, "FT")))
-    assert reopened["schema_version"] == 8
+    assert reopened["schema_version"] == 9
     assert reopened["model"]["distribution"]["skew"] == 17.7
     old = create_project(plain, "Old")
     old["schema_version"] = 5
@@ -428,7 +428,8 @@ def test_default_application_model():
     from quickerbridge.models import default_model
 
     m = default_model()
-    assert m.nonprismatic and m.distribution.enabled and m.distribution.apply
+    # v0.9.6: no axle factor by default; the user enables it.
+    assert m.nonprismatic and not m.distribution.enabled and not m.distribution.apply
     assert m.sections[1].depth > m.sections[0].depth
     first, second = m.spans
     # S2 only over the pier, parabolic, plates from the deeper section.
@@ -438,7 +439,7 @@ def test_default_application_model():
     assert (second.zones[0].section, second.zones[0].plates) == (1, "deep")
     assert second.zones[-1].section == 0  # abutment keeps S1
     r = analyse(m)
-    assert r["ft"] is not None and r["kind"] == "mechanical"
+    assert r["ft"] is None and r["kind"] == "mechanical"
 
 
 def test_exterior_girder_dead_load_shear_takes_fs():
@@ -496,7 +497,7 @@ def test_slab_ft_hand_calculation():
     v = pick(r, "ULS", "interior", "shear", "+", "span:1")
     assert v["DT"] == pytest.approx(2.35 + 0.35 * math.sqrt(20)) and v["lambda"] == 0
     f = pick(r, "FLS", "interior", "shear", "+", "span:1")
-    assert f["DT"] == pytest.approx(3.20 + 0.10 * 20)  # 0.10·Le (author's choice)
+    assert f["DT"] == pytest.approx(3.20 + 0.10 * 20)  # Table 5.2 (classes A, B)
     fm = pick(r, "FLS", "exterior", "moment", "+", "span:1")
     assert fm["DT"] == pytest.approx(11.0 - 14.5 / math.sqrt(20))
     assert fm["lambda"] == pytest.approx(0.15 - 0.40 / 20)

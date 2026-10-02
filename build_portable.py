@@ -6,6 +6,7 @@ from datetime import date
 import hashlib
 from io import BytesIO
 import json
+import re
 from pathlib import Path
 import runpy
 import shutil
@@ -23,6 +24,12 @@ release_day = date.fromisoformat(RELEASE_DATE)
 # The portable application is always named with its version and release date.
 PORTABLE_NAME = f"QuickerBridge-v{VERSION}-{RELEASE_DATE}.html"
 ZIP_TIME = (release_day.year, release_day.month, release_day.day, 0, 0, 0)
+
+
+def project_schema_version():
+    # One project schema for Python and the browser (audit 2026-10-01).
+    text = (ROOT / "quickerbridge" / "projects.py").read_text(encoding="utf-8")
+    return int(re.search(r"SCHEMA_VERSION = (\d+)", text).group(1))
 
 
 def zip_bytes(entries) -> bytes:
@@ -157,7 +164,12 @@ def build_browser_assets() -> None:
     version_js = (
         "window.QB_META="
         + json.dumps(
-            {"version": VERSION, "date": RELEASE_DATE, "author": AUTHOR},
+            {
+                "version": VERSION,
+                "date": RELEASE_DATE,
+                "author": AUTHOR,
+                "schema": project_schema_version(),
+            },
             ensure_ascii=False,
         )
         + ";\n"

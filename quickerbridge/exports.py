@@ -214,6 +214,36 @@ def distribution_sheet(wb, model, language):
         ("We (m)", d["We"]),
         ("μ", d["mu"]),
     ]
+    # v0.9.6: every parameter of the simplified method used.
+    items += [
+        ("Classe de route" if fr else "Road class", inputs["road_class"]),
+        ("Poutre choisie" if fr else "Selected girder", names[inputs["girder"]]),
+        ("État limite choisi" if fr else "Selected limit state", names[inputs["state"]]),
+        (
+            "FT appliqué aux enveloppes" if fr else "FT applied to the envelopes",
+            ("oui" if fr else "yes") if inputs["apply"] else ("non" if fr else "no"),
+        ),
+        ("Bordure / Curb (m)", d.get("curb")),
+        ("FT min ÉLUL" if fr else "FT min ULS", d["minimum"]["ULS"]),
+        ("FT min ÉLF" if fr else "FT min FLS", d["minimum"]["FLS"]),
+        ("h gauche (m)" if fr else "h left (m)", inputs["h_left"]),
+        ("h droite (m)" if fr else "h right (m)", inputs["h_right"]),
+    ]
+    for s in d["spans"]:
+        items.append((f"{'Travée' if fr else 'Span'} {s['span']} · L (m)", s["L"]))
+        items.append((f"{'Travée' if fr else 'Span'} {s['span']} · Fs", s["Fs"]))
+    for z in d["positive"]:
+        items.append(
+            (f"Le M+ {'travée' if fr else 'span'} {z['span']} (m) · {z['rule']}", z["Le"])
+        )
+    for z in d["negative"]:
+        items.append(
+            (f"Le M− {'appui' if fr else 'support'} {z['support']} (m) · {z['rule']}", z["Le"])
+        )
+    for zone in data.get("zones", []):
+        if isinstance(zone, dict) and {"FT_M", "FT_V"} <= set(zone):
+            where = zone.get("where", "")
+            items.append((f"Zone {where} · FT M / FT V", f"{zone['FT_M']:.4f} / {zone['FT_V']:.4f}"))
     for label, value in items:
         sheet.append([label, value])
 

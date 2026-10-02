@@ -393,6 +393,7 @@ def structure_key(model):
         "load_mode",
         "modal",
         "distribution",
+        "stress",
     ):
         data.pop(key)
     return json.dumps(data, sort_keys=True)
@@ -1146,8 +1147,8 @@ def stress_at(model, result, index, self_weight_stage="steel", dead_stage="3n"):
     nx = len(result["x"])
     x, side = result["x"][index], result["sides"][index]
     section = section_at(model, x, side)
-    if section.kind != "girder":
-        raise ValueError("stress.section_kind")  # needs plate dimensions
+    if section.kind not in ("girder", "nebt"):
+        raise ValueError("stress.section_kind")  # needs a known section
     dead_total = result["dead"]["M"][index]
     m_sw = 0.0
     if model.load_mode != "live" and model.self_weight.apply:
@@ -1177,3 +1178,75 @@ def stress_at(model, result, index, self_weight_stage="steel", dead_stage="3n"):
         "dead_stage": dead_stage,
     }
     return out
+
+
+def _self_weight_moments(model, result):
+    """Girder self-weight moments at every report station (kN·m)."""
+    nx = len(result["x"])
+    if model.load_mode == "live" or not model.self_weight.apply:
+        return [0.0] * nx
+    only_sw = model.model_copy(deep=True)
+    only_sw.dead = []
+    basis = cached_basis(structure_key(model))
+    old = basis.model
+    basis.model = only_sw
+    values, _ = basis.static_dead()
+    basis.model = old
+    return [float(v) for v in values[nx : 2 * nx]]
+
+
+def stress_all(model, result, self_weight_stage="steel", dead_stage="3n"):
+    """Total stresses (M max and M min cases) at every station (v0.9.6).
+
+    Feeds the hover preview and the fixed stress scale: per station the
+    section drawing data, the fibres and the totals of both cases; plus the
+    extreme tension and compression of the bridge. Composite properties are
+    computed once per distinct section.
+    """
+    import json
+
+    from .section_props import composite_properties, stress_profile
+    from .sections import section_at
+
+    m_sw = _self_weight_moments(model, result)
+    sections, keys, comps, stations = [], {}, {}, []
+    t_max, c_max = 0.0, 0.0
+    for i, (x, side) in enumerate(zip(result["x"], result["sides"])):
+        section = section_at(model, x, side)
+        if section.kind not in ("girder", "nebt"):
+            stations.append(None)
+            continue
+        key = json.dumps(section.model_dump(), sort_keys=True)
+        if key not in keys:
+            keys[key] = len(sections)
+            sections.append(section.model_dump())
+            slab = section.composite
+            comps[key] = (
+                composite_properties(section, slab)
+                if slab is not None and slab.enabled
+                else None
+            )
+        dead_total = result["dead"]["M"][i]
+        m_dead = dead_total - m_sw[i]
+        out = {"s": keys[key]}
+        for case in ("max", "min"):
+            moments = {"steel": 0.0, "3n": 0.0, "1n": result[case]["M"][i] - dead_total}
+            moments[self_weight_stage] += m_sw[i]
+            moments[dead_stage] += m_dead
+            prof = stress_profile(section, moments, comps[key])
+            out[case] = prof["total"]
+            if case == "max":
+                out["fibres"] = [[f["name"], f["y"]] for f in prof["fibres"]]
+                out["height"] = prof["height"]
+                out["composite"] = prof["composite"]
+            values = list(prof["total"].values())
+            t_max = max(t_max, *values)
+            c_max = min(c_max, *values)
+        stations.append(out)
+    return {
+        "sections": sections,
+        "stations": stations,
+        "tension": t_max,
+        "compression": c_max,
+    }
+

@@ -43,8 +43,8 @@ function axleDerivedHtml(){
 function axleWarningsHtml(){return (axleData?.warnings||[]).map(w=>`<p class="axle-warning">⚠ ${t('axleWarn_'+w)}</p>`).join('');}
 function axleRefresh(){
  const d=axleSettings();
- $('#axle-tab')?.classList.toggle('hidden',!d.enabled);
- if(!d.enabled&&view==='axle')showView('diagrams');
+ // v0.9.6: the FT tab is always shown; FT stays off until the user enables it.
+ $('#axle-tab')?.classList.remove('hidden');
  const mini=$('#axle-mini');if(mini)mini.innerHTML=axleMiniHtml();
  if(view==='axle')renderAxleResults();
 }
@@ -70,11 +70,12 @@ function renderAxleView(){
  const inputs=axleSlab()?[type,cls,field('slabWidthB','distribution.slab_width',d.slab_width,'',{min:1.01,max:60}),field('equivalentWidthBe','distribution.equivalent_width',d.equivalent_width??d.slab_width,'',{min:1.01,max:60}),...(d.bridge_type==='voided_slab'?[field('voidSpacingS','distribution.spacing',d.spacing,'',{min:.31,max:10})]:[]),...common]:[type,cls,field('girdersN','distribution.girders',d.girders,'',{min:1,max:40,step:1}),field('spacingS','distribution.spacing',d.spacing,'',{min:.31,max:10}),field('overhangSc','distribution.overhang',d.overhang,'',{min:0,max:6}),...common];
  if(left)inputs.push(field('hLeft','distribution.h_left',d.h_left,'',{min:0,max:30}));
  if(right)inputs.push(field('hRight','distribution.h_right',d.h_right,'',{min:0,max:30}));
- host.innerHTML=`<div class="axle-view"><div class="axle-view-head"><span class="axle-badge">S6-25</span><div><b>${t('axleTitle')}</b><small>${t('axleSub')}</small></div></div><div class="axle-inputs"><div class="axle-grid">${inputs.join('')}</div><div class="axle-choice">${axleChoice()}</div></div><div id="axle-results"></div><details class="axle-notes"><summary>${t('axleNotes')}</summary><div class="method-content"><h3>${t('axleDefsTitle')}</h3><dl class="axle-defs">${axleDefinitions().map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl><h3>${t('axleMethod')}</h3><p>${t('axleMethodBody')}</p>${axleSlab()?`<p>${t('axleSlabNote')}</p>`:''}<h3>${t('axleInterpret')}</h3><p>${t('axleInterpretBody')}</p><p>${t('axleApplyBody')}</p></div></details></div>`;
+ host.innerHTML=`<div class="axle-view"><div class="axle-view-head"><span class="axle-badge">S6-25</span><div><b>${t('axleTitle')}</b><small>${t('axleSub')}</small></div><label class="toggle-row axle-enable"><input type="checkbox" data-path="distribution.enabled" ${d.enabled?'checked':''}>${t('axleEnable')}</label></div><div class="axle-inputs"><div class="axle-grid">${inputs.join('')}</div><div class="axle-choice">${axleChoice()}</div></div><div id="axle-results"></div><details class="axle-notes"><summary>${t('axleNotes')}</summary><div class="method-content"><h3>${t('axleDefsTitle')}</h3><dl class="axle-defs">${axleDefinitions().map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl><h3>${t('axleMethod')}</h3><p>${t('axleMethodBody')}</p>${axleSlab()?`<p>${t('axleSlabNote')}</p>`:''}<h3>${t('axleInterpret')}</h3><p>${t('axleInterpretBody')}</p><p>${t('axleApplyBody')}</p></div></details></div>`;
  renderAxleResults();
 }
 function renderAxleResults(){
  const host=$('#axle-results');if(!host)return;
+ if(!axleSettings().enabled){host.innerHTML=`<p class="axle-off">${t('axleOffHint')}</p>`;return;}
  if(!axleData){host.innerHTML=`<p class="help">${t('axleComputing')}</p>`;return;}
  const a=axleData,dv=a.derived,nspan=dv.spans.length,d=axleSettings();
  const cols=[];
@@ -188,3 +189,5 @@ Object.assign(words.en,{slabSolid:'Solid slab',slabVoided:'Voided slab',slabWidt
 })();
 Object.assign(words.fr,{axleSlabShearInt:'FT portion int.',axleSlabShearExt:'FT portion ext. × Fs'});
 Object.assign(words.en,{axleSlabShearInt:'FT interior portion',axleSlabShearExt:'FT exterior portion × Fs'});
+Object.assign(words.fr,{axleOffHint:'Aucun facteur d’essieu par défaut : cochez « Calculer la fraction de charge de camion » pour le calculer, puis « Appliquer » pour l’appliquer aux enveloppes.'});
+Object.assign(words.en,{axleOffHint:'No axle factor by default: tick “Compute the truck load fraction” to compute it, then “Apply” to apply it to the envelopes.'});

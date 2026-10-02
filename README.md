@@ -9,7 +9,7 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 
 ![QuickerBridge — envelopes of a two-span girder with rotational-spring abutments](docs/screenshots/envelopes.png)
 
-*Version 0.9.5 · 2026-10-01 · Anthony Chéruel · [Guide en français](README.fr.md)*
+*Version 0.9.6 · 2026-10-02 · Anthony Chéruel · [Guide en français](README.fr.md)*
 
 ---
 
@@ -21,7 +21,7 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 | **Influence lines** | V, M and deflection at any station, plus the reaction (and moment reaction) at the nearest support, with the governing axles drawn on the line. |
 | **Truck crossing animation** | 60 pre-computed positions of the full vehicle, played back instantly; the envelope stays as a reference. |
 | **Supports** | Pinned, roller, **fixed (integral abutment)** or **rotational spring k** with the resulting degree of fixity. Any span can be made **simple (isostatic)**, hinged at both ends *(v0.8.6)*. Uplift is flagged automatically. |
-| **Sections** | Steel I-girders from plate dimensions, standard **precast prestressed NEBT 1000–1800** girders *(v0.8.6, concrete E 28 GPa by default)* or direct EI, inertia modifier, non-prismatic zones with linear or parabolic depth and a constant-depth support section centred on every interior support *(v0.9.5, 400 mm by default)*, EI(x) diagram and stiffness-step warnings. Girder **self-weight** is added to the permanent loads by default (steel +15%, NEBT +10%, adjustable, can be switched off). |
+| **Sections** | Steel I-girders from plate dimensions, standard **precast prestressed NEBT 1000–1800** girders *(v0.8.6, concrete E 28 GPa by default)* or direct EI, inertia modifier, non-prismatic zones with linear or parabolic depth (steel girders; NEBT bridges stay prismatic), EI(x) diagram and stiffness-step warnings. Girder **self-weight** is added to the permanent loads by default (steel +15%, NEBT +10%, adjustable, can be switched off). |
 | **Vibration modes** *(v0.8)* | Up to 12 natural frequencies and periods in vertical bending from the same model (non-prismatic EI, integral abutments, springs), mass from the unfactored permanent loads. Animated deck, mode thumbnails, frequency spectrum with pedestrian resonance bands, modal mass. Six modes and real-time animation by default; optional slow motion. |
 | **Truck load fraction FT** *(v0.9–0.9.3)* | CSA S6-25 simplified method for slab-on-girder, solid-slab and voided-slab bridges (per metre of width for slabs, with Be; classes A/B and C/D, CL-625 / CL-750-QC): N, S, Sc, Wc, skew → n, RL, We, μ, DVE (≤ 3.0 m), Le (Figure 5.1, 0.20 (L1+L2) over piers), DT, λ, γc, γe, FT for interior/exterior girders, moment and shear, ULS/SLS1 and FLS/SLS2, with Fs. Choose the girder and limit state; when applied, the whole live load of one lane is multiplied zone by zone (M and δ by the moment FT, V and reactions by the shear FT); exterior girders also get Fs on dead-load shear. Data, definitions and compact tables in the “FT · S6-25” tab; Excel sheet. |
 | **Section properties** *(v0.9.3bis)* | Window opened from a steel section card: steel alone (A, centroid, Ix, S, Iy, J, Cw, Zx and plastic neutral axis, S6 section classes), composite 3n and 1n with slab, haunch and two bar layers (I, section moduli at S1–S5 and a user height), effective properties with FrQr, cross-section drawing with neutral axes. *(v0.9.5)* Positive / negative region chosen first: in the negative region the cracked slab is ignored and I′ = steel + bars in tension (no 3n / 1n); y of point S3 set per configuration (steel, 3n, 1n, I′), also for the steel section alone. Display only; a ratio can be copied into the inertia modifier M. *(v0.9.4)* Double-click any diagram (or “σ ↗” in the readout) for the staged stresses over the depth at that station: self-weight and other permanent loads on the steel alone or the 3n section, live envelope max/min on the 1n section, cracked composite section under negative moment. *(v0.9.5)* A “σ Stresses ↗” button and a hover preview next to the envelopes (small stress profile, neutral axes, compression/tension sides); the window lets you change the station (◀ ▶, x, slider) and the S3 height y, and draws each case as one continuous outline from σ = 0 with the dashed neutral axes. |
@@ -106,3 +106,11 @@ every push to `main`). In the repository settings, **Pages → Source** must be 
 Built on [PyCBA](https://github.com/ccaprani/pycba) by Colin Caprani (AGPL-3.0-or-later),
 vendored with local additions (CL-750-QC, non-prismatic performance); runs on
 [Pyodide](https://pyodide.org). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## What's new in 0.9.6
+
+- Audit fixes: the v0.9.5 constant support section is removed (it overrode the non-prismatic zones; older files still open); bars must lie inside the slab; the stress load stages are saved with the project; one project schema (9) for Python and the browser.
+- NEBT girders: section properties (tabulated A, I, yb, h; composite with n = Eg/Ec and bars m = Es/Eg; negative region I′) and stress diagrams like steel girders. A bridge with NEBT girders cannot be non-prismatic.
+- Stresses: instant hover preview from one all-stations calculation, fixed scale from the bridge extreme tension and compression, values in MPa on the drawing coloured by sign, S1–S5 marked in the full window.
+- FT tab always visible, no axle factor by default. Slab FLS shear n ≥ 2 follows each printed table (A/B: 3.20 + 0.10 Le; C/D: 3.20 + 0.10/Le). The Excel FT sheet lists every parameter.
+- Diagram readout in the colour of each diagram, values next to the dots; "Method and assumptions" window in the header; explanation of standard vs fine precision.
