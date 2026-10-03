@@ -94,9 +94,12 @@ def vehicle_variants(live: LiveLoad):
 def lane_parameters(live: LiveLoad):
     """Return the companion UDL and placement used by the selected model.
 
-    ``full`` matches PyCBA's ``run_load_model(..., w_lane=...)`` companion UDL
-    behavior. Only a user-defined custom vehicle retains optional adverse-region
-    placement.
+    The lane load always covers the whole bridge length (``full``): S6:19
+    3.8.3.1.3 "bumper-to-bumper" case, a truck with axles at 80 % superimposed
+    on a 9 kN/m UDL; the MTQ CL-750-QC (12.6 kN/m) works the same way. This
+    matches PyCBA's ``run_load_model(..., w_lane=...)`` companion UDL.
+    ``CL750QC`` returns the manual ``lane_fraction``; with ``mtq_auto`` the
+    engine picks 63 % or 80 % per response instead (``mtq_lane_fractions``).
     """
     if live.vehicle == "CL625":
         return 9.0, 0.8, "full"
@@ -109,11 +112,17 @@ def lane_parameters(live: LiveLoad):
         return live.cooper_e / 10 * 4.4482216 / 0.3048, 1.0, "full"
     if live.vehicle == "Maintenance":
         return 0.0, 1.0, "none"
-    return live.lane_w, live.lane_fraction, "patterned"
+    return live.lane_w, live.lane_fraction, "full"
 
 
-def lane_axle_factor(live: LiveLoad, truck_factor: float) -> float:
-    """Point-load factor in a companion-lane case; the UDL is never amplified."""
+def lane_axle_factor(live: LiveLoad, truck_factor: float, record=None) -> float:
+    """Point-load factor in a companion-lane case; the UDL is never amplified.
+
+    A record carrying ``fraction`` (MTQ automatic 63 % / 80 %) overrides the
+    manual ``lane_fraction`` so that a click on an extreme reproduces it.
+    """
+    if record is not None and record.get("fraction") is not None:
+        return float(record["fraction"])
     _, fraction, _ = lane_parameters(live)
     return truck_factor if live.vehicle in HL93_VEHICLES else fraction
 

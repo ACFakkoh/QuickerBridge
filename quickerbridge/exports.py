@@ -218,7 +218,10 @@ def distribution_sheet(wb, model, language):
     items += [
         ("Classe de route" if fr else "Road class", inputs["road_class"]),
         ("Poutre choisie" if fr else "Selected girder", names[inputs["girder"]]),
-        ("État limite choisi" if fr else "Selected limit state", names[inputs["state"]]),
+        (
+            "État limite choisi" if fr else "Selected limit state",
+            names[inputs["state"]],
+        ),
         (
             "FT appliqué aux enveloppes" if fr else "FT applied to the envelopes",
             ("oui" if fr else "yes") if inputs["apply"] else ("non" if fr else "no"),
@@ -234,16 +237,27 @@ def distribution_sheet(wb, model, language):
         items.append((f"{'Travée' if fr else 'Span'} {s['span']} · Fs", s["Fs"]))
     for z in d["positive"]:
         items.append(
-            (f"Le M+ {'travée' if fr else 'span'} {z['span']} (m) · {z['rule']}", z["Le"])
+            (
+                f"Le M+ {'travée' if fr else 'span'} {z['span']} (m) · {z['rule']}",
+                z["Le"],
+            )
         )
     for z in d["negative"]:
         items.append(
-            (f"Le M− {'appui' if fr else 'support'} {z['support']} (m) · {z['rule']}", z["Le"])
+            (
+                f"Le M− {'appui' if fr else 'support'} {z['support']} (m) · {z['rule']}",
+                z["Le"],
+            )
         )
     for zone in data.get("zones", []):
         if isinstance(zone, dict) and {"FT_M", "FT_V"} <= set(zone):
             where = zone.get("where", "")
-            items.append((f"Zone {where} · FT M / FT V", f"{zone['FT_M']:.4f} / {zone['FT_V']:.4f}"))
+            items.append(
+                (
+                    f"Zone {where} · FT M / FT V",
+                    f"{zone['FT_M']:.4f} / {zone['FT_V']:.4f}",
+                )
+            )
     for label, value in items:
         sheet.append([label, value])
 
@@ -426,12 +440,43 @@ def excel_bytes(result, language="en", model=None):
     meta.append(["Version", f"QuickerBridge {APP_VERSION} · {RELEASE_DATE} · {AUTHOR}"])
     if thermal:
         thermal_input = result["model"]["thermal"]
-        meta.append(
-            ["Load case / Cas", "Thermal gradient only / Gradient thermique seulement"]
-        )
-        meta.append(["ΔT = Ttop − Tbottom (°C)", thermal_input["delta_T"]])
-        meta.append(["α (10⁻⁶/°C)", thermal_input["alpha_micro"]])
-        meta.append(["Thermal depth / Hauteur thermique (mm)", thermal_input["depth"]])
+        imposed = thermal_input.get("imposed", "thermal")
+        if imposed == "thermal":
+            meta.append(
+                [
+                    "Load case / Cas",
+                    "Thermal gradient only / Gradient thermique seulement",
+                ]
+            )
+            meta.append(["ΔT = Ttop − Tbottom (°C)", thermal_input["delta_T"]])
+            meta.append(["α (10⁻⁶/°C)", thermal_input["alpha_micro"]])
+            meta.append(
+                ["Thermal depth / Hauteur thermique (mm)", thermal_input["depth"]]
+            )
+        else:
+            meta.append(
+                [
+                    "Load case / Cas",
+                    "Slab shrinkage only / Retrait de la dalle seulement"
+                    if imposed == "shrinkage"
+                    else "Slab creep only / Fluage de la dalle seulement",
+                ]
+            )
+            if imposed == "creep":
+                meta.append(["φ", thermal_input["creep_phi"]])
+                meta.append(["σc (MPa)", thermal_input["creep_stress"]])
+            meta.append(
+                [
+                    "Slab shortening / Raccourcissement de la dalle (10⁻⁶)",
+                    result["meta"].get("slab_strain"),
+                ]
+            )
+            meta.append(
+                [
+                    "Long-term section / Section à long terme",
+                    f"{thermal_input['modular_factor']:g}n",
+                ]
+            )
         meta.append(
             ["Imposed curvature / Courbure imposée (1/m)", result["meta"]["curvature"]]
         )
@@ -517,15 +562,24 @@ def excel_bytes(result, language="en", model=None):
         meta.append(
             [
                 "Lane / Voie",
-                "Standard vehicles: companion UDL over the full bridge. Custom vehicle: adverse regions.",
+                "Companion UDL over the full bridge length (S6 bumper-to-bumper lane case).",
             ]
         )
+        if vehicle == "CL750QC" and model.live.mtq_auto:
+            meta.append(
+                [
+                    "MTQ automatic fraction / Fraction MTQ automatique",
+                    "CL-750-QC lane case, MTQ A2023-05: axles at 63 % for M+ outside the M− zones of the "
+                    "supports, V, single span and reactions without deck continuity; 80 % for M−, M+ in the "
+                    "M− zones, reactions at continuous piers and deflections.",
+                ]
+            )
         if vehicle in ("HL93Truck", "HL93Tandem") and model.live.two_trucks:
             meta.append(
                 [
                     "HL-93 · 90% · two trucks / deux camions",
                     "Supplementary lane case for M− around interior piers and interior vertical R only; "
-                    "90% trucks + adverse lane; 14 ft axle spacings; ≥50 ft clear headway; "
+                    "90% trucks + full-deck lane; 14 ft axle spacings; ≥50 ft clear headway; "
                     "truck centres in adjacent spans. FHWA-HIF-16-002 Vol.20 §6.2.1.",
                 ]
             )

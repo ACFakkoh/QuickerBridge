@@ -87,7 +87,9 @@ def test_stress_request_reproduces_the_envelope_moments():
     total_max = mo["self_weight"] + mo["dead_steel"] + mo["dead_3n"] + mo["live_max"]
     assert total_max == pytest.approx(result["max"]["M"][i])
     case = out["cases"]["max"]
-    assert case["stages"]["steel"]["M"] == pytest.approx(mo["self_weight"] + mo["dead_steel"])
+    assert case["stages"]["steel"]["M"] == pytest.approx(
+        mo["self_weight"] + mo["dead_steel"]
+    )
     assert case["stages"]["3n"]["M"] == pytest.approx(mo["dead_3n"])
     assert case["stages"]["1n"]["M"] == pytest.approx(mo["live_max"])
     assert case["composite"] and case["total"]["S5"] > 0

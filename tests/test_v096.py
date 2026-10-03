@@ -37,7 +37,7 @@ def test_stress_stages_are_saved_with_the_project():
     m.dead[0].stage = "steel"
     reopened = validate_project(json.dumps(create_project(m, "p")))
     assert reopened["model"]["dead"][0]["stage"] == "steel"
-    assert reopened["schema_version"] == 10
+    assert reopened["schema_version"] == 11
     # Schema 9 files: a global "dead on steel" choice moves to every load.
     old = create_project(default_model(), "p")
     old["schema_version"] = 9
@@ -59,7 +59,9 @@ def test_variable_depth_stress_sections_match_the_analysis():
             continue
         sec = section_at(m, x, side)
         local, span = (x, 0) if x <= L else (x - L, 1)
-        ei = float(span_ei(m, span)(min(local, L - 1e-9) if span == 0 else max(local, 1e-9)))
+        ei = float(
+            span_ei(m, span)(min(local, L - 1e-9) if span == 0 else max(local, 1e-9))
+        )
         assert m.sections[0].depth <= sec.depth <= m.sections[1].depth
         assert properties(sec)["EI"] == pytest.approx(ei, rel=2e-3)
         st = stress_at(m, r, i)["cases"]["max"]["stages"]["steel"]
@@ -98,7 +100,9 @@ def test_nebt_composite_uses_girder_modulus():
     bars = [(b["area"] * out["m"], base + b["y_in_slab"]) for b in out["bars"]]
     slab = (out["concrete_area"] / out["n"], base + s.composite.slab_thickness / 2)
     area = data["A"] + slab[0] + sum(a for a, _ in bars)
-    ybar = (data["A"] * data["yb"] + slab[0] * slab[1] + sum(a * y for a, y in bars)) / area
+    ybar = (
+        data["A"] * data["yb"] + slab[0] * slab[1] + sum(a * y for a, y in bars)
+    ) / area
     assert out["1n"]["A"] == pytest.approx(area)
     assert out["1n"]["y_bottom"] == pytest.approx(ybar)
     neg = out["negative"]
@@ -146,8 +150,12 @@ def test_stress_all_matches_station_requests():
 
 def test_slab_fls_shear_follows_each_printed_table():
     le = 20.0
-    assert slab_shear("FLS", 2, le, False, 3.0, "AB")[0] == pytest.approx(3.20 + 0.10 * le)
-    assert slab_shear("FLS", 2, le, False, 3.0, "CD")[0] == pytest.approx(3.20 + 0.10 * le)  # A5.3.2 typo
+    assert slab_shear("FLS", 2, le, False, 3.0, "AB")[0] == pytest.approx(
+        3.20 + 0.10 * le
+    )
+    assert slab_shear("FLS", 2, le, False, 3.0, "CD")[0] == pytest.approx(
+        3.20 + 0.10 * le
+    )  # A5.3.2 typo
     assert slab_shear("ULS", 2, le, False, 3.0, "AB")[0] == pytest.approx(
         2.35 + 0.35 * math.sqrt(le)
     )
@@ -168,7 +176,14 @@ def test_excel_ft_sheet_lists_every_parameter():
     wb = openpyxl.load_workbook(io.BytesIO(data))
     sheet = wb["Facteur d'essieu FT"]
     labels = [row[0].value for row in sheet.iter_rows() if row[0].value]
-    for expected in ("Classe de route", "Poutre choisie", "FT min ÉLUL", "N", "DVE (m)", "μ"):
+    for expected in (
+        "Classe de route",
+        "Poutre choisie",
+        "FT min ÉLUL",
+        "N",
+        "DVE (m)",
+        "μ",
+    ):
         assert expected in labels
     assert any(str(x).startswith("Le M+ travée 1") for x in labels)
     assert any(str(x).startswith("Le M− appui 2") for x in labels)
@@ -177,14 +192,24 @@ def test_excel_ft_sheet_lists_every_parameter():
 
 def test_stress_profile_on_steel_unchanged_by_refactor():
     # Steel girder + reference slab: same values as the v0.9.4/0.9.5 formulas.
-    s = Section(composite=CompositeSlab(slab_thickness=225, spacing_top=150, spacing_bottom=150, cover_top=35, cover_bottom=60))
+    s = Section(
+        composite=CompositeSlab(
+            slab_thickness=225,
+            spacing_top=150,
+            spacing_bottom=150,
+            cover_top=35,
+            cover_bottom=60,
+        )
+    )
     out = stress_profile(s, {"steel": 0.0, "3n": 0.0, "1n": 1000.0})
     st = out["stages"]["1n"]
     assert out["total"]["S5"] == pytest.approx(1000e6 * st["ybar"] / st["I"])
     comp = section_properties(s)["composite"]
     assert comp["m"] == 1.0
     y_bar = next(f["y"] for f in out["fibres"] if f["name"] == "bar_top")
-    assert out["total"]["bar_top"] == pytest.approx(-1000e6 * (y_bar - st["ybar"]) / st["I"])
+    assert out["total"]["bar_top"] == pytest.approx(
+        -1000e6 * (y_bar - st["ybar"]) / st["I"]
+    )
 
 
 # --- Permanent-load stages, Fs on dead loads, thermal (0.9.6 complement) ------
@@ -245,7 +270,10 @@ def test_thermal_depth_from_sections_and_bilinear_gradient():
     b = comp["concrete_area"] / comp["n"] / tc
     e = 1250.0 - c1["y_bottom"]
     q = b * 35 / tc * (e * tc**2 / 2 + tc**3 / 3)
-    q += sum(bar["area"] * comp["m"] * 35 * bar["y_in_slab"] / tc * (e + bar["y_in_slab"]) for bar in comp["bars"])
+    q += sum(
+        bar["area"] * comp["m"] * 35 * bar["y_in_slab"] / tc * (e + bar["y_in_slab"])
+        for bar in comp["bars"]
+    )
     assert free_curvature(m, s) == pytest.approx(alpha * q / c1["I"] * 1000)
     r = analyse(m)
     assert r["kind"] == "thermal" and max(abs(v) for v in r["values"]["M"]) > 0

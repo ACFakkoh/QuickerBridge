@@ -151,7 +151,9 @@ def test_thermal_fixed_fixed_gives_uniform_moment_and_no_deflection():
         supports=["fixed", "fixed"],
         sections=[Section(kind="ei", EI=EI)],
         load_mode="thermal",
-        thermal=ThermalLoad(delta_T=20, alpha_micro=12, depth=1500, depth_source="manual"),
+        thermal=ThermalLoad(
+            delta_T=20, alpha_micro=12, depth=1500, depth_source="manual"
+        ),
     )
     r = analyse_thermal(model)
     kappa = r["meta"]["curvature"]
@@ -219,7 +221,7 @@ def test_project_round_trip_with_fixed_supports_and_plates():
         Zone(end=1, section=0),
     ]
     project = create_project(model, "Integral")
-    assert project["schema_version"] == 10
+    assert project["schema_version"] == 11
     reopened = validate_project(json.dumps(project))
     assert reopened["model"] == model.model_dump(mode="json")
     # v0.4 (schema 2) files still open: no plates key, default "start".

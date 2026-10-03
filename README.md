@@ -9,7 +9,7 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 
 ![QuickerBridge — envelopes of a two-span girder with rotational-spring abutments](docs/screenshots/envelopes.png)
 
-*Version 0.9.6 · 2026-10-02 · Anthony Chéruel · [Guide en français](README.fr.md)*
+*Version 0.9.7 · 2026-10-02 · Anthony Chéruel · [Guide en français](README.fr.md)*
 
 ---
 
@@ -25,7 +25,7 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 | **Vibration modes** *(v0.8)* | Up to 12 natural frequencies and periods in vertical bending from the same model (non-prismatic EI, integral abutments, springs), mass from the unfactored permanent loads. Animated deck, mode thumbnails, frequency spectrum with pedestrian resonance bands, modal mass. Six modes and real-time animation by default; optional slow motion. |
 | **Truck load fraction FT** *(v0.9–0.9.3)* | CSA S6-25 simplified method for slab-on-girder, solid-slab and voided-slab bridges (per metre of width for slabs, with Be; classes A/B and C/D, CL-625 / CL-750-QC): N, S, Sc, Wc, skew → n, RL, We, μ, DVE (≤ 3.0 m), Le (Figure 5.1, 0.20 (L1+L2) over piers), DT, λ, γc, γe, FT for interior/exterior girders, moment and shear, ULS/SLS1 and FLS/SLS2, with Fs. Choose the girder and limit state; when applied, the whole live load of one lane is multiplied zone by zone (M and δ by the moment FT, V and reactions by the shear FT); exterior girders also get Fs on dead-load shear. Data, definitions and compact tables in the “FT · S6-25” tab; Excel sheet. |
 | **Section properties** *(v0.9.3bis)* | Window opened from a steel section card: steel alone (A, centroid, Ix, S, Iy, J, Cw, Zx and plastic neutral axis, S6 section classes), composite 3n and 1n with slab, haunch and two bar layers (I, section moduli at S1–S5 and a user height), effective properties with FrQr, cross-section drawing with neutral axes. *(v0.9.5)* Positive / negative region chosen first: in the negative region the cracked slab is ignored and I′ = steel + bars in tension (no 3n / 1n); y of point S3 set per configuration (steel, 3n, 1n, I′), also for the steel section alone. Display only; a ratio can be copied into the inertia modifier M. *(v0.9.4)* Double-click any diagram (or “σ ↗” in the readout) for the staged stresses over the depth at that station: self-weight and other permanent loads on the steel alone or the 3n section, live envelope max/min on the 1n section, cracked composite section under negative moment. *(v0.9.5)* A “σ Stresses ↗” button and a hover preview next to the envelopes (small stress profile, neutral axes, compression/tension sides); the window lets you change the station (◀ ▶, x, slider) and the S3 height y, and draws each case as one continuous outline from σ = 0 with the dashed neutral axes. |
-| **Thermal gradient** | Linear ΔT through the depth on every span, alone or with integral/spring supports. |
+| **Imposed deformations** | Thermal gradient (linear or bilinear), slab shrinkage or slab creep, each alone, with any supports. |
 | **Outputs** | Station table, one formatted Excel workbook including vibration modes and shapes (FR/EN), `.quickerbridge.json` projects, and comparison of two project envelopes on the same metre axis. |
 
 ![Vibration modes: animated deck, spectrum and the six default modes](docs/screenshots/vibration-modes.png)
@@ -106,6 +106,14 @@ every push to `main`). In the repository settings, **Pages → Source** must be 
 Built on [PyCBA](https://github.com/ccaprani/pycba) by Colin Caprani (AGPL-3.0-or-later),
 vendored with local additions (CL-750-QC, non-prismatic performance); runs on
 [Pyodide](https://pyodide.org). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## What's new in 0.9.7
+
+- **MTQ automatic fraction (CL-750-QC).** On by default: the 12.6 kN/m lane load goes with the truck at 63 % or 80 % of its axles per response, as in MTQ Info-structures A2023-05 (63 % for M+ outside the M− zones of the supports, shear, single-span bridges and reactions without deck continuity; 80 % for M−, M+ in the M− zones over piers, reactions at continuous piers and deflections). Untick it to choose 63 % or 80 % by hand. The lane load always covers the whole deck (S6 bumper-to-bumper case), as before. Support reactions are now a fifth diagram with arrows at the supports, replacing the table below the diagrams.
+- The vehicle always travels in both directions; the "travel direction" option is removed (older files open unchanged).
+- Up to 7 spans. The section at the cursor (girder, slab, or an "EI" box) is drawn in the beam frame.
+- "Thermal" becomes **Imposed deformation**: thermal gradient (with an illustrated profile), slab shrinkage (250 × 10⁻⁶ by default) and slab creep (ε = φ σc / Ec), each analysed alone, on the long-term k·n composite section (k = 3 by default).
+- Stresses: the hover preview shows the top-bar stress in both cases, no slab value, and the M max / M min legend; the full window has a beam sketch with a cursor (click or drag to move the station).
 
 ## What's new in 0.9.6
 

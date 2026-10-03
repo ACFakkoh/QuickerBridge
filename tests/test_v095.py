@@ -88,7 +88,7 @@ def test_support_section_removed_and_old_files_open():
     m = default_model()
     assert "support_length" not in m.model_dump()
     project = create_project(m, "p")
-    assert project["schema_version"] == 10
+    assert project["schema_version"] == 11
     project["schema_version"] = 8
     project["model"]["support_length"] = 400
     assert "support_length" not in validate_project(json.dumps(project))["model"]

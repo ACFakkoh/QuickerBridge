@@ -16,7 +16,12 @@ from scipy.interpolate import CubicSpline
 import pycba as cba
 
 from .models import Model
-from .distribution import applied as ft_applied, station_factors, truck_fraction
+from .distribution import (
+    applied as ft_applied,
+    effective_spans,
+    station_factors,
+    truck_fraction,
+)
 from .sections import member_deflection, stiffness_profile, span_ei, properties
 from .loads import (
     CANADIAN_VEHICLES,
@@ -281,37 +286,12 @@ class Basis:
             )
         return np.r_[v, m, d, r, mr], intervals
 
-    def lane(self, w):
-        # Fixed grid augmented on BOTH sides of every response station: the
-        # discontinuity in a shear influence line must never be integrated across.
-        base = np.concatenate(
-            [
-                np.linspace(a, b, 241 if self.model.precision == "standard" else 481)
-                for a, b in zip(self.support_x[:-1], self.support_x[1:])
-            ]
-        )
-        q = np.unique(
-            np.clip(
-                np.r_[base, self.x - 2 * self.eps, self.x + 2 * self.eps],
-                0,
-                self.length,
-            )
-        )
-        u = self.unit(q)
-        integrate = np.trapezoid
-        return (
-            w * integrate(np.minimum(u, 0), q, axis=0),
-            w * integrate(np.maximum(u, 0), q, axis=0),
-            q,
-            u,
-        )
-
     def full_lane(self, w):
         """Response to a companion UDL covering the entire bridge deck.
 
         This is the lane-load arrangement used by PyCBA's
-        ``BridgeAnalysis.run_load_model(..., w_lane=...)``. Custom lanes alone
-        can use :meth:`lane` for adverse-region placement.
+        ``BridgeAnalysis.run_load_model(..., w_lane=...)`` and the only one of
+        QuickerBridge: S6 bumper-to-bumper lane case (S6:19 3.8.3.1.3).
         """
         self.solve_loads(
             [[i + 1, 3, w, 0.0, length] for i, length in enumerate(self.lengths)]
@@ -404,6 +384,53 @@ def cached_basis(key):
     return Basis(Model.model_validate_json(key)).build()
 
 
+def mtq_active(model: Model) -> bool:
+    """MTQ automatic 63 % / 80 % axle fraction applies to this model."""
+    return model.live.vehicle == "CL750QC" and model.live.mtq_auto
+
+
+def mtq_lane_fractions(model: Model, basis):
+    """Axle fraction (0.63 or 0.80) of the CL-750-QC lane case per response.
+
+    MTQ Info-structures A2023-05: the 12.6 kN/m lane load is superimposed on
+    the CL-750-QC truck with axles at 80 %, but at 63 % for single-span
+    bridges and culverts, for the positive moment and vertical shear of
+    multi-span bridges, for the reactions of a multi-span bridge at an axis
+    without deck continuity, and for bearing movements and deck joints.
+    Returns ``(low, high)`` arrays over the response columns V, M, D, R, Mr
+    (one value per column and per envelope sense):
+
+    * single span: 0.63 everywhere;
+    * multi-span: V 0.63 (both senses); M "high" (positive moment) 0.63 except
+      at stations inside the negative-moment zones around the supports, where
+      0.80; M "low" (negative moment) 0.80; D, Mr 0.80;
+    * R: 0.63 at the end abutments and at supports next to a simple span
+      (hinge: no deck continuity), 0.80 at continuous interior supports.
+
+    The M− zones are the geometric ones of S6-25 Figure 5.1
+    (``distribution.effective_spans``, with h = 0), independent of whether FT
+    is enabled. A manual position record uses 0.80 (no target response).
+    """
+    nx, ns = basis.nx, basis.ns
+    count = basis.nresponse
+    low, high = np.full(count, 0.8), np.full(count, 0.8)
+    if len(model.spans) == 1:
+        low[:], high[:] = 0.63, 0.63
+        return low, high
+    low[:nx] = high[:nx] = 0.63
+    zones = [z[4] for z in effective_spans(model, 0.0, 0.0)[1]]
+    positive = np.full(nx, 0.63)
+    for a, b in zones:
+        positive[(basis.x >= a - 1e-9) & (basis.x <= b + 1e-9)] = 0.8
+    high[nx : 2 * nx] = positive
+    n = len(model.spans)
+    for k in range(ns):
+        free = k in (0, n) or model.spans[k - 1].simple or model.spans[k].simple
+        if free:
+            low[3 * nx + k] = high[3 * nx + k] = 0.63
+    return low, high
+
+
 def case_record(case, direction, position, axles, factor, **metadata):
     return {
         "case": case,
@@ -429,7 +456,18 @@ def position_record(model: Model, position: float, direction: str):
     )
     if is_lane and model.live.vehicle in CANADIAN_VEHICLES:
         factor = 1.0
-    return case_record("lane" if is_lane else "truck", direction, position, ids, factor)
+    # A user-positioned vehicle has no target effect: with MTQ automatic
+    # fraction it uses the 80 % axles (the "all effects" rule).
+    extra = {"fraction": 0.8} if is_lane and mtq_active(model) else {}
+    return case_record(
+        "lane" if is_lane else "truck",
+        direction,
+        position,
+        ids,
+        factor,
+        manual=True,
+        **extra,
+    )
 
 
 def analyse(model: Model):
@@ -461,17 +499,13 @@ def analyse(model: Model):
     include_truck = model.live.case != "lane" or lane_style == "none"
     lane_lo = lane_hi = np.zeros(count)
     scale = displayed_axle_factor(model)
+    # MTQ automatic fraction: per response column and envelope sense.
+    mtq = mtq_lane_fractions(model, basis) if mtq_active(model) else None
     if model.load_mode != "dead":
         if include_lane:
-            if lane_style == "patterned":
-                lane_lo, lane_hi, _, _ = basis.lane(lane_w)
-            else:
-                lane_lo = lane_hi = basis.full_lane(lane_w)
-        directions = (
-            ["forward", "reverse"]
-            if model.live.direction == "both"
-            else [model.live.direction]
-        )
+            lane_lo = lane_hi = basis.full_lane(lane_w)
+        # v0.9.7: always both travel directions.
+        directions = ["forward", "reverse"]
         for weights, offsets, variant in variants:
             for direction in directions:
                 # Physical front axle: p-offset for forward; p+offset for reverse.
@@ -512,6 +546,9 @@ def analyse(model: Model):
                             or len(group["axles"]) == len(weights)
                         ):
                             axle_factor = lane_axle_factor(model.live, group["factor"])
+                            axle_lo, axle_hi = (
+                                mtq if mtq else (axle_factor, axle_factor)
+                            )
                             # The record factor reports dynamic allowance.  A
                             # Canadian lane reduction is deliberately not DLA.
                             reported_factor = (
@@ -522,9 +559,9 @@ def analyse(model: Model):
                             cases.append(
                                 (
                                     "lane",
-                                    (axle_effect * axle_factor + lane_lo)
+                                    (axle_effect * axle_lo + lane_lo)
                                     * model.live.factor,
-                                    (axle_effect * axle_factor + lane_hi)
+                                    (axle_effect * axle_hi + lane_hi)
                                     * model.live.factor,
                                     reported_factor,
                                 )
@@ -545,7 +582,13 @@ def analyse(model: Model):
                                     else candidate > target + 1e-10
                                 )
                                 target[changed] = candidate[changed]
+                                fractions = mtq[0 if is_low else 1] if mtq else None
                                 for j in changed:
+                                    extra = (
+                                        {"fraction": float(fractions[j])}
+                                        if name == "lane" and mtq
+                                        else {}
+                                    )
                                     infos[j] = case_record(
                                         name,
                                         direction,
@@ -553,6 +596,7 @@ def analyse(model: Model):
                                         group["axles"],
                                         factor,
                                         **variant,
+                                        **extra,
                                     )
         if include_lane:
             # Include the lane case with its truck completely off the bridge.
@@ -676,6 +720,7 @@ def analyse(model: Model):
             "lane_w": lane_w,
             "fraction": fraction,
             "lane_style": lane_style,
+            "mtq_auto": mtq_active(model),
         },
         "meta": {
             "elapsed": round(time.perf_counter() - started, 3),
@@ -701,7 +746,7 @@ def analyse(model: Model):
 
 
 def two_truck_envelope(basis, model, low, high, info_low, info_high, step):
-    """AASHTO 3.6.1.3.1: 90% two trucks + adverse lane; M− and interior R.
+    """AASHTO 3.6.1.3.1: 90% two trucks + full-deck lane; M− and interior R.
 
     Fixed 14 ft axle spacing; clear headway >= 50 ft, varied on the travel
     grid. Truck centres occupy adjacent spans. A prefix optimum searches all
@@ -726,14 +771,10 @@ def two_truck_envelope(basis, model, low, high, info_low, info_high, step):
     indices = np.r_[moment_indices, reactions]
     if not len(indices):
         return 0
-    lane_lo, lane_hi, _, _ = basis.lane(9.3)
+    lane_lo = lane_hi = basis.full_lane(9.3)
     scale = displayed_axle_factor(model)
     factor = 1.33 if model.live.dynamic else 1.0
-    directions = (
-        ["forward", "reverse"]
-        if model.live.direction == "both"
-        else [model.live.direction]
-    )
+    directions = ["forward", "reverse"]
     positions = 0
     for direction in directions:
         sign = -1 if direction == "forward" else 1
@@ -853,7 +894,7 @@ def record_axles(model, record, length):
     if model.load_mode == "dead" or record.get("case") == "unloaded":
         ids = []
     if record.get("case") == "lane":
-        factor = lane_axle_factor(model.live, factor)
+        factor = lane_axle_factor(model.live, factor, record)
     return [
         {
             "id": i + 1,
@@ -939,26 +980,22 @@ def traverse(model, direction="forward", frames=60):
     lane_w, _, lane_style = lane_parameters(model.live)
     base = dead.copy()
     lane = []
-    patterned = first["case"] == "lane" and lane_style == "patterned"
-    if first["case"] == "lane" and lane_style == "full" and model.load_mode != "dead":
+    # The crossing shows the positioned vehicle with its lane load on the
+    # whole deck, like a user-positioned snapshot.
+    if first["case"] == "lane" and lane_style != "none" and model.load_mode != "dead":
         base += basis.full_lane(lane_w * model.live.factor)
         lane = [{"start": 0.0, "end": basis.length, "w": lane_w * model.live.factor}]
     out = []
     ls, ds = live_scale(model, basis), dead_scale(model, basis)
     for position in np.linspace(begin, end, frames):
         record = position_record(model, float(position), direction)
-        if patterned:
-            snap = snapshot(model, record)
-            values = np.r_[snap["V"], snap["M"], snap["D"], snap["R"], snap["Mr"]]
-            axles, frame_lane = snap["axles"], snap["lane"]
-        else:
-            axles = record_axles(model, record, basis.length)
-            values = base.copy()
-            for axle in axles:
-                values += basis.unit([axle["x"]])[0] * axle["load"]
-            if ls is not None:  # per-girder live effects (S6-25 FT by zone)
-                values = dead * (1 if ds is None else ds) + (values - dead) * ls
-            frame_lane = lane
+        axles = record_axles(model, record, basis.length)
+        values = base.copy()
+        for axle in axles:
+            values += basis.unit([axle["x"]])[0] * axle["load"]
+        if ls is not None:  # per-girder live effects (S6-25 FT by zone)
+            values = dead * (1 if ds is None else ds) + (values - dead) * ls
+        frame_lane = lane
         out.append(
             {
                 "position": float(position),
@@ -987,12 +1024,9 @@ def snapshot(model, record, target_index=None, sense="max"):
         intervals = []
     special = record.get("case") == "hl93_two_trucks"
     is_lane = record.get("case") == "lane" or special
-    lane_w, _, lane_style = lane_parameters(model.live)
+    lane_w, _, _ = lane_parameters(model.live)
     if special:
-        lane_style = "patterned"
         lane_w *= 0.9
-        target_index = record["target_index"]
-        sense = record["sense"]
     axles = record_axles(model, record, basis.length)
     # Physical arrangement first (equilibrium, reactions, graph); the S6-25
     # zone fractions are applied to the per-girder effects at the end.
@@ -1000,35 +1034,10 @@ def snapshot(model, record, target_index=None, sense="max"):
     for axle in axles:
         values += basis.unit([axle["x"]])[0] * axle["load"]
     lane_intervals = []
-    lane_q = np.array([])
-    lane_mass = np.array([])
     if is_lane and model.load_mode != "dead":
         lane_w *= model.live.factor
-        if lane_style == "full":
-            lane_intervals.append({"start": 0.0, "end": basis.length, "w": lane_w})
-            values += basis.full_lane(lane_w)
-        else:
-            _, _, q, u = basis.lane(lane_w)
-            target_index = int(target_index or 0)
-            polarity = 1 if sense == "max" else -1
-            selected = polarity * u[:, target_index] > 1e-12
-            dq = np.diff(q)
-            lane_q = q
-            lane_mass = (
-                lane_w * selected * np.r_[dq[0] / 2, (dq[:-1] + dq[1:]) / 2, dq[-1] / 2]
-            )
-            # Integrate the SAME nodal pattern for every effect (coincident
-            # result), not the individual envelopes of the other responses.
-            values += lane_w * np.trapezoid(u * selected[:, None], q, axis=0)
-            changes = np.diff(np.r_[False, selected, False].astype(int))
-            for a, b in zip(np.where(changes == 1)[0], np.where(changes == -1)[0]):
-                lane_intervals.append(
-                    {
-                        "start": float(q[a]),
-                        "end": float(q[min(b, len(q) - 1)]),
-                        "w": lane_w,
-                    }
-                )
+        lane_intervals.append({"start": 0.0, "end": basis.length, "w": lane_w})
+        values += basis.full_lane(lane_w)
     nx = basis.nx
     total_load = sum(a["load"] for a in axles) + sum(
         (v["end"] - v["start"]) * v["w"] for v in intervals
@@ -1037,13 +1046,9 @@ def snapshot(model, record, target_index=None, sense="max"):
         (v["end"] - v["start"]) * v["w"] * (v["end"] + v["start"]) / 2
         for v in intervals
     )
-    if is_lane:
-        if lane_style == "full":
-            total_load += lane_w * basis.length
-            total_moment += lane_w * basis.length**2 / 2
-        else:
-            total_load += lane_w * np.trapezoid(selected.astype(float), q)
-            total_moment += lane_w * np.trapezoid(selected * q, q)
+    if is_lane and model.load_mode != "dead":
+        total_load += lane_w * basis.length
+        total_moment += lane_w * basis.length**2 / 2
     r = values[3 * nx : 3 * nx + basis.ns]
     mr = values[3 * nx + basis.ns :]
     # Add both sides of every applied point load to the plotted snapshot. The
@@ -1067,17 +1072,11 @@ def snapshot(model, record, target_index=None, sense="max"):
         a, b, w = load["start"], load["end"], load["w"]
         gv -= w * np.clip(gx - a, 0, b - a)
         gm -= w / 2 * (np.maximum(gx - a, 0) ** 2 - np.maximum(gx - b, 0) ** 2)
-    if is_lane and lane_style == "full":
+    if is_lane:
         for load in lane_intervals:
             a, b, w = load["start"], load["end"], load["w"]
             gv -= w * np.clip(gx - a, 0, b - a)
             gm -= w / 2 * (np.maximum(gx - a, 0) ** 2 - np.maximum(gx - b, 0) ** 2)
-    if len(lane_q):
-        cumulative = np.r_[0, np.cumsum(lane_mass)]
-        moments = np.r_[0, np.cumsum(lane_mass * lane_q)]
-        gv -= cumulative[np.searchsorted(lane_q, gc, side="left")]
-        before = np.searchsorted(lane_q, gx, side="left")
-        gm -= gx * cumulative[before] - moments[before]
     if ft_applied(model):
         # Per-girder effects: the live part (trucks and lane load) takes the
         # zone FT (V: shear, M and δ: moment), the dead-load shear of an
@@ -1260,4 +1259,3 @@ def stress_all(model, result):
         "tension": t_max,
         "compression": c_max,
     }
-

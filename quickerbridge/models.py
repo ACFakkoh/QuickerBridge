@@ -189,13 +189,23 @@ class LiveLoad(InputModel):
     )
     case: Literal["governing", "truck", "lane"] = "governing"
     lane_fraction: Literal[0.63, 0.8] = 0.8
+    # CL-750-QC only: MTQ Info-structures A2023-05 chooses 63 % or 80 % of the
+    # axles per response; when on, lane_fraction is ignored.
+    mtq_auto: bool = True
     lane_w: float = Field(default=9, ge=0, le=1000)  # custom vehicle only
     cooper_e: float = Field(default=80, ge=10, le=200)  # AREA / AREMA Cooper E
     factor: float = Field(default=1, ge=0, le=1000)
     axle_factor: float = Field(default=1, ge=0, le=1000)
     dynamic: bool = True
     two_trucks: bool = False  # HL-93 supplementary 90% negative-moment/pier case
+    # v0.9.7: the vehicle always travels in both directions. Older projects
+    # may still hold "forward"/"reverse"; they are read as "both".
     direction: Literal["both", "forward", "reverse"] = "both"
+
+    @model_validator(mode="after")
+    def both_directions(self):
+        self.direction = "both"
+        return self
 
     @model_validator(mode="after")
     def axles(self):
@@ -209,6 +219,20 @@ class LiveLoad(InputModel):
 
 
 class ThermalLoad(InputModel):
+    """Imposed deformations (v0.9.7), each analysed on its own.
+
+    ``imposed`` selects the case: thermal gradient, slab shrinkage or slab
+    creep. Shrinkage and creep are a uniform shortening of the slab concrete,
+    restrained by the girder on the long-term composite section (k·n).
+    """
+
+    imposed: Literal["thermal", "shrinkage", "creep"] = "thermal"
+    shrinkage_micro: float = Field(default=250, ge=0, le=3000)  # slab shortening, 10^-6
+    creep_phi: float = Field(default=2.0, ge=0, le=10)  # creep coefficient
+    creep_stress: float = Field(
+        default=3.0, ge=0, le=60
+    )  # sustained slab compression, MPa
+    modular_factor: float = Field(default=3.0, ge=1, le=10)  # k of the k·n section
     delta_T: float = Field(default=15, ge=-100, le=100)  # T_top - T_bottom, deg C
     alpha_micro: float = Field(default=12, gt=0, le=100)  # 10^-6 / deg C
     # v0.9.6: the reference depth comes from the sections (girder + haunch +
@@ -265,13 +289,13 @@ class ModalSettings(InputModel):
 
 class Model(InputModel):
     spans: list[Span] = Field(
-        default_factory=lambda: [Span(), Span()], min_length=1, max_length=5
+        default_factory=lambda: [Span(), Span()], min_length=1, max_length=7
     )
     supports: list[Literal["pin", "roller", "fixed", "spring"]] = Field(
         default_factory=lambda: ["roller", "pin", "roller"]
     )
     # Rotational spring stiffness per support, kN·m/rad (used by "spring").
-    support_springs: list[float] = Field(default_factory=list, max_length=6)
+    support_springs: list[float] = Field(default_factory=list, max_length=8)
     sections: list[Section] = Field(
         default_factory=lambda: [Section()], min_length=1, max_length=20
     )

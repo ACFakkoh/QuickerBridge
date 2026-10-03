@@ -1,4 +1,9 @@
-"""Uniform linear thermal-gradient analysis through PyCBA imposed curvature."""
+"""Imposed deformations through PyCBA imposed curvature (v0.9.7).
+
+Three cases, each analysed on its own: thermal gradient (linear or
+bilinear), slab shrinkage and slab creep. Shrinkage and creep are a uniform
+shortening of the slab concrete restrained by the girder.
+"""
 
 import time
 
@@ -39,8 +44,61 @@ def section_depth(section) -> float | None:
     return depth
 
 
+def slab_strain(model: Model, section) -> float:
+    """Free shortening of the slab concrete (positive, dimensionless).
+
+    Shrinkage: ε_sh as entered. Creep: ε_cr = φ σc / Ec, with σc the mean
+    sustained compression of the slab and Ec from f'c and γc of the slab.
+    """
+    th = model.thermal
+    if th.imposed == "shrinkage":
+        return th.shrinkage_micro * 1e-6
+    from .section_props import concrete_modulus
+
+    slab = section.composite
+    ec = concrete_modulus(slab.fc, slab.unit_weight * 1000 / 9.81)
+    return th.creep_phi * th.creep_stress / ec
+
+
+def slab_restraint(model: Model, section) -> dict:
+    """Long-term composite section (slab / k·n) restraining a slab strain.
+
+    Returns the transformed slab area, its lever arm to the neutral axis and
+    the inertia (mm², mm, mm⁴) of the k·n section, bars included.
+    """
+    from .section_props import _combine, bars, composite_properties, girder_base
+
+    slab = section.composite
+    if section.kind == "ei" or slab is None or not slab.enabled:
+        raise ValueError("thermal.needs_slab")
+    comp = composite_properties(section, slab)
+    g = girder_base(section)
+    ratio = model.thermal.modular_factor * comp["n"]
+    base = g["depth"] + slab.haunch
+    net = comp["concrete_area"]
+    parts = g["parts"] + [
+        (
+            net / ratio,
+            base + slab.slab_thickness / 2,
+            net / ratio * slab.slab_thickness**2 / 12,
+        )
+    ]
+    parts += [(b["area"] * comp["m"], base + b["y_in_slab"], 0.0) for b in bars(slab)]
+    area, ybar, inertia = _combine(parts)
+    return {
+        "area": net / ratio,
+        "lever": base + slab.slab_thickness / 2 - ybar,
+        "I": inertia,
+        "ratio": ratio,
+        "y_bottom": ybar,
+    }
+
+
 def free_curvature(model: Model, section) -> float:
-    """Free thermal curvature (1/m, positive when the top is hotter).
+    """Free curvature (1/m, positive when the top lengthens: top hotter).
+
+    Shrinkage and creep shorten the slab: κ = −ε As e / I on the k·n
+    section (sagging, the beam bows downward like a cooler top).
 
     Linear: α ΔT / h with h from the section (or the manual depth).
     Bilinear (S6-25 type): T falls linearly from slab_delta_T at the top of the
@@ -48,6 +106,9 @@ def free_curvature(model: Model, section) -> float:
     composite 1n section (slab / n, bars × m).
     """
     th = model.thermal
+    if th.imposed in ("shrinkage", "creep"):
+        r = slab_restraint(model, section)
+        return -slab_strain(model, section) * r["area"] * r["lever"] / r["I"] * 1000.0
     alpha = th.alpha_micro * 1e-6
     if th.profile == "bilinear":
         from .section_props import composite_properties, girder_base
@@ -89,7 +150,9 @@ def span_curvatures(model: Model) -> list[float]:
             [
                 free_curvature(
                     model,
-                    section_at(model, start + x, "right" if x < span.length else "left"),
+                    section_at(
+                        model, start + x, "right" if x < span.length else "left"
+                    ),
                 )
                 for x in xs
             ]
@@ -98,6 +161,17 @@ def span_curvatures(model: Model) -> list[float]:
         out.append(-mean)
         start += span.length
     return out
+
+
+def imposed_strain(model: Model):
+    """Slab shortening (10⁻⁶) of a shrinkage/creep case at the first section
+    with a slab, for display; None for the thermal gradient."""
+    if model.thermal.imposed == "thermal":
+        return None
+    for section in model.sections:
+        if section.kind != "ei" and section.composite and section.composite.enabled:
+            return slab_strain(model, section) * 1e6
+    return None
 
 
 def analyse_thermal(model: Model) -> dict:
@@ -216,6 +290,8 @@ def analyse_thermal(model: Model) -> dict:
             "elapsed": round(time.perf_counter() - started, 3),
             "curvature": float(np.mean(kappas)),
             "curvatures": kappas,
+            "imposed": model.thermal.imposed,
+            "slab_strain": imposed_strain(model),
             "equilibrium_error": max(max_force_error, max_moment_error),
             "pycba": cba.__version__,
             "precision": model.precision,

@@ -1,4 +1,4 @@
-# QuickerBridge 0.9.6 — guide en français
+# QuickerBridge 0.9.7 — guide en français
 
 [English README](README.md)
 
@@ -11,7 +11,7 @@ compacte. Aucune installation de Python et aucun serveur local pour les utilisat
 ## Démarrer
 
 - **Sur le web :** https://acfakkoh.github.io/QuickerBridge/ (GitHub Pages, publié à chaque mise à jour de `main`).
-- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.9.6-2026-10-02.html`) dans un navigateur moderne. Si vous
+- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.9.7-2026-10-02.html`) dans un navigateur moderne. Si vous
   recevez l’archive portable, extrayez-la avant d’ouvrir le HTML.
 - Une connexion Internet est nécessaire au démarrage pour charger Pyodide et ses
   bibliothèques. Le cache peut accélérer les ouvertures suivantes; cette édition
@@ -23,7 +23,7 @@ pont ne sont pas envoyées à un serveur de calcul. Fermer l’onglet interrompt
 
 ## Saisir un modèle
 
-1. **Géométrie :** choisissez 1 à 5 travées, leurs longueurs en mètres et les appuis.
+1. **Géométrie :** choisissez 1 à 7 travées, leurs longueurs en mètres et les appuis.
    Les appuis articulés et à rouleaux bloquent le déplacement vertical, avec
    continuité de la poutre aux appuis intérieurs. **Encastré (culée intégrale)**
    bloque aussi la rotation et donne une réaction de moment Mr (anti-horaire +).
@@ -40,7 +40,7 @@ pont ne sont pas envoyées à un serveur de calcul. Fermer l’onglet interrompt
    une **poutre précontrainte NEBT 1000 à 1800** (propriétés normalisées, E béton
    28 GPa par défaut, modifiable), ou une rigidité EI constante directement en kN·m².
    La hauteur comprend les semelles.
-3. **Charges :** choisissez permanentes, routières, les deux, ou thermique seul.
+3. **Charges :** choisissez permanentes, routières, les deux, ou une déformation imposée seule (gradient thermique, retrait ou fluage de la dalle).
    Le **poids propre des poutres** acier (aire × 77 kN/m³, +15 %) et NEBT (poids
    normalisé, +10 %) est ajouté par défaut aux charges permanentes; majorations et
    facteur de charge modifiables, option pour ne pas l’appliquer. Les projets
@@ -210,7 +210,7 @@ Open the provided GitHub Pages link, or double-click the extracted
 access is required to download the browser runtime; guaranteed offline use is not
 included. Calculations run locally in your browser. Use the top EN/FR toggle.
 
-Define 1–5 spans, supports, steel plates or direct constant EI, then select dead,
+Define 1–7 spans, supports, steel plates or direct constant EI, then select dead,
 live, combined, or thermal-only loading. An inertia modifier multiplies the gross
 steel I for stiffness only; it does not calculate composite section properties.
 In a non-prismatic zone, only height varies. “Plates, E and M from” selects the
@@ -235,7 +235,7 @@ to Canadian truck axle subsets; reduced-truck-plus-lane cases have no dynamic
 allowance. HL-93 envelopes its permitted 4.3–9.0 m rear-axle spacing and applies
 its 33% allowance to truck/tandem axles only, with a 9.3 kN/m companion UDL. Cooper
 uses PyCBA’s full E-series train and companion UDL. Standard companion UDLs cover
-the full bridge; the optional 90% two-truck HL-93 case uses adverse lane regions
+the full bridge; the optional 90% two-truck HL-93 case uses the full-deck lane
 for negative moments and interior reactions, with at least 50 ft clear headway
 and fixed 14 ft truck axle spacings. The maintenance vehicle is 24 + 56 kN at 2.0 m, with no lane load
 or dynamic allowance. Truck and lane cases are alternatives. No automatic self-weight,
@@ -277,6 +277,14 @@ GitHub Pages, consultez [le guide développeur](README_DEVELOPER.md).
   fenêtre complète, où l’on change la station (◀ ▶, x, curseur) et le y de S3.
   Profils en trait continu depuis σ = 0, ANE en pointillés; lignes dessus /
   dessous de dalle et armature inf. retirées du tableau.
+
+## Nouveautés 0.9.7
+
+- **Fraction MTQ automatique (CL-750-QC).** Activée par défaut : la voie de 12,6 kN/m accompagne le camion à 63 % ou 80 % de ses essieux selon l’effet, comme dans l’Info-structures A2023-05 du MTQ (63 % pour le M+ hors des zones de M− des appuis, l’effort tranchant, les ponts à une travée et les réactions sans continuité du tablier; 80 % pour le M−, le M+ dans les zones de M− sur piles, les réactions sur piles continues et les flèches). Décochez-la pour choisir 63 % ou 80 % à la main. La charge de voie couvre toujours tout le tablier (cas « bumper-to-bumper » de S6), comme avant. Les réactions d’appui forment maintenant un cinquième diagramme avec des flèches aux appuis, à la place du tableau sous les diagrammes.
+- Le véhicule circule toujours dans les deux sens; l’option « sens de circulation » est retirée (les anciens fichiers s’ouvrent sans changement).
+- Jusqu’à 7 travées. La section au curseur (poutre, dalle, ou rectangle « EI ») est dessinée dans le cadre de la poutre.
+- « Thermique » devient **Déformation imposée** : gradient thermique (profil illustré), retrait de la dalle (250 × 10⁻⁶ par défaut) et fluage de la dalle (ε = φ σc / Ec), chacun analysé seul, sur la section mixte à long terme k·n (k = 3 par défaut).
+- Contraintes : l’aperçu au survol montre la contrainte de l’armature sup. dans les deux cas, sans valeur de dalle, et la légende M max / M min; la fenêtre complète a un croquis de la poutre avec curseur (clic ou glisser pour changer de station).
 
 ## Nouveautés 0.9.6
 

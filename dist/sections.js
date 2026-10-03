@@ -154,15 +154,15 @@ document.addEventListener('change',e=>{
  updateProjectState();renderSectionDialog();spRequest();
 });
 // v0.9.4 — staged stresses over the depth at a station (double-click a
-// diagram, or "σ ↗" in the readout). Self-weight and other permanent loads on
+// diagram). Self-weight and other permanent loads on
 // the steel alone or the 3n section, live load on the 1n section; a composite
 // stage under a negative moment uses the cracked section (steel + bars).
-Object.assign(words.fr,{stTitle:'Contraintes sur la hauteur',stOpen:'σ ↗',stHint:'Double-cliquez un diagramme pour les contraintes à cette station.',stSelfStage:'Poids propre repris par',stDeadStage:'Autres permanentes reprises par',stSteel:'Acier seul',st3n:'Mixte 3n',stMoments:'Moments à la station (kN·m)',stSelf:'Poids propre',stDead:'Autres permanentes',stLiveMax:'Surcharge (env. max)',stLiveMin:'Surcharge (env. min)',stCaseMax:'Cas M max',stCaseMin:'Cas M min',stFibre:'Fibre',stTotal:'Total',stSlabTop:'Dessus de dalle',stSlabBottom:'Dessous de dalle',stBarTop:'Armature sup.',stBarBottom:'Armature inf.',stS2:'S2 · haut semelle sup.',stS3:'S3 · y sous l’ANE 1n',stS4:'S4 · haut semelle inf.',stS5:'S5 · bas semelle inf.',stSign:'σ en MPa, traction +, compression −. Béton : σ acier équivalente / n (ou 3n). Moment négatif sur la section mixte : béton fissuré, acier + armatures.',stNoSlab:'Aucune dalle définie pour cette section : toutes les étapes sur l’acier seul. Définissez la dalle dans « Propriétés de section ».',stCracked:'fissurée',stNotSteel:'Contraintes disponibles pour les poutres en I en acier.',stDefine:'Définir la dalle ↗'});
-Object.assign(words.en,{stTitle:'Stresses over the depth',stOpen:'σ ↗',stHint:'Double-click a diagram for the stresses at that station.',stSelfStage:'Self-weight carried by',stDeadStage:'Other permanent loads carried by',stSteel:'Steel alone',st3n:'Composite 3n',stMoments:'Moments at the station (kN·m)',stSelf:'Self-weight',stDead:'Other permanent',stLiveMax:'Live load (envelope max)',stLiveMin:'Live load (envelope min)',stCaseMax:'M max case',stCaseMin:'M min case',stFibre:'Fibre',stTotal:'Total',stSlabTop:'Top of slab',stSlabBottom:'Bottom of slab',stBarTop:'Top bars',stBarBottom:'Bottom bars',stS2:'S2 · top of top flange',stS3:'S3 · y below the 1n ENA',stS4:'S4 · top of bottom flange',stS5:'S5 · bottom of bottom flange',stSign:'σ in MPa, tension +, compression −. Concrete: equivalent steel σ / n (or 3n). Negative moment on the composite section: cracked concrete, steel + bars.',stNoSlab:'No slab defined for this section: every stage on the steel alone. Define the slab in “Section properties”.',stCracked:'cracked',stNotSteel:'Stresses are available for steel I-girders.',stDefine:'Define the slab ↗'});
+Object.assign(words.fr,{stTitle:'Contraintes sur la hauteur',stSelfStage:'Poids propre repris par',stDeadStage:'Autres permanentes reprises par',stSteel:'Acier seul',st3n:'Mixte 3n',stMoments:'Moments à la station (kN·m)',stSelf:'Poids propre',stDead:'Autres permanentes',stLiveMax:'Surcharge (env. max)',stLiveMin:'Surcharge (env. min)',stCaseMax:'Cas M max',stCaseMin:'Cas M min',stFibre:'Fibre',stTotal:'Total',stSlabTop:'Dessus de dalle',stSlabBottom:'Dessous de dalle',stBarTop:'Armature sup.',stBarBottom:'Armature inf.',stS2:'S2 · haut semelle sup.',stS3:'S3 · y sous l’ANE 1n',stS4:'S4 · haut semelle inf.',stS5:'S5 · bas semelle inf.',stSign:'σ en MPa, traction +, compression −. Béton : σ acier équivalente / n (ou 3n). Moment négatif sur la section mixte : béton fissuré, acier + armatures.',stNoSlab:'Aucune dalle définie pour cette section : toutes les étapes sur l’acier seul. Définissez la dalle dans « Propriétés de section ».',stCracked:'fissurée',stNotSteel:'Contraintes disponibles pour les poutres en I en acier.',stDefine:'Définir la dalle ↗'});
+Object.assign(words.en,{stTitle:'Stresses over the depth',stSelfStage:'Self-weight carried by',stDeadStage:'Other permanent loads carried by',stSteel:'Steel alone',st3n:'Composite 3n',stMoments:'Moments at the station (kN·m)',stSelf:'Self-weight',stDead:'Other permanent',stLiveMax:'Live load (envelope max)',stLiveMin:'Live load (envelope min)',stCaseMax:'M max case',stCaseMin:'M min case',stFibre:'Fibre',stTotal:'Total',stSlabTop:'Top of slab',stSlabBottom:'Bottom of slab',stBarTop:'Top bars',stBarBottom:'Bottom bars',stS2:'S2 · top of top flange',stS3:'S3 · y below the 1n ENA',stS4:'S4 · top of bottom flange',stS5:'S5 · bottom of bottom flange',stSign:'σ in MPa, tension +, compression −. Concrete: equivalent steel σ / n (or 3n). Negative moment on the composite section: cracked concrete, steel + bars.',stNoSlab:'No slab defined for this section: every stage on the steel alone. Define the slab in “Section properties”.',stCracked:'cracked',stNotSteel:'Stresses are available for steel I-girders.',stDefine:'Define the slab ↗'});
 // v0.9.5: station and S3 y set in the window, short fibre table (no slab
 // faces, no bottom bars), hover preview next to the diagrams, visible entry.
-Object.assign(words.fr,{stOpen:'σ Contraintes ↗',stCta:'σ Contraintes',stCtaTitle:'Ouvrir la fenêtre des contraintes sur la hauteur (station survolée, sinon M max)',stHint:'Double-cliquez un diagramme pour ouvrir la fenêtre complète des contraintes à cette station.',hoverHint:'Survolez un diagramme : valeurs et aperçu des contraintes · double-clic : fenêtre complète des contraintes',stStation:'Station x (m)',stPrev:'Station précédente',stNext:'Station suivante',stY1n:'S3 · y sous l’ANE 1n (mm)',stYsteel:'S3 · y sous l’ANE acier (mm)',stS3s:'S3 · y sous l’ANE acier',stPeekTitle:'Contraintes σ (MPa)',stPeekHint:'Double-clic : fenêtre complète (station, y de S3, étapes de chargement)',stPeekTop:'Haut acier S2',stPeekBottom:'Bas acier S5',stPeekSlab:'Dessus dalle'});
-Object.assign(words.en,{stOpen:'σ Stresses ↗',stCta:'σ Stresses',stCtaTitle:'Open the stresses over the depth (hovered station, otherwise M max)',stHint:'Double-click a diagram to open the full stress window at that station.',hoverHint:'Hover a diagram: values and stress preview · double-click: full stress window',stStation:'Station x (m)',stPrev:'Previous station',stNext:'Next station',stY1n:'S3 · y below the 1n ENA (mm)',stYsteel:'S3 · y below the steel ENA (mm)',stS3s:'S3 · y below the steel ENA',stPeekTitle:'Stresses σ (MPa)',stPeekHint:'Double-click: full window (station, S3 y, load stages)',stPeekTop:'Steel top S2',stPeekBottom:'Steel bottom S5',stPeekSlab:'Top of slab'});
+Object.assign(words.fr,{stCta:'σ Contraintes',stCtaTitle:'Ouvrir la fenêtre des contraintes sur la hauteur (station survolée, sinon M max)',stStation:'Station x (m)',stPrev:'Station précédente',stNext:'Station suivante',stY1n:'S3 · y sous l’ANE 1n (mm)',stYsteel:'S3 · y sous l’ANE acier (mm)',stS3s:'S3 · y sous l’ANE acier',stPeekTitle:'Contraintes σ (MPa)',stPeekHint:'Double-clic : fenêtre complète (station, y de S3, étapes de chargement)',stPeekTop:'Haut acier S2',stPeekBottom:'Bas acier S5',stPeekSlab:'Dessus dalle'});
+Object.assign(words.en,{stCta:'σ Stresses',stCtaTitle:'Open the stresses over the depth (hovered station, otherwise M max)',stStation:'Station x (m)',stPrev:'Previous station',stNext:'Next station',stY1n:'S3 · y below the 1n ENA (mm)',stYsteel:'S3 · y below the steel ENA (mm)',stS3s:'S3 · y below the steel ENA',stPeekTitle:'Stresses σ (MPa)',stPeekHint:'Double-click: full window (station, S3 y, load stages)',stPeekTop:'Steel top S2',stPeekBottom:'Steel bottom S5',stPeekSlab:'Top of slab'});
 // v0.9.6: stresses for steel and NEBT girders; load stages saved with the
 // project (model.stress); one fixed σ scale per analysis, from the extreme
 // tension and compression of the whole bridge (preview and window); values on
@@ -225,8 +225,9 @@ function renderStress(){
  const dlg=$('#stress-dialog');if(!dlg||stIndex===null||!result)return;
  if(!dlg.querySelector('#st-content')){
   dlg.innerHTML=`<div class="sp-head"><span class="axle-badge">σ</span><div><b id="st-title"></b><small>${t('stSign')}</small></div><button class="icon-button sp-close" data-st-close title="${t('spClose')}">×</button></div>
-<div class="st-controls"><div class="field st-station"><span>${t('stStation')}</span><div class="st-station-row"><button class="icon-button" data-st-step="-1" title="${t('stPrev')}" aria-label="${t('stPrev')}">◀</button><input id="st-x" type="number" step="any" min="0" max="${result.x.at(-1)}"><button class="icon-button" data-st-step="1" title="${t('stNext')}" aria-label="${t('stNext')}">▶</button><input id="st-slider" type="range" min="0" max="${result.x.length-1}" step="1" aria-label="${t('stStation')}"></div></div><label class="field st-y"><span id="st-y-label">${t('stY1n')}</span><input id="st-y" type="number" min="0.001" max="15000" step="any" disabled></label><p class="help st-stage-note">${t('stStageNote')}</p></div><div id="st-content"></div>`;
+<div class="st-controls"><div class="field st-station"><span>${t('stStation')}</span><div class="st-station-row"><button class="icon-button" data-st-step="-1" title="${t('stPrev')}" aria-label="${t('stPrev')}">◀</button><input id="st-x" type="number" step="any" min="0" max="${result.x.at(-1)}"><button class="icon-button" data-st-step="1" title="${t('stNext')}" aria-label="${t('stNext')}">▶</button><input id="st-slider" type="range" min="0" max="${result.x.length-1}" step="1" aria-label="${t('stStation')}"></div></div><label class="field st-y"><span id="st-y-label">${t('stY1n')}</span><input id="st-y" type="number" min="0.001" max="15000" step="any" disabled></label><p class="help st-stage-note">${t('stStageNote')}</p></div><div class="st-beam-wrap"><svg id="st-beam" viewBox="0 0 640 78" role="slider" tabindex="0" aria-label="${t('stStation')}"></svg></div><div id="st-content"></div>`;
  }
+ stBeamDraw();
  const x=result.x[stIndex],sec=stData&&!stData.error?stData.section:null,mx=sec?stData.cases.max:null;
  dlg.querySelector('#st-title').innerHTML=`${t('stTitle')} · x = ${fmt(x)} m${sec?` · ${esc(sec.name)} · h ${fmt(mx.depth,0)} mm`:''}`;
  const xi=dlg.querySelector('#st-x'),sl=dlg.querySelector('#st-slider'),yi=dlg.querySelector('#st-y');
@@ -330,6 +331,7 @@ function stPeekRender(el,i){
  const a=stAll.data,st=a&&!a.error?a.stations[i]:null;
  let h=`<div class="st-peek-head"><b>${t('stPeekTitle')}</b><span>x = ${fmt(result.x[i])} m${st?` · ${esc(a.sections[st.s].name)}`:''}</span></div>`;
  h+=st?`<div class="st-peek-svg">${stMini(st,a.sections[st.s])}</div>`:`<p class="help">${t('stNotSteel')}</p>`;
+ if(st)h+=`<div class="st-peek-legend"><span class="st-max-text"><i></i>${t('stCaseMax')}</span><span class="st-min-text"><i></i>${t('stCaseMin')}</span>${st.composite?`<span class="st-bar-key">▬ ${t('stBarTop')}</span>`:''}</div>`;
  el.innerHTML=h+`<p class="st-peek-hint">${t('stPeekHint')}</p>`;el.classList.add('show');
 }
 // Compact profile at a fixed height scale (deepest girder + slab of the model,
@@ -343,8 +345,8 @@ function stMini(st,sec){
  let g=stZones(sc,left,right,top-6,vh-pad+4,10)+stSectionSvg(sec,composite,d0,X,Y,wMax)+`<line x1="${ox}" x2="${ox}" y1="${top-6}" y2="${vh-pad+4}" class="sp-axis"/>`;
  [[st.min,'st-min'],[st.max,'st-max']].forEach(([tot,cls])=>{const p=stCasePath(tot,fib,sec,composite,d0,Y,SX,ox);g+=`<path d="${p.path}" class="${cls} st-mini-area"/>`;if(p.band)g+=`<path d="${p.band}" class="${cls} st-bar-band"/>`;});
  // Values on the profile, in MPa, coloured by sign (M max above, M min below).
- const keys=['S5','S2'].concat(composite?['slab_top']:[]);
- [st.max,st.min].forEach((tot,n)=>keys.forEach(k=>{const v=tot[k];if(v===undefined||Math.abs(v)<.5)return;const x=SX(v),anchor=v>=0?(x>right-40?'end':'start'):(x<left+40?'start':'end');g+=`<text x="${x+(anchor==='start'?4:-4)}" y="${Y(fib[k])+(n?13:-4)}" text-anchor="${anchor}" class="st-val st-val-mini ${stSignCls(v)}">${stVal(v)}</text>`;}));
+ const keys=['S5','S2'].concat(composite?['bar_top']:[]);
+ [st.max,st.min].forEach((tot,n)=>keys.forEach(k=>{const v=tot[k];if(v===undefined||fib[k]===undefined||Math.abs(v)<.5)return;const x=SX(v),anchor=v>=0?(x>right-40?'end':'start'):(x<left+40?'start':'end');g+=`<text x="${x+(anchor==='start'?4:-4)}" y="${Y(fib[k])+(n?13:-4)}" text-anchor="${anchor}" class="st-val st-val-mini ${stSignCls(v)}">${stVal(v)}</text>`;}));
  return `<svg viewBox="0 0 ${vw} ${vh}" class="sp-svg" role="img" aria-label="${t('stTitle')}">${g}</svg>`;
 }
 // Visible entry point next to the display modes.
@@ -360,13 +362,12 @@ $('#charts')?.addEventListener('pointerleave',stPeekHide);
 // Prefetch the all-stations stresses when the pointer reaches the diagrams.
 $('#charts')?.addEventListener('pointerenter',()=>{if(display==='envelope')stAllLoad();});
 document.addEventListener('click',e=>{
- const open=e.target.closest('[data-stress-index]');if(open){openStress(Number(open.dataset.stressIndex));return;}
  if(e.target.closest('#stress-cta')){if(!result||result.kind==='thermal'||!jobId){$('#status').textContent=t('stNotSteel');return;}const M=result.max.M.map((v,k)=>Math.max(Math.abs(v),Math.abs(result.min.M[k])));openStress(stLastHover??M.indexOf(Math.max(...M)));return;}
  const step=e.target.closest('[data-st-step]');if(step&&stIndex!==null){stIndex=Math.max(0,Math.min(result.x.length-1,stIndex+Number(step.dataset.stStep)));const sl=$('#st-slider');if(sl)sl.value=stIndex;stLiveTitle();stLiveFigure();stRequestSoon();return;}
  if(e.target.closest('[data-st-close]')){$('#stress-dialog')?.close();}
 });
 document.addEventListener('input',e=>{if(e.target.id==='st-slider'&&stIndex!==null){stIndex=Number(e.target.value);stLiveTitle();stLiveFigure();stRequestSoon();}});
-function stLiveTitle(){const dlg=$('#stress-dialog');if(!dlg||!result)return;const x=result.x[stIndex],xi=dlg.querySelector('#st-x');if(xi&&document.activeElement!==xi)xi.value=Number(x.toFixed(3));const tt=dlg.querySelector('#st-title');if(tt)tt.innerHTML=tt.innerHTML.replace(/x = [^·]*m/,`x = ${fmt(x)} m`);}
+function stLiveTitle(){const dlg=$('#stress-dialog');if(!dlg||!result)return;stBeamCursor();const x=result.x[stIndex],xi=dlg.querySelector('#st-x');if(xi&&document.activeElement!==xi)xi.value=Number(x.toFixed(3));const tt=dlg.querySelector('#st-title');if(tt)tt.innerHTML=tt.innerHTML.replace(/x = [^·]*m/,`x = ${fmt(x)} m`);}
 document.addEventListener('change',e=>{
  if(e.target.id==='st-x'&&stIndex!==null&&e.target.validity.valid&&e.target.value!==''){stIndex=nearest(Number(e.target.value));e.target.blur();renderStress();stRequest();return;}
  if(e.target.id==='st-y'&&stData&&!stData.error&&e.target.validity.valid&&e.target.value!==''){
@@ -385,3 +386,44 @@ Object.assign(words.en,{spGirderNebt:'Precast NEBT girder',spGirderAlone:'Girder
 Object.assign(words.fr,{stS2n:'S2 · haut de la poutre',stS5n:'S5 · bas de la poutre'});Object.assign(words.en,{stS2n:'S2 · top of girder',stS5n:'S5 · bottom of girder'});
 Object.assign(words.fr,{stDeadSteel:'Permanentes « poutre seule »',stStageNote:'Poids propre et charges « poutre seule » sur la poutre seule; autres permanentes sur la section mixte 3n; surcharge sur 1n. Le choix se fait pour chaque charge permanente (onglet Charges).'});
 Object.assign(words.en,{stDeadSteel:'“Girder alone” permanent loads',stStageNote:'Self-weight and “girder alone” loads on the girder alone; other permanent loads on composite 3n; live load on 1n. The choice is made for each permanent load (Loads tab).'});
+
+// v0.9.7: beam sketch in the stress window (same style as the beam frame of
+// the main page) with a cursor at the station; click or drag to move it.
+// Hover preview: top-bar values, no slab value, M max / M min legend.
+const ST_BEAM={W:640,H:78,L:24,R:616,deck:30};
+function stBeamX(x){const total=result.x.at(-1);return ST_BEAM.L+x/total*(ST_BEAM.R-ST_BEAM.L);}
+function stBeamDraw(){
+ const svg=$('#st-beam');if(!svg||!result||!model)return;
+ const key=JSON.stringify([result.x.at(-1),model.spans,model.supports,model.sections.map(s=>[s.kind,s.depth,s.nebt]),model.nonprismatic]);
+ if(svg.dataset.key===key){stBeamCursor();return;}
+ svg.dataset.key=key;
+ const {W,H,deck}=ST_BEAM,starts=[0];model.spans.forEach(s=>starts.push(starts.at(-1)+s.length));
+ const maxDepth=Math.max(...model.sections.map(sectionDepth)),ds=14/maxDepth;
+ let g=`<rect x="0" y="0" width="${W}" height="${H}" rx="8" fill="#102d41"/>`;
+ model.spans.forEach((s,i)=>{
+  const outline=[];let previous=0;
+  const zones=model.nonprismatic&&s.zones.length?s.zones:[{end:1,section:s.section,end_section:s.section,profile:'constant'}];
+  zones.forEach(z=>{const a=model.sections[z.section]||model.sections[0],b=model.sections[z.end_section??z.section]||a;
+   for(let j=0;j<=12;j++){const f=j/12,shape=z.profile==='constant'?0:z.profile==='parabolic'?(sectionDepth(a)>sectionDepth(b)?1-(1-f)**2:f*f):f;outline.push([stBeamX(starts[i]+s.length*(previous+(z.end-previous)*f)).toFixed(1),(deck+(sectionDepth(a)*(1-shape)+sectionDepth(b)*shape)*ds).toFixed(1)]);}previous=z.end;});
+  g+=`<path d="M${stBeamX(starts[i])} ${deck}H${stBeamX(starts[i+1])}L${outline.slice().reverse().map(p=>p.join(' ')).join('L')}Z" fill="#2b5967" stroke="#73d8bd" stroke-width="1"/><line x1="${stBeamX(starts[i])}" x2="${stBeamX(starts[i+1])}" y1="${deck}" y2="${deck}" stroke="#a2f1d5" stroke-width="2"/>`;
+  g+=`<text x="${stBeamX((starts[i]+starts[i+1])/2)}" y="${H-5}" fill="#bdced7" text-anchor="middle" font-size="10">${fmt(s.length)} m</text>`;
+ });
+ starts.forEach((x,i)=>{const X=stBeamX(x);g+=model.supports[i]==='fixed'?`<line x1="${X}" x2="${X}" y1="${deck-2}" y2="${deck+26}" stroke="#dceaf0" stroke-width="2.5"/>`:`<path d="M${X} ${deck+17}l-6 10h12Z" fill="#dceaf0"/>`;g+=`<text x="${X}" y="${deck+38}" text-anchor="middle" font-size="9" fill="#91acbb">R${i+1}</text>`;});
+ g+=`<g id="st-beam-cursor"><line y1="6" y2="${deck+22}" stroke="#ffd49a" stroke-width="1.6"/><circle cy="${deck}" r="4.2" fill="#ffd49a" stroke="#102d41" stroke-width="1.4"/><text y="13" font-size="10" font-weight="700" fill="#ffd49a"></text></g>`;
+ svg.innerHTML=g;stBeamCursor();
+}
+function stBeamCursor(){
+ const c=$('#st-beam-cursor');if(!c||stIndex===null||!result)return;
+ const x=result.x[stIndex],X=stBeamX(x),txt=c.querySelector('text'),right=X>ST_BEAM.W-90;
+ c.querySelector('line').setAttribute('x1',X);c.querySelector('line').setAttribute('x2',X);c.querySelector('circle').setAttribute('cx',X);
+ txt.setAttribute('x',X+(right?-7:7));txt.setAttribute('text-anchor',right?'end':'start');txt.textContent=`x = ${fmt(x)} m`;
+}
+function stBeamPick(e){
+ const svg=$('#st-beam');if(!svg||stIndex===null||!result)return;const r=svg.getBoundingClientRect();if(!r.width)return;
+ const u=((e.clientX-r.left)/r.width*ST_BEAM.W-ST_BEAM.L)/(ST_BEAM.R-ST_BEAM.L),i=nearest(Math.max(0,Math.min(1,u))*result.x.at(-1));
+ if(i===stIndex)return;stIndex=i;const sl=$('#st-slider');if(sl)sl.value=stIndex;stLiveTitle();stLiveFigure();stRequestSoon();
+}
+document.addEventListener('pointerdown',e=>{const svg=e.target.closest?.('#st-beam');if(!svg)return;svg.setPointerCapture?.(e.pointerId);svg.dataset.drag='1';stBeamPick(e);});
+document.addEventListener('pointermove',e=>{const svg=$('#st-beam');if(svg&&svg.dataset.drag==='1')stBeamPick(e);});
+document.addEventListener('pointerup',()=>{const svg=$('#st-beam');if(svg)svg.dataset.drag='';});
+document.addEventListener('keydown',e=>{if(e.target.id!=='st-beam'||stIndex===null||!result)return;const d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(!d)return;e.preventDefault();stIndex=Math.max(0,Math.min(result.x.length-1,stIndex+d));const sl=$('#st-slider');if(sl)sl.value=stIndex;stLiveTitle();stLiveFigure();stRequestSoon();});
