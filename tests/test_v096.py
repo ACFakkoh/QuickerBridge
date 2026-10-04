@@ -1,5 +1,6 @@
 """v0.9.6: audit fixes, NEBT section properties and stresses, FT, exports."""
 
+from quickerbridge.projects import SCHEMA_VERSION
 import io
 import json
 import math
@@ -37,7 +38,7 @@ def test_stress_stages_are_saved_with_the_project():
     m.dead[0].stage = "steel"
     reopened = validate_project(json.dumps(create_project(m, "p")))
     assert reopened["model"]["dead"][0]["stage"] == "steel"
-    assert reopened["schema_version"] == 11
+    assert reopened["schema_version"] == SCHEMA_VERSION
     # Schema 9 files: a global "dead on steel" choice moves to every load.
     old = create_project(default_model(), "p")
     old["schema_version"] = 9
@@ -73,7 +74,7 @@ def test_variable_depth_stress_sections_match_the_analysis():
 
 
 def nebt(**slab):
-    return Section(kind="nebt", nebt="NEBT1400", composite=CompositeSlab(**slab))
+    return Section(kind="nebt", nebt="NEBT1400", E=28, composite=CompositeSlab(**slab))
 
 
 def test_nebt_section_properties():
@@ -257,7 +258,7 @@ def test_thermal_depth_from_sections_and_bilinear_gradient():
     alpha = m.thermal.alpha_micro * 1e-6
     # Linear: h = girder depth (no slab), then + haunch + slab.
     assert free_curvature(m, s) == pytest.approx(alpha * 15 / 1.2)
-    s.composite = CompositeSlab()
+    s.composite = CompositeSlab(slab_thickness=200)
     assert free_curvature(m, s) == pytest.approx(alpha * 15 / 1.45)
     assert span_curvatures(m)[0] == pytest.approx(-alpha * 15 / 1.45)
     m.thermal.depth_source = "manual"

@@ -117,7 +117,7 @@ def test_effective_properties(ref):
 def test_defaults_and_worker_action():
     c = CompositeSlab()
     assert (c.slab_thickness, c.haunch, c.fc, c.cover_top, c.cover_bottom) == (
-        200,
+        225,
         50,
         35,
         60,

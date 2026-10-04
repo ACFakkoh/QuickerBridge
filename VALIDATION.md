@@ -549,3 +549,68 @@ Scope: Notion pages "QuickerBridge 0.9.6 fix" and "Astra audit indépendant".
   next to the dot. Section, stress and method windows float (non-modal,
   draggable, no dark backdrop, Escape closes the front one).
 - 225 tests native; 209 + 1 skipped in browser mode.
+
+## v0.9.9 work protection and results header (verified 2026-10-04)
+
+Interface only; no calculation, project schema or Python change. Checked in
+the browser (static dist, real Pyodide): span edit then Ctrl+Z restores
+34.8 m and clears the unsaved mark, Ctrl+Y redoes; Reset with unsaved changes
+opens the dialog ("Réinitialiser le modèle?"), "Reset without saving" restores
+the default model and Ctrl+Z brings the edited model back; the unsaved model
+is stored in localStorage (`qb-autosave-v1`), removed when the model is saved
+or back to its saved state, and offered at the next start; Restore validates
+it through the worker and keeps it marked unsaved. A span of −5 m shows
+"Plage admise : 0,5 … 200" under the field and the Excel item reads
+"Corrigez d’abord les valeurs invalides". The stress window opens with no
+field in error. Results header: Static / Vibration modes then four load
+cases; no horizontal overflow at 1440, 1024 (two rows) and 390 px (even
+grid), FR and EN; modes view gap 10 px without a doubled rule. No console
+errors.
+
+## v0.9.95 feedback 0.9.9 (verified 2026-10-04)
+
+Scope: only the Notion page "QuickerBridge 0.9.9 feedback". Interface only; no
+calculation, project schema or Python change (FT is computed by the same
+`axle_factor` worker action; applied = enabled and apply, as before). Checked
+in the browser (static dist, real Pyodide), FR and EN:
+
+- Band of five cases; vibration-mode drawing: supports at the same x as the
+  static drawing (116 / 533 / 951 px); no overflow at 1440, 1024 and 390 px.
+- Headline values rounded up: 5 675,4 → 5 676, −6 405,9 → −6 406,
+  1 098,4 → 1 099 kN, 243,89 → 243,9 mm.
+- Default model: both M+ peaks (5 675) and both deflection peaks (243,9 /
+  −63,5) labelled. 18-32-32-18 m bridge with a split pier at R2 and a simple
+  last span: labels for the left span (M 2 732), the continuous part (4 990
+  twice, −5 507) and the simple span (2 732).
+- Δ ranges tab: ΔV, ΔM, Δδ only. Governing truck: case of M max, no
+  position row. Influence lines: no reaction diagram.
+- FT window: no compute / apply boxes, Fs row (1,029), no DVE alert; the Loads
+  switch applies FT (M+ 5 676 → 4 919 kN·m) and removes it (back to 5 676).
+- Examples menu above the FT window (hit test), titles only; uplift warning
+  hidden for the live load alone; no stiffness warning or circles; stress
+  hover preview off until its box is ticked; panel collapse arrow.
+  No console errors.
+
+### v0.9.95 complement: Impeccable audit, harden, colour, type, quieter, polish (2026-10-04)
+
+Same version 0.9.95, interface only. Audit before these passes: 13/20
+(6 P1). Measured after them in the browser: muted text 5.36:1 on white and
+4.85:1 on the page background (was 4.21 / 3.80), chart ticks 4.78:1 at 11 px
+(was 2.22:1 at 10 px), series names 5.68:1, disclaimer 7.08:1, stress button
+4.88:1; no functional text below 11 px; focus ring --teal on light surfaces.
+Keyboard: File menu opens with ↓, arrows / Home / End move, Escape closes and
+returns focus to its button; input tabs move with ← →; a focused Moment plot
+steps stations (Home, Shift+→) and announces "x = 4,35 m · M max 3 110 ·
+min 306 kN·m". aria-pressed / aria-selected follow the visual state; floating
+windows are named by their title; station table headers carry scope. Detector:
+39 findings before the passes, 12 after (remaining ones are the intro, the
+summary chevron, the underline tabs and the elevation token, all
+intentional). No horizontal overflow at 1440 and 390 px; no console errors.
+Second critique (two isolated reviews): 29/40, up from 24/40. Its findings were
+then fixed and checked: Enter on a plot opens the case of the keyboard station
+and gives the focus back (banner "M max à x = 8,70 m · …"), the modes view no
+longer shadows the "unloaded" label, the total length follows typed spans,
+chart peaks and cursor values are rounded up like the headline values (5 676
+everywhere, U+2212 minus), the disclaimer sits under the headline values,
+File menu has Redo, the example dialog says "Charger sans enregistrer", and the
+FT window opens on the right of the model panel.

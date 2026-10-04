@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="./styles.css">
   <script src="./version.js" defer></script>
   <script src="./default-result.js" defer></script>
+  <script src="./examples.js" defer></script>
   <script src="./solver-bundle.js" defer></script>
   <script src="./browser-solver.js" defer></script>
   <script src="./app.js" defer></script>
@@ -59,7 +60,7 @@
       <text id="sp-version" x="500" y="574" text-anchor="middle" class="sp-small sp-dim"></text>
     </g>
   </svg>
-  <button id="qb-splash-skip" type="button" aria-label="Skip">›</button>
+  <button id="qb-splash-skip" type="button" aria-label="Passer l’animation">›</button>
 </div>
 <script>
 /* QuickerBridge intro: a real 3-span continuous-beam solution (three-moment
@@ -69,7 +70,7 @@
 (function(){
   "use strict";
   var root=document.getElementById('qb-splash');if(!root)return;
-  var lang='fr';try{lang=localStorage.getItem('qb-language-v03')==='en'?'en':'fr';}catch(e){}
+  var lang='fr';try{lang=localStorage.getItem('qb-language-v095')==='en'?'en':'fr';}catch(e){}
   var T={fr:{tag:'Analyse de poutres continues de ponts · PyCBA',stages:{'Python / WebAssembly':'Démarrage de Python · WebAssembly','NumPy · PyCBA':'Chargement NumPy · PyCBA','Excel':'Module Excel','QuickerBridge':'Moteur QuickerBridge',engine:'Calcul des lignes d’influence',done:'Prêt'},start:'Préparation du modèle',retry:'Téléchargement échoué · nouvel essai',attempt:'essai',failed:'Échec du chargement du moteur',close:'Fermer'},
          en:{tag:'Continuous bridge beam analysis · PyCBA',stages:{'Python / WebAssembly':'Starting Python · WebAssembly','NumPy · PyCBA':'Loading NumPy · PyCBA','Excel':'Excel module','QuickerBridge':'QuickerBridge engine',engine:'Computing influence lines',done:'Ready'},start:'Preparing the model',retry:'Download failed · retrying',attempt:'attempt',failed:'Engine download failed',close:'Close'}}[lang];
   var $=function(id){return document.getElementById(id);};
@@ -191,20 +192,35 @@
   </header>
   <main class="workspace">
     <aside class="inputs">
-      <div class="panel-heading"><h1 data-i18n="model">Bridge model</h1><div><button class="text-button collapse-inputs" id="collapse-inputs" aria-expanded="true">−</button><button class="text-button" id="reset" data-i18n="reset">Reset</button></div></div>
-      <div class="project-bar"><div class="project-identity"><input id="project-name" maxlength="120" aria-label="Project name"><span id="dirty-state"></span></div><div class="project-actions"><button id="open-project" data-i18n="openProject">Ouvrir</button><button id="save-project" data-i18n="saveProject">Enregistrer</button><input id="project-file" type="file" accept=".quickerbridge.json,application/json" hidden></div></div>
-      <div class="input-tabs" role="tablist"><button class="active" data-panel="geometry" data-i18n="geometry">Geometry</button><button data-panel="sections" data-i18n="sections">Sections</button><button data-panel="loads" data-i18n="loads">Loads</button></div>
-      <div id="input-content"></div>
-      <div class="input-footer"><span id="scope-footer" data-i18n="oneLane">One lane · full axle loads</span><span data-i18n="elastic">Linear elastic · gross section</span></div>
+      <button type="button" class="panel-toggle" id="panel-toggle" aria-expanded="true" aria-controls="input-content"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5L5.5 8 10 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="panel-heading"><h1 data-i18n="model">Bridge model</h1><div><button class="text-button collapse-inputs" id="collapse-inputs" aria-expanded="true">−</button><button class="text-button" id="reset" data-i18n="reset">Reset</button></div></div>
+      <div class="project-bar">
+        <label class="project-name-field" for="project-name"><span class="pn-label" data-i18n="modelName">Nom du modèle</span><span class="pn-wrap"><input id="project-name" maxlength="120" autocomplete="off" spellcheck="false"><svg class="pn-pencil" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 14.5l-.8 2.3 2.3-.8L15 6.5 13.5 5z M12.5 6l1.5 1.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></span><span id="dirty-state"></span></label>
+        <div class="project-actions">
+          <div class="qb-menu"><button type="button" class="menu-button" data-menu-toggle aria-haspopup="menu" aria-expanded="false"><svg class="mi-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2.8h6.5L15.5 7v10.2H5z M11.5 2.8V7h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><span data-i18n="fileMenu">Fichier</span><span class="caret" aria-hidden="true">▾</span></button>
+            <div class="menu-pop" role="menu">
+              <button type="button" id="open-project" role="menuitem"><svg class="mi-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 5.5h5l1.6 1.8h8.4v8.7h-15z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><span class="mi-text"><b data-i18n="openProject">Ouvrir</b><small data-i18n="openProjectSub">Projet QuickerBridge (.json)</small></span><kbd>Ctrl O</kbd></button>
+              <button type="button" id="save-project" role="menuitem"><svg class="mi-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 3.5h10.5l2.5 2.5v10.5h-13z M6.5 3.5v4h6v-4 M6 16.5v-5h8v5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><span class="mi-text"><b data-i18n="saveProject">Enregistrer</b><small data-i18n="saveProjectSub">Télécharge le projet (.json)</small></span><kbd>Ctrl S</kbd></button>
+              <div class="menu-sep" role="separator"></div>
+              <button type="button" id="compare-project" role="menuitem"><svg class="mi-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 15l4-6 3.5 3.5L17 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 11l4 1.5 3.5-4L17 10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 2"/></svg><span class="mi-text"><b data-i18n="compare">Comparer</b><small data-i18n="compareSub">Superposer un autre projet</small></span></button>
+              <button type="button" id="excel" role="menuitem" disabled><svg class="mi-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="3.5" y="3.5" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 7l6 6M13 7l-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="mi-text"><b class="mi-label" data-i18n="excelExport">Exporter Excel</b><small data-i18n="excelSub">Enveloppes, cas, réactions (.xlsx)</small></span></button>
+            </div></div>
+          <div class="qb-menu"><button type="button" class="menu-button" data-menu-toggle aria-haspopup="menu" aria-expanded="false"><svg class="mi-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 15.5h14 M4.5 15.5V9.5 M15.5 15.5V9.5 M2.5 9.5h15 M5 9.5c1.5-3 3.2-4.5 5-4.5s3.5 1.5 5 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span data-i18n="examplesMenu">Exemples</span><span class="caret" aria-hidden="true">▾</span></button>
+            <div class="menu-pop menu-examples" role="menu" id="examples-list"></div></div>
+          <input id="project-file" type="file" accept=".quickerbridge.json,application/json" hidden><input id="compare-file" type="file" accept=".quickerbridge.json,application/json" hidden>
+        </div>
+      </div>
+      <div class="input-tabs" role="tablist" aria-label="Données du modèle"><button class="active" data-panel="geometry" data-i18n="geometry">Geometry</button><button data-panel="sections" data-i18n="sections">Sections</button><button data-panel="loads" data-i18n="loads">Loads</button></div>
+      <div id="input-content" role="tabpanel"></div>
     </aside>
-    <section class="results">
-      <div class="result-toolbar"><div class="segmented" id="load-mode"><button data-mode="dead" data-i18n="dead">Dead</button><button data-mode="live" data-i18n="live">Live</button><button data-mode="both" class="active" data-i18n="both">Dead + live</button><button data-mode="thermal" data-i18n="thermal">Thermal</button><button id="modes-mode" data-i18n="modes">Vibration modes</button></div><div id="status" role="status" aria-live="polite" data-i18n="initializing">Preparing the model…</div></div>
+    <section class="results" aria-labelledby="results-title"><h2 id="results-title" class="sr-only">Résultats</h2>
+      <div class="result-toolbar"><nav class="case-band" id="case-band" aria-label="Cas d’analyse"><div class="cb-cases" id="load-mode" role="group" aria-label="Cas de charge"><button type="button" data-mode="dead" data-i18n="dead">Dead</button><button type="button" data-mode="live" data-i18n="live">Live</button><button type="button" data-mode="both" class="active" data-i18n="both">Dead + live</button><button type="button" data-mode="thermal" data-i18n="thermal">Thermal</button></div><span class="cb-rule" aria-hidden="true"></span><button type="button" id="modes-mode" class="cb-modes" aria-pressed="false" data-i18n="modes">Vibration modes</button></nav><div id="status" role="status" aria-live="polite" data-i18n="initializing">Preparing the model…</div></div>
       <div id="error" class="error hidden" role="alert"></div>
-      <div class="structure-panel"><div class="structure-heading"><span data-i18n="beamLoads">BEAM & LOADS</span><span id="model-summary">2 × 34.80 m</span></div><svg id="beam" viewBox="0 0 1000 146" role="img" aria-label="Bridge geometry and loads"></svg><div id="load-caption" class="load-caption"></div></div>
+      <div class="structure-panel"><div class="structure-heading"><span class="structure-right"><b id="structure-name"></b></span></div><svg id="beam" viewBox="0 0 1000 146" role="img" aria-label="Bridge geometry and loads"></svg></div>
       <div class="metrics" id="metrics"></div>
-      <div class="chart-toolbar"><div class="view-tabs"><button class="active" data-view="diagrams" data-i18n="diagrams">Diagrams</button><button data-view="table" data-i18n="table">Station table</button><button data-view="axle" id="axle-tab" class="axle-tab" data-i18n="axleTab">FT · S6-25</button></div><div class="export-buttons"><button id="compare-project" data-i18n="compare">Comparer</button><input id="compare-file" type="file" accept=".quickerbridge.json,application/json" hidden><button id="focus-results" aria-pressed="false" data-i18n="focus">Focus diagrams</button><button id="excel" disabled>↓ Excel</button></div></div>
+      <p class="warning" role="note"><span class="warning-symbol" aria-hidden="true">!</span><span data-i18n="warning">Indicative preliminary values only — not a substitute for detailed design.</span></p>
+      <div class="chart-toolbar"><div class="view-tabs" role="tablist" aria-label="Vue des résultats"><button class="active" data-view="diagrams" data-i18n="diagrams">Diagrams</button><button data-view="table" data-i18n="table">Station table</button></div></div>
       <div id="diagrams-view" class="result-view">
-        <div class="display-controls" id="display-controls"><div class="display-left"><div class="segmented small" id="display-mode"><button class="active" data-display="envelope" data-i18n="envelope">Envelope</button><button data-display="snapshot" data-i18n="snapshot">Truck position</button><button data-display="influence" data-i18n="influence">Influence lines</button></div><label class="delta-toggle hidden" id="delta-toggle"><input type="checkbox" id="delta-mode"><span data-i18n="deltaMode">Δ ranges (max − min)</span></label></div><div class="position-controls hidden" id="position-controls"><label><span data-i18n="frontAxle">Front axle</span> <input id="position" type="number" step="0.1" value="20"> m</label><input id="position-slider" type="range" step="0.1" value="20" aria-label="Front axle position"><button id="reverse" data-i18n="reverse">Reverse</button><button id="play" class="play-button" data-i18n="play">▶ Animate</button></div><span id="legend" class="legend"><i></i><span data-i18n="range">Min / max envelope</span></span></div>
+        <div class="display-controls" id="display-controls"><div class="display-left"><div class="segmented small" id="display-mode" role="group" aria-label="Affichage"><button class="active" data-display="envelope" data-i18n="envelope">Envelope</button><button data-display="delta" data-i18n="deltaTab">Δ ranges</button><button data-display="snapshot" data-i18n="snapshot">Governing truck</button><button data-display="influence" data-i18n="influence">Influence lines</button></div></div><div class="position-controls hidden" id="position-controls"><label><span data-i18n="frontAxle">Front axle</span> <input id="position" type="number" step="0.1" value="20"> m</label><input id="position-slider" type="range" step="0.1" value="20" aria-label="Front axle position"><button id="reverse" data-i18n="reverse">Reverse</button><button id="play" class="play-button" data-i18n="play">▶ Animate</button></div><span id="legend" class="legend"><i></i><span data-i18n="range">Min / max envelope</span></span></div>
         <div id="governing" class="governing hidden"></div><div id="uplift-warning" class="uplift-warning hidden" role="alert"></div><div id="stiffness-warning" class="stiffness-warning hidden" role="note"></div>
         <div class="charts" id="charts"></div>
       </div>
@@ -214,9 +230,9 @@
       <div id="axle-view" class="result-view hidden"></div>
     </section>
   </main>
-  <div class="warning"><span class="warning-symbol">!</span><span data-i18n="warning">Indicative preliminary values only — not a substitute for detailed design.</span></div>
+
 
 <dialog id="replace-dialog"><form method="dialog"><h2 data-i18n="unsavedTitle">Unsaved changes</h2><p data-i18n="unsavedBody">Save the current project before opening the selected file?</p><div class="dialog-actions"><button value="cancel" data-i18n="cancel">Cancel</button><button value="discard" data-i18n="discard">Discard</button><button value="save" class="primary" data-i18n="saveThenOpen">Save then open</button></div></form></dialog>
-<dialog id="method-dialog" class="section-dialog method-dialog"><div class="sp-head"><span class="axle-badge">i</span><div><b data-i18n="methodOpen">Method and assumptions</b><small data-i18n="methodSub">How QuickerBridge calculates</small></div><button class="icon-button sp-close" data-method-close title="×">×</button></div><div id="method-view" class="method-dialog-body"></div></dialog>
+<dialog id="method-dialog" class="section-dialog method-dialog"><div class="sp-head"><span class="axle-badge">i</span><div><b data-i18n="methodOpen">Method and assumptions</b><small data-i18n="methodSub">How QuickerBridge calculates</small></div><button class="icon-button sp-close" data-method-close title="Fermer" aria-label="Fermer">×</button></div><div id="method-view" class="method-dialog-body"></div></dialog>
 </body>
 </html>

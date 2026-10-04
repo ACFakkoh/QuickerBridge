@@ -23,7 +23,7 @@ class CompositeSlab(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = True
-    slab_thickness: float = Field(default=200, gt=0, le=2000)  # tc
+    slab_thickness: float = Field(default=225, gt=0, le=2000)  # tc (v0.9.8: 225)
     haunch: float = Field(default=50, ge=0, le=1000)  # concrete haunch
     effective_width: float = Field(default=3110, gt=0, le=20000)  # be
     fc: float = Field(default=35, gt=0, le=150)  # f'c
@@ -72,6 +72,14 @@ NEBT_TYPES = ("NEBT1000", "NEBT1200", "NEBT1400", "NEBT1600", "NEBT1800")
 NEBT_DEFAULT_E = 28.0  # GPa, prestressed concrete; editable per section
 
 
+def concrete_modulus(fc: float, unit_weight: float) -> float:
+    """Ec in MPa: (3300 √f'c + 6900) (γc / 2300)^1.5 with the
+    density γc in kg/m³ (unit weight kN/m³ × 1000 / 9.81). Same expression as
+    the slab of the section properties window and the creep strain."""
+    density = unit_weight * 1000 / 9.81
+    return (3300 * fc**0.5 + 6900) * (density / 2300) ** 1.5
+
+
 class Section(InputModel):
     name: str = Field(default="S1", max_length=60)
     # girder: steel I from plates; ei: direct stiffness; nebt: standard
@@ -88,14 +96,62 @@ class Section(InputModel):
     bottom_width: float = Field(default=600, gt=0, le=20000)
     bottom_thickness: float = Field(default=50, gt=0, le=2000)
     composite: CompositeSlab | None = None  # section properties module only
+    # v0.9.8: how the stiffness of a direct-EI or NEBT section is given.
+    #   "EI": EI directly (direct-EI sections, kN·m²);
+    #   "concrete": E from f'c and γc (S6-25 8.4.1.7) times I;
+    #   "modulus": E entered (GPa, shown in MPa) times I.
+    # NEBT sections use "concrete" (new) or "modulus" (projects before 0.9.8).
+    stiffness_input: Literal["EI", "concrete", "modulus"] = "EI"
+    I_direct: float = Field(default=0.25, gt=0, le=1e6)  # m⁴, direct-EI section
+    fc: float = Field(default=35, gt=0, le=150)  # MPa (NEBT: 50)
+    unit_weight: float = Field(default=24, gt=10, le=40)  # kN/m³ (NEBT: 24.5)
+    # v0.9.8: inertia used by the analysis for a steel or NEBT girder with a
+    # slab. "manual": I girder × M as entered. "1n", "3n", "negative" (I′):
+    # M is set automatically to I(config) / I(girder alone) from the section
+    # properties, so the composite inertia is applied exactly once.
+    inertia_source: Literal["manual", "1n", "3n", "negative"] = "manual"
 
     @model_validator(mode="before")
     @classmethod
-    def concrete_modulus(cls, data):
-        # A NEBT section given without E is concrete, not the steel default.
-        if isinstance(data, dict) and data.get("kind") == "nebt" and "E" not in data:
-            data = {**data, "E": NEBT_DEFAULT_E}
+    def concrete_defaults(cls, data):
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        if data.get("kind") == "nebt":
+            # Projects before 0.9.8 entered E for NEBT girders: keep it.
+            data.setdefault("stiffness_input", "modulus" if "E" in data else "concrete")
+            data.setdefault("fc", 50)
+            data.setdefault("unit_weight", 24.5)
+            data.setdefault("E", NEBT_DEFAULT_E)
         return data
+
+    @model_validator(mode="after")
+    def derived_stiffness(self):
+        # E (GPa) and EI (kN·m²) always hold the values used by the analysis.
+        mode = self.stiffness_input
+        if self.kind == "nebt" and mode == "EI":
+            mode = self.stiffness_input = "concrete"
+        if self.kind in ("ei", "nebt") and mode == "concrete":
+            self.E = round(concrete_modulus(self.fc, self.unit_weight) / 1000, 6)
+        if self.kind == "ei" and mode in ("concrete", "modulus"):
+            self.EI = self.E * 1e6 * self.I_direct
+        if (
+            self.inertia_source != "manual"
+            and self.kind in ("girder", "nebt")
+            and self.composite is not None
+            and self.composite.enabled
+        ):
+            from .section_props import section_properties
+
+            props = section_properties(self)
+            comp = props["composite"]
+            ratio = (
+                comp["negative"]["ratio"]
+                if self.inertia_source == "negative"
+                else comp[self.inertia_source]["I"] / props["steel"]["Ix"]
+            )
+            self.inertia_modifier = round(float(ratio), 6)
+        return self
 
     @model_validator(mode="after")
     def geometry(self):
@@ -291,7 +347,9 @@ class Model(InputModel):
     spans: list[Span] = Field(
         default_factory=lambda: [Span(), Span()], min_length=1, max_length=7
     )
-    supports: list[Literal["pin", "roller", "fixed", "spring"]] = Field(
+    # "split" (v0.9.8): pier with two bearing lines and a deck joint. The
+    # deck is discontinuous there; each side has its own reaction.
+    supports: list[Literal["pin", "roller", "fixed", "spring", "split"]] = Field(
         default_factory=lambda: ["roller", "pin", "roller"]
     )
     # Rotational spring stiffness per support, kN·m/rad (used by "spring").
@@ -314,6 +372,8 @@ class Model(InputModel):
     def consistency(self):
         if len(self.supports) != len(self.spans) + 1:
             raise ValueError("model.supports")
+        if self.supports[0] == "split" or self.supports[-1] == "split":
+            raise ValueError("model.split_end")  # interior supports only
         if self.nonprismatic and any(s.kind == "nebt" for s in self.sections):
             # v0.9.6: precast NEBT girders have a constant tabulated section.
             raise ValueError("model.nebt_nonprismatic")

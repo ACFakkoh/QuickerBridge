@@ -1,5 +1,6 @@
 """Thermal-gradient and saved-project regressions for QuickerBridge v0.3."""
 
+from quickerbridge.projects import SCHEMA_VERSION
 from datetime import datetime, timezone
 from io import BytesIO
 import json
@@ -122,7 +123,7 @@ def test_project_round_trip_preserves_full_model_and_normalizes():
     reopened = validate_project(json.dumps(project))
     assert reopened["name"] == "Thermal example"
     assert reopened["model"] == model.model_dump(mode="json")
-    assert reopened["schema_version"] == 11
+    assert reopened["schema_version"] == SCHEMA_VERSION
 
 
 def test_project_round_trips_constant_ei_and_five_span_custom_nonprismatic():
@@ -150,7 +151,7 @@ def test_project_round_trips_constant_ei_and_five_span_custom_nonprismatic():
     "mutate",
     [
         lambda p: p.update(format="WrongFormat"),
-        lambda p: p.update(schema_version=12),
+        lambda p: p.update(schema_version=SCHEMA_VERSION + 1),
         lambda p: p.update(unknown=True),
         lambda p: p["model"].update(unknown=True),
     ],

@@ -1,5 +1,6 @@
 """v0.9: CSA S6-25 truck load fraction FT for slab-on-girder bridges."""
 
+from quickerbridge.projects import SCHEMA_VERSION
 from io import BytesIO
 import json
 import math
@@ -255,7 +256,7 @@ def test_distribution_changes_the_analysis_only_when_applied_and_round_trips():
     assert analyse(plain)["max"]["M"] == analyse(on)["max"]["M"]
     assert analyse(on)["ft"] is None
     reopened = validate_project(json.dumps(create_project(on, "FT")))
-    assert reopened["schema_version"] == 11
+    assert reopened["schema_version"] == SCHEMA_VERSION
     assert reopened["model"]["distribution"]["skew"] == 17.7
     old = create_project(plain, "Old")
     old["schema_version"] = 5
@@ -368,8 +369,16 @@ def test_browser_action_and_excel_sheet():
     assert sheet.max_row > 20 and sheet["N1"].value == "FT"
 
 
-def test_nebt_concrete_default_is_28_gpa():
-    assert Section(kind="nebt").E == 28
+def test_nebt_concrete_modulus_from_fc_and_unit_weight():
+    # v0.9.8: f'c 50 MPa and 24.5 kN/m³ by default; E follows them.
+    from quickerbridge.models import concrete_modulus
+
+    s = Section(kind="nebt")
+    assert (s.stiffness_input, s.fc, s.unit_weight) == ("concrete", 50, 24.5)
+    assert s.E == pytest.approx(concrete_modulus(50, 24.5) / 1000)
+    assert s.E == pytest.approx(34.2103, abs=1e-3)
+    # Projects saved with an explicit E keep it.
+    assert Section(kind="nebt", E=28).E == 28
 
 
 # --- v0.9.2 ------------------------------------------------------------------

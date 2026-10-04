@@ -2,7 +2,6 @@
 Object.assign(words.fr,{compare:'Comparer',compareOpen:'Choisir un projet JSON',compareClose:'Fermer',compareLoading:'Calcul du projet de référence…',compareCurrent:'Projet courant',compareReference:'Référence',compareDifference:'Écart des extrema',compareGeometry:'Géométrie différente : abscisses en mètres, appuis propres à chaque projet.',compareCases:'Les paramètres de charge enregistrés sont utilisés pour chaque projet.',compareRead:'Survoler pour lire les valeurs des deux projets.',compareInvalid:'Projet de comparaison invalide.'});
 Object.assign(words.en,{compare:'Compare',compareOpen:'Choose a JSON project',compareClose:'Close',compareLoading:'Computing the reference project…',compareCurrent:'Current project',compareReference:'Reference',compareDifference:'Difference of extrema',compareGeometry:'Different geometry: coordinates in metres, supports shown for each project.',compareCases:'Each project uses its own saved load settings.',compareRead:'Hover to read both projects.',compareInvalid:'Invalid comparison project.'});
 let comparisonProject=null,comparisonResult=null,comparisonToken=0,comparisonLoading=false,comparisonError='';
-$('#compare-project').textContent=t('compare');
 async function openComparison(file){
  const token=++comparisonToken;comparisonLoading=true;comparisonError='';showView('comparison');renderComparison();
  try{

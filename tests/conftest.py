@@ -27,6 +27,7 @@ def _user_loads_only_before_v086(request, monkeypatch):
         "test_v094",
         "test_v095",
         "test_v096",
+        "test_v098",
     ):
         return
     import quickerbridge.loads as loads

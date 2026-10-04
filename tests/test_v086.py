@@ -1,5 +1,6 @@
 """v0.8.6: NEBT sections, automatic girder self-weight, isostatic spans."""
 
+from quickerbridge.projects import SCHEMA_VERSION
 import json
 import math
 
@@ -36,8 +37,8 @@ def pier_index(r, x):
 
 
 def test_nebt_properties_match_the_standard_table():
-    s = Section(kind="nebt", nebt="NEBT1600")
-    assert s.E == 28  # concrete default, not the steel 200 GPa
+    s = Section(kind="nebt", nebt="NEBT1600", E=28)  # E entered (before 0.9.8)
+    assert s.stiffness_input == "modulus" and s.E == 28
     p = properties(s)
     assert p["A"] == pytest.approx(0.589884)
     assert p["I"] == pytest.approx(0.20492)
@@ -130,7 +131,7 @@ def test_old_projects_keep_results_and_new_projects_apply_self_weight():
     for span in project["model"]["spans"]:
         del span["simple"]
     reopened = validate_project(json.dumps(project))
-    assert reopened["schema_version"] == 11
+    assert reopened["schema_version"] == SCHEMA_VERSION
     assert reopened["model"]["self_weight"]["apply"] is False
     fresh = validate_project(json.dumps(create_project(Model(), "New")))
     assert fresh["model"]["self_weight"]["apply"] is True

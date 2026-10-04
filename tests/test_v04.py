@@ -1,5 +1,6 @@
 """Depth-only zones, effective stiffness and unchanged optimized PyCBA results."""
 
+from quickerbridge.projects import SCHEMA_VERSION
 import json
 
 import numpy as np
@@ -121,7 +122,7 @@ def test_old_taper_projects_are_not_silently_reinterpreted():
     m.spans[0].zones = [Zone(end=1, section=0, end_section=1, profile="linear")]
     project = create_project(m, "Earlier model")
     project["schema_version"] = 1
-    assert validate_project(json.dumps(project))["schema_version"] == 11
+    assert validate_project(json.dumps(project))["schema_version"] == SCHEMA_VERSION
     project["model"]["sections"][1]["top_width"] = 600
     with pytest.raises(ValueError, match="project.legacy_taper"):
         validate_project(json.dumps(project))

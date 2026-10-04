@@ -9,7 +9,7 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 
 ![QuickerBridge — envelopes of a two-span girder with rotational-spring abutments](docs/screenshots/envelopes.png)
 
-*Version 0.9.7 · 2026-10-02 · Anthony Chéruel · [Guide en français](README.fr.md)*
+*Version 0.9.95 · 2026-10-04 · Anthony Chéruel · [Guide en français](README.fr.md)*
 
 ---
 
@@ -17,9 +17,9 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 
 | | |
 |---|---|
-| **Moving-load envelopes** | CL-625, CL-750-QC (MTQ), AASHTO HL-93 truck & tandem, Cooper E, maintenance vehicle, or a custom 1–7 axle vehicle. CAN/CSA S6 dynamic allowance on every axle subset, lane loads over the full deck, load and axle factors. Optional HL-93 90% two-truck case for negative moments and interior reactions. Click any extreme to see its governing arrangement; one “Δ ranges” switch replaces V, M, δ by ΔV, ΔM, Δδ = max − min, read with the same cursor. |
+| **Moving-load envelopes** | CL-625, CL-750-QC (MTQ), AASHTO HL-93 truck & tandem, Cooper E, maintenance vehicle, or a custom 1–7 axle vehicle. CAN/CSA S6 dynamic allowance on every axle subset, lane loads over the full deck, load and axle factors. Optional HL-93 90% two-truck case for negative moments and interior reactions. Click any extreme to see its governing arrangement; a “Δ ranges” tab replaces V, M, δ by ΔV, ΔM, Δδ = max − min, read with the same cursor. |
 | **Influence lines** | V, M and deflection at any station, plus the reaction (and moment reaction) at the nearest support, with the governing axles drawn on the line. |
-| **Truck crossing animation** | 60 pre-computed positions of the full vehicle, played back instantly; the envelope stays as a reference. |
+| **Governing truck** | The axle arrangement of any extreme drawn on the beam, with its V, M and δ diagrams over the faint envelope. |
 | **Supports** | Pinned, roller, **fixed (integral abutment)** or **rotational spring k** with the resulting degree of fixity. Any span can be made **simple (isostatic)**, hinged at both ends *(v0.8.6)*. Uplift is flagged automatically. |
 | **Sections** | Steel I-girders from plate dimensions, standard **precast prestressed NEBT 1000–1800** girders *(v0.8.6, concrete E 28 GPa by default)* or direct EI, inertia modifier, non-prismatic zones with linear or parabolic depth (steel girders; NEBT bridges stay prismatic), EI(x) diagram and stiffness-step warnings. Girder **self-weight** is added to the permanent loads by default (steel +15%, NEBT +10%, adjustable, can be switched off). |
 | **Vibration modes** *(v0.8)* | Up to 12 natural frequencies and periods in vertical bending from the same model (non-prismatic EI, integral abutments, springs), mass from the unfactored permanent loads. Animated deck, mode thumbnails, frequency spectrum with pedestrian resonance bands, modal mass. Six modes and real-time animation by default; optional slow motion. |
@@ -35,11 +35,11 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 <table>
 <tr>
 <td><img src="docs/screenshots/influence-lines.png" alt="Influence lines with the governing axles"></td>
-<td><img src="docs/screenshots/truck-crossing.png" alt="Truck crossing animation"></td>
+<td><img src="docs/screenshots/truck-crossing.png" alt="Governing truck over the envelope"></td>
 </tr>
 <tr>
 <td align="center"><em>Influence lines and governing axles</em></td>
-<td align="center"><em>Truck crossing over the envelope</em></td>
+<td align="center"><em>Governing truck over the envelope (screenshot from 0.9.8)</em></td>
 </tr>
 </table>
 
@@ -106,6 +106,29 @@ every push to `main`). In the repository settings, **Pages → Source** must be 
 Built on [PyCBA](https://github.com/ccaprani/pycba) by Colin Caprani (AGPL-3.0-or-later),
 vendored with local additions (CL-750-QC, non-prismatic performance); runs on
 [Pyodide](https://pyodide.org). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## What's new in 0.9.95
+
+- **Results header as a band.** The five analysis cases (Dead, Live, Dead + live, Imposed deformation, Vibration modes) form one band on top of the beam drawing. The beam drawing keeps only the model name: no heading, no load caption, no section inset. The vibration-mode drawing now has the same length as the others.
+- **Display tabs.** Envelope · Δ ranges · Governing truck · Influence lines. Δ ranges is a tab (V, M and δ only, no EI or reactions). Governing truck shows the arrangement of the largest positive moment (click any extreme for another one); the manual position, reverse and animation row is removed. Influence lines no longer repeat the reaction diagram. The "min / max envelope" legend is removed.
+- **Peak labels.** Every independent part of the bridge (separated by a simple span or a split pier) shows its own extremes of V, M and deflection, and any peak within 0.5 % of the overall extreme is labelled too, so symmetry is visible at a glance. The four headline values are rounded up, without decimals except one for the deflection.
+- **FT in its own window.** "Set FT…" opens a floating window, like the stresses. FT is always computed there; the switch "Apply S6-25 FT to the envelopes" in Loads (off by default) applies it. The zone table has an Fs row. No "DVE limited to 3.0 m" alert.
+- **Lighter interface.** No stiffness-step warning or red circles on EI; no uplift warning for the live load alone; examples show their titles only; mode names in the singular. The stress preview on hover is off by default (a box next to "σ Stresses"). "Focus diagrams" is replaced by an arrow that collapses the model panel. The Examples menu opens above every window.
+- **Readability and keyboard.** Secondary text, chart scales and series names reach WCAG AA contrast; functional text is at least 11 px. File and Examples menus work with the arrow keys and Escape; tabs and segmented controls expose their state to screen readers; a focused diagram steps through stations with ← → (Shift: 10 stations, Home / End) and reads the values aloud. Flatter surfaces (no gradients or side stripes), the disclaimer inside the results, and "S6-25 FT applied: values per girder" above the headline values when FT is applied.
+
+## What's new in 0.9.9
+
+- **Work protection.** Reset asks first when the model has unsaved changes (save, reset without saving, or cancel). Leaving the page with unsaved changes asks for confirmation. The unsaved model is kept in this browser and offered back at the next start ("Unsaved model found": Restore / Dismiss). Ctrl+Z / Ctrl+Y undo and redo model changes (edits, opened files, examples, reset), also from **File → Undo**.
+- **Analysis type apart from the load case.** The results header has two controls: **Static / Vibration modes**, then the four load cases (Dead, Live, Dead + live, Imposed deformation). The load case is kept while the modes are shown. The header wraps instead of overflowing on medium and narrow screens.
+- **Clearer errors.** An invalid number shows its message (e.g. the allowed range) right under the field while it is edited. The stress window no longer shows valid station and S3 values as errors. The Excel item says why it is unavailable (engine loading, calculation running, invalid values).
+
+## What's new in 0.9.8
+
+- **Faster.** First analysis of a 6-span non-prismatic bridge about 40 times faster (cached Gauss rule in PyCBA); each live-load update 4 to 5 times faster (every axle subset handled at once, exactly; "axle exactly on a station" positions evaluated for that station only). Envelope differences below 0.01 %. Changes made during an analysis are merged into one update of the latest model, after a wait that adapts to the previous analysis time.
+- **Split pier** (Geometry tab, support type): deck joint over a pier with two bearings. The spans on either side are independent; the diagram, the station table and the Excel export give two reactions (L / R).
+- **Sections.** Direct EI given as EI, as f′c and γc (computed E) with I, or as E (MPa) and I. NEBT girders: f′c (50 MPa) and γc (24.5 kN/m³) → E shown; γc also scales the self-weight. For a girder with a slab, the analysis inertia can come straight from the 1n, 3n or I′ composite section: M is then computed and greyed out (never applied twice). Default slab 225 mm. An unused section can be removed.
+- **Interface.** QuickerUnits-style inputs (thousands separator, decimal comma in French, calculations allowed: `2*17.4`), model name in evidence (also in the beam frame), **File** menu (Open, Save, Compare, Excel; Ctrl+O, Ctrl+S) and **Examples** menu (4 anonymous bridges, FT not applied). The beam sketch names the section of every zone. The imposed-deformation drawings show the actual girder (steel, NEBT or EI).
+- FT: the overall width B = (N − 1)·S + 2·Sc is highlighted together with the curb (B − Wc)/2.
 
 ## What's new in 0.9.7
 

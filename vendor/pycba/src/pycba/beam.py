@@ -1104,6 +1104,12 @@ class Beam:
         x, w : np.ndarray
             The concatenated Gauss nodes and weights mapped onto ``[0, L]``.
         """
+        # QuickerBridge v0.9.8: the nodes only depend on the pieces and L; a
+        # moving-load analysis asks for them thousands of times per member.
+        key = (float(L), len(EI.pieces), tuple((p.x0, p.x1, p.degree) for p in EI.pieces))
+        cached = getattr(EI, "_gauss_cache", None)
+        if cached is not None and cached[0] == key:
+            return cached[1]
         xs = []
         ws = []
         for p in EI.pieces:
@@ -1112,10 +1118,15 @@ class Beam:
                 n = 2  # quadratic integrand -> 2-point Gauss is exact
             else:
                 n = max(2 * p.degree + 8, 16)
-            xi, wi = np.polynomial.legendre.leggauss(n)
+            xi, wi = _legendre_rule(n)  # QuickerBridge v0.9.8: cached rule
             xs.append(0.5 * (b - a) * (xi + 1.0) + a)
             ws.append(0.5 * (b - a) * wi)
-        return np.concatenate(xs), np.concatenate(ws)
+        out = np.concatenate(xs), np.concatenate(ws)
+        try:
+            EI._gauss_cache = (key, out)
+        except AttributeError:  # read-only description: no cache
+            pass
+        return out
 
     @staticmethod
     def _flexibility(EI: SectionEI, L: float) -> np.ndarray:

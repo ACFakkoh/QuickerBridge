@@ -71,3 +71,19 @@ def test_generalized_eigh_matches_scipy():
     b = rng.normal(size=(6, 6))
     b = b @ b.T + 6 * np.eye(6)
     np.testing.assert_allclose(lite.eigh(a, b)[0], linalg.eigh(a, b)[0], rtol=1e-9)
+
+
+def test_cubic_spline_power_coefficients_match_scipy():
+    # v0.9.8: the engine evaluates crossing rows from ``CubicSpline.c``.
+    from scipy.interpolate import CubicSpline as Reference
+
+    from quickerbridge._scipy_lite import CubicSpline as Lite
+
+    rng = np.random.default_rng(3)
+    x = np.sort(rng.uniform(0, 30, 12))
+    y = rng.normal(size=(12, 4))
+    assert np.allclose(Lite(x, y).c, Reference(x, y).c, atol=1e-9)
+    q = np.linspace(x[0], x[-1], 50)
+    seg = np.clip(np.searchsorted(x, q, side="right") - 1, 0, len(x) - 2)
+    c, dx = Lite(x, y).c[:, seg], (q - x[seg])[:, None]
+    assert np.allclose(((c[0] * dx + c[1]) * dx + c[2]) * dx + c[3], Lite(x, y)(q))

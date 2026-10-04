@@ -1,5 +1,6 @@
 """v0.5: integral (fixed) abutments, zone plate source, influence lines, traverse."""
 
+from quickerbridge.projects import SCHEMA_VERSION
 from io import BytesIO
 import json
 
@@ -193,7 +194,7 @@ def test_excel_reports_moment_reactions_for_integral_abutments():
     wb = load_workbook(BytesIO(excel_bytes(r, "en")))
     sheet = wb["Reactions"]
     header = [c.value for c in sheet[1]]
-    assert "Mr min (kN·m, CCW +)" in header and "Type" in header
+    assert "Mr (kN·m, CCW +)" in header and "Type" in header  # dead only
     assert sheet.cell(2, header.index("Type") + 1).value == "fixed"
     thermal = analyse_thermal(
         Model(
@@ -221,7 +222,7 @@ def test_project_round_trip_with_fixed_supports_and_plates():
         Zone(end=1, section=0),
     ]
     project = create_project(model, "Integral")
-    assert project["schema_version"] == 11
+    assert project["schema_version"] == SCHEMA_VERSION
     reopened = validate_project(json.dumps(project))
     assert reopened["model"] == model.model_dump(mode="json")
     # v0.4 (schema 2) files still open: no plates key, default "start".

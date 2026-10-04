@@ -1,6 +1,6 @@
 # QuickerBridge — guide développeur
 
-Version 0.9.7 · Anthony Chéruel · 2026-10-02
+Version 0.9.95 · Anthony Chéruel · 2026-10-04
 
 ## Quel fichier utiliser ou envoyer ?
 
@@ -74,12 +74,13 @@ fichiers à chaque livraison, pas seulement le HTML.
 | `dist/sections.js` | v0.9.3bis : fenêtre « Propriétés de section », créée à la première ouverture |
 | `dist/axle.js` | v0.9 : carte FT (onglet Charges), vue « FT · S6-25 », application au facteur d’essieu ou de charge |
 | `quickerbridge/projects.py` | Schéma de projet et compatibilité |
+| `quickerbridge/presets.py` | v0.9.8 : exemples du menu « Exemples » (écrits par le build dans `dist/examples.js` et `examples/`) |
 | `quickerbridge/version.py` | Version, date, auteur |
 | `vendor/pycba/src/pycba/` | Solveur PyCBA et modifications locales |
 | `tests/` | Vérifications analytiques, régressions et mesures |
 | `build_portable.py` | Génération des HTML, bundles et archives |
 
-Ne modifiez pas à la main `solver-bundle.js`, `version.js` ou `QuickerBridge-v<version>-<date>.html`.
+Ne modifiez pas à la main `solver-bundle.js`, `examples.js`, `version.js` ou `QuickerBridge-v<version>-<date>.html`.
 Ils sont régénérés. Le ZIP de sources intégré au worker inclut la licence PyCBA.
 Les répertoires `release/` et `GitHub/` sont des livrables, pas les sources de travail.
 

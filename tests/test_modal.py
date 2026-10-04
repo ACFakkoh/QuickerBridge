@@ -1,5 +1,6 @@
 """v0.8 free-vibration module: closed forms, PyCBA agreement, extensions."""
 
+from quickerbridge.projects import SCHEMA_VERSION
 import json
 import math
 
@@ -247,7 +248,7 @@ def test_browser_dispatch_and_project_roundtrip():
     assert value["kind"] == "modal" and len(value["modes"]) == 6
     project = create_project(m, "modes")
     reopened = validate_project(json.dumps(project))
-    assert reopened["schema_version"] == 11
+    assert reopened["schema_version"] == SCHEMA_VERSION
     assert reopened["model"]["modal"]["modes"] == 6
     old = json.loads(json.dumps(project))
     old["schema_version"] = 3

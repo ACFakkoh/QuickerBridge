@@ -1,5 +1,6 @@
 """v0.9.5: negative-region I', y per configuration, constant support section."""
 
+from quickerbridge.projects import SCHEMA_VERSION
 import json
 
 import pytest
@@ -88,7 +89,7 @@ def test_support_section_removed_and_old_files_open():
     m = default_model()
     assert "support_length" not in m.model_dump()
     project = create_project(m, "p")
-    assert project["schema_version"] == 11
+    assert project["schema_version"] == SCHEMA_VERSION
     project["schema_version"] = 8
     project["model"]["support_length"] = 400
     assert "support_length" not in validate_project(json.dumps(project))["model"]

@@ -322,7 +322,9 @@ def test_exports_consistent_reactions_once_and_french():
     assert sum(bool(row[-1]) for row in data[1:]) == 3
     wb = load_workbook(BytesIO(excel_bytes(r, "fr")))
     assert "Réactions" in wb.sheetnames
-    assert wb["Réactions"]["D3"].value == pytest.approx(375)
+    # Permanent loads alone: one R column (v0.9.7, no min/max duplication).
+    assert wb["Réactions"]["C3"].value == pytest.approx(375)
+    assert wb["Réactions"]["D1"].value is None
     assert wb["Stations"].max_row == 23
 
 

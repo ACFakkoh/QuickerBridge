@@ -91,11 +91,20 @@ def rows(result, language):
         yield values
 
 
+def single_case(result):
+    """One value per effect: imposed deformation or permanent loads alone."""
+    return (
+        result.get("kind") == "thermal"
+        or result.get("model", {}).get("load_mode") == "dead"
+    )
+
+
 def thermal_rows(result, language):
+    """Rows of a single-case result (no min/max envelope)."""
     seen = set()
     for row in result["table"]:
         values = [
-            row[key]
+            row[key] if key in row else row[key + "_max"]
             for key in ("span", "station", "x", "local_x", "side", "V", "M", "D")
         ]
         if language == "fr":
@@ -104,7 +113,7 @@ def thermal_rows(result, language):
             (r for r in result["reactions"] if abs(r["x"] - row["x"]) < 1e-8), None
         )
         if reaction and reaction["support"] not in seen:
-            values.append(reaction["value"])
+            values.append(reaction.get("value", reaction.get("max")))
             seen.add(reaction["support"])
         else:
             values.append(None)
@@ -114,7 +123,7 @@ def thermal_rows(result, language):
 def csv_bytes(result, language="en"):
     stream = StringIO(newline="")
     writer = csv.writer(stream)
-    thermal = result.get("kind") == "thermal"
+    thermal = single_case(result)
     writer.writerow((THERMAL_HEADERS if thermal else HEADERS)[language])
     writer.writerows((thermal_rows if thermal else rows)(result, language))
     return stream.getvalue().encode("utf-8-sig")
@@ -268,30 +277,31 @@ def excel_bytes(result, language="en", model=None):
 
     model = model or Model.model_validate(result["model"])
     thermal = result.get("kind") == "thermal"
+    single = single_case(result)
     wb = Workbook()
     ws = wb.active
     ws.title = "Stations"
-    ws.append((THERMAL_HEADERS if thermal else HEADERS)[language])
-    for row in (thermal_rows if thermal else rows)(result, language):
+    ws.append((THERMAL_HEADERS if single else HEADERS)[language])
+    for row in (thermal_rows if single else rows)(result, language):
         ws.append(row)
     rx = wb.create_sheet("Réactions" if language == "fr" else "Reactions")
     rx.append(
         [
             "Appui" if language == "fr" else "Support",
             "x (m)",
-            "R (kN)" if thermal else "R min (kN)",
+            "R (kN)" if single else "R min (kN)",
         ]
     )
-    if not thermal:
+    if not single:
         rx.cell(1, 4, "R max (kN)")
     fixed = any(r.get("type") in ("fixed", "spring") for r in result["reactions"])
     if fixed:
         # Integral (fixed) abutments also carry a moment reaction, CCW +.
-        column = 4 if thermal else 5
+        column = 4 if single else 5
         labels = (
             ["Mr (kN·m, anti-horaire +)"] if language == "fr" else ["Mr (kN·m, CCW +)"]
         )
-        if not thermal:
+        if not single:
             labels = [
                 label.replace("Mr", name)
                 for name in ("Mr min", "Mr max")
@@ -302,14 +312,14 @@ def excel_bytes(result, language="en", model=None):
         rx.cell(1, column + len(labels), "Type")
     for r in result["reactions"]:
         row = (
-            [r["support"], r["x"], r["value"]]
-            if thermal
+            [r["support"], r["x"], r.get("value", r.get("max"))]
+            if single
             else [r["support"], r["x"], r["min"], r["max"]]
         )
         if fixed:
             row += (
-                [r.get("moment", 0.0)]
-                if thermal
+                [r.get("moment", r.get("moment_max", 0.0))]
+                if single
                 else [r.get("moment_min", 0.0), r.get("moment_max", 0.0)]
             )
             kind = r.get("type", "")
@@ -317,7 +327,22 @@ def excel_bytes(result, language="en", model=None):
                 kind = f"spring k={r['k']:,.0f} kN·m/rad ({100 * r['fixity']:.0f}%)"
             row.append(kind)
         rx.append(row)
-    if not thermal:
+        split = r.get("split")
+        if split:
+            # v0.9.8 split pier: one bearing line each side of the deck joint,
+            # R left = −V(x⁻), R right = V(x⁺).
+            lo, hi = result["min"]["V"], result["max"]["V"]
+            i, j = split["left"], split["right"]
+            sides = ("gauche", "droite") if language == "fr" else ("left", "right")
+            for name, values in (
+                (sides[0], [-hi[i], -lo[i]]),
+                (sides[1], [lo[j], hi[j]]),
+            ):
+                extra = [values[1]] if single else values
+                if fixed:
+                    extra += [""] * (1 if single else 2) + ["split"]
+                rx.append([f"{r['support']} {name}", r["x"], *extra])
+    if not single:
         cases = wb.create_sheet(
             "Cas déterminants" if language == "fr" else "Governing cases"
         )
@@ -552,7 +577,7 @@ def excel_bytes(result, language="en", model=None):
             "1-D Euler–Bernoulli; one lane / une voie; gross homogeneous I-section / section en I homogène brute",
         ]
     )
-    if not thermal:
+    if not single:
         meta.append(
             [
                 "Factors / Facteurs",

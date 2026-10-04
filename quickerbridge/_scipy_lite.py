@@ -59,6 +59,24 @@ class CubicSpline:
             a[-1, -3:] = [h[-1], -(h[-2] + h[-1]), h[-2]]
             m = np.linalg.solve(a, b)
         self.x, self._y, self._m, self._h, self._shape = x, yy, m, h, shape
+        self._c = None
+
+    @property
+    def c(self):
+        """Power-basis coefficients (4, intervals, values), highest degree
+        first, in ``x - x[i]``: SciPy's ``CubicSpline.c`` layout."""
+        if self._c is None:
+            y, m, h = self._y, self._m, self._h[:, None]
+            slope = (y[1:] - y[:-1]) / h
+            self._c = np.stack(
+                [
+                    (m[1:] - m[:-1]) / (6 * h),
+                    m[:-1] / 2,
+                    slope - h * (2 * m[:-1] + m[1:]) / 6,
+                    y[:-1],
+                ]
+            ).reshape((4, len(h)) + self._shape)
+        return self._c
 
     def __call__(self, xq):
         xq = np.asarray(xq, float)

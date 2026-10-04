@@ -1,4 +1,4 @@
-# QuickerBridge 0.9.7 — guide en français
+# QuickerBridge 0.9.95 — guide en français
 
 [English README](README.md)
 
@@ -11,7 +11,7 @@ compacte. Aucune installation de Python et aucun serveur local pour les utilisat
 ## Démarrer
 
 - **Sur le web :** https://acfakkoh.github.io/QuickerBridge/ (GitHub Pages, publié à chaque mise à jour de `main`).
-- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.9.7-2026-10-02.html`) dans un navigateur moderne. Si vous
+- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.9.95-2026-10-04.html`) dans un navigateur moderne. Si vous
   recevez l’archive portable, extrayez-la avant d’ouvrir le HTML.
 - Une connexion Internet est nécessaire au démarrage pour charger Pyodide et ses
   bibliothèques. Le cache peut accélérer les ouvertures suivantes; cette édition
@@ -99,8 +99,8 @@ le diagramme EI(x) et l’alerte « Saut de rigidité » le signalent.
 - **Lignes d’influence :** onglet « Lignes d’influence », cliquez un diagramme pour
   choisir la station. V, M, δ à la station et R (et Mr si encastré) à l’appui le plus
   proche, pour 1 kN vers le bas, avec les essieux de la disposition M max.
-- **Animation :** en « Position du camion », ▶ Animer rejoue 60 positions
-  précalculées du véhicule complet; le curseur réutilise ces positions sans recalcul.
+- **Camion gouvernant :** onglet « Camion gouvernant » ou clic sur un extrême; la
+  disposition des essieux est dessinée sur la poutre avec ses diagrammes V, M, δ.
 - Axes Y gradués, quadrillage léger et valeurs des pics sur chaque diagramme.
 - **Écran d’ouverture (≈ 4 s)** pendant le chargement du moteur : une vraie poutre
   continue à 3 travées résolue par l’équation des trois moments, un CL-750-QC qui
@@ -277,6 +277,29 @@ GitHub Pages, consultez [le guide développeur](README_DEVELOPER.md).
   fenêtre complète, où l’on change la station (◀ ▶, x, curseur) et le y de S3.
   Profils en trait continu depuis σ = 0, ANE en pointillés; lignes dessus /
   dessous de dalle et armature inf. retirées du tableau.
+
+## Nouveautés 0.9.95
+
+- **Bandeau des cas d’analyse.** Les cinq cas (Permanente, Routière, Permanente + routière, Déformation imposée, Modes propres) forment un bandeau au-dessus du croquis de la poutre. Le croquis ne garde que le nom du modèle : plus de titre, de légende des charges ni d’encart de section. Le croquis des modes propres a maintenant la même longueur que les autres.
+- **Onglets d’affichage.** Enveloppe · Écarts Δ · Camion gouvernant · Lignes d’influence. Écarts Δ est un onglet (V, M et δ seulement, sans EI ni réactions). Camion gouvernant montre la position du moment positif maximal (cliquer un extrême pour en voir un autre); la rangée position / inverser / animer est retirée. Les lignes d’influence ne répètent plus le diagramme des réactions. La légende « enveloppe min / max » est retirée.
+- **Étiquettes des pics.** Chaque partie indépendante du pont (séparée par une travée isostatique ou une pile dédoublée) affiche ses propres extrêmes de V, M et flèche, et tout pic à 0,5 % près de l’extrême global est aussi étiqueté, pour voir la symétrie d’un coup d’œil. Les quatre valeurs maximales sont arrondies au supérieur, sans décimale sauf une pour la flèche.
+- **FT dans sa propre fenêtre.** « Régler le FT… » ouvre une fenêtre flottante, comme les contraintes. FT y est toujours calculé; la case « Appliquer le FT S6-25 aux enveloppes » de l’onglet Charges (désactivée par défaut) l’applique. Le tableau par zone a une ligne Fs. Plus d’alerte « DVE limité à 3,0 m ».
+- **Interface allégée.** Plus d’avertissement de saut de rigidité ni de cercles rouges sur EI; plus d’avertissement de soulèvement pour la surcharge routière seule; exemples sans description; noms des cas au singulier. L’aperçu des contraintes au survol est désactivé par défaut (case à côté de « σ Contraintes »). « Agrandir les diagrammes » est remplacé par une flèche qui réduit le panneau du modèle. Le menu Exemples s’ouvre au-dessus de toutes les fenêtres.
+- **Lisibilité et clavier.** Le texte secondaire, les échelles des diagrammes et les noms des séries atteignent le contraste WCAG AA; le texte fonctionnel fait au moins 11 px. Les menus Fichier et Exemples se parcourent aux flèches et se ferment avec Échap; les onglets et boutons d’options annoncent leur état aux lecteurs d’écran; un diagramme sélectionné au clavier avance de station en station avec ← → (Maj : 10 stations, Début / Fin) et annonce les valeurs. Surfaces plus sobres (sans dégradés ni bordures latérales), avertissement dans la colonne des résultats, et « FT S6-25 appliqué : valeurs par poutre » au-dessus des valeurs maximales quand FT est appliqué.
+
+## Nouveautés 0.9.9
+
+- **Protection du travail.** « Réinitialiser » demande confirmation quand le modèle a des modifications non enregistrées (enregistrer, réinitialiser sans enregistrer ou annuler). Quitter la page avec des modifications non enregistrées demande confirmation. Le modèle non enregistré est conservé dans ce navigateur et proposé au démarrage suivant (« Modèle non enregistré retrouvé » : Restaurer / Ignorer). Ctrl+Z / Ctrl+Y annulent et rétablissent les modifications du modèle (saisies, fichiers ouverts, exemples, réinitialisation), aussi par **Fichier → Annuler**.
+- **Type d’analyse séparé du cas de charge.** L’en-tête des résultats a deux commandes : **Statique / Modes propres**, puis les quatre cas de charge (Permanentes, Routières, Permanentes + routières, Déformation imposée). Le cas de charge est conservé pendant l’affichage des modes. L’en-tête passe à la ligne au lieu de déborder sur les écrans moyens et étroits.
+- **Erreurs plus claires.** Une valeur invalide affiche son message (p. ex. la plage admise) juste sous la case pendant la saisie. La fenêtre des contraintes n’affiche plus en erreur des valeurs valides de station et de S3. L’export Excel indique pourquoi il n’est pas disponible (moteur en chargement, calcul en cours, valeurs invalides).
+
+## Nouveautés 0.9.8
+
+- **Calcul plus rapide.** Premier calcul d’un pont non prismatique à 6 travées : environ 40 fois plus rapide (règle de Gauss mise en cache dans PyCBA); chaque recalcul de charge vive : 4 à 5 fois plus rapide (toutes les combinaisons d’essieux traitées d’un coup, de façon exacte; les positions « essieu exactement sur une station » ne sont évaluées que pour cette station). Écart sur les enveloppes : moins de 0,01 %. Pendant un calcul, les modifications sont regroupées en un seul recalcul du dernier état, avec un délai d’attente qui s’adapte à la durée du calcul précédent.
+- **Pile dédoublée** (onglet Géométrie, type d’appui) : joint de tablier sur une pile, deux appareils d’appui. Les travées de part et d’autre sont indépendantes; le diagramme, le tableau des stations et l’export Excel donnent deux réactions (g / d).
+- **Sections.** EI direct défini par EI, par f′c et γc (E calculé) avec I, ou par E (MPa) et I. Poutres NEBT : f′c (50 MPa) et γc (24,5 kN/m³) → E affiché; γc ajuste aussi le poids propre. Sur une poutre avec dalle, l’inertie de l’analyse peut venir directement de la section mixte 1n, 3n ou I′ : M est alors calculé et grisé (jamais appliqué deux fois). Dalle par défaut de 225 mm. Une section inutilisée peut être supprimée.
+- **Interface.** Cases de saisie à la QuickerUnits (séparateur des milliers, virgule décimale en français, calcul permis : `2*17,4`), nom du modèle bien visible (aussi dans le cadre de la poutre), menu **Fichier** (Ouvrir, Enregistrer, Comparer, Excel; Ctrl+O, Ctrl+S) et menu **Exemples** (4 ponts anonymes, FT non appliqué). Le schéma de la poutre nomme les sections de chaque zone. Les illustrations de déformation imposée dessinent la vraie poutre (acier, NEBT ou EI).
+- FT : la largeur hors-tout B = (N − 1)·S + 2·Sc est mise en évidence avec la bordure (B − Wc)/2.
 
 ## Nouveautés 0.9.7
 

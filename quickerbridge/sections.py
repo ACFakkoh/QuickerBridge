@@ -70,7 +70,8 @@ def properties(section: Section) -> dict:
             "I_effective": inertia * section.inertia_modifier,
             "centroid": data["yb"],
             "EI": section.E * 1e6 * inertia * section.inertia_modifier,
-            "w": data["w"],
+            # v0.9.8: the tabulated weight is A × 24.5 kN/m³; it follows γc.
+            "w": data["w"] * section.unit_weight / 24.5,
         }
     d, bt, tt, tw, bb, tb = [getattr(section, key) / 1000 for key in DIMENSIONS]
     hw = d - tt - tb

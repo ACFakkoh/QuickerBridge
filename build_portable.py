@@ -98,6 +98,7 @@ def source_entries():
         "browser-solver.js",
         "version.js",
         "default-result.js",
+        "examples.js",
         "solver-bundle.js",
     ):
         entries.append((DIST / name, f"dist/{name}"))
@@ -153,6 +154,34 @@ def write_default_result() -> None:
     )
 
 
+def write_examples() -> None:
+    """Example bridges of the project menu (v0.9.8): dist/examples.js and one
+    project file per example in examples/."""
+    import sys
+
+    sys.path.insert(0, str(ROOT))
+    from quickerbridge.models import Model
+    from quickerbridge.presets import presets
+    from quickerbridge.projects import create_project
+
+    items = presets()
+    (DIST / "examples.js").write_text(
+        "window.QB_EXAMPLES="
+        + json.dumps(items, separators=(",", ":"), ensure_ascii=False)
+        + ";\n",
+        encoding="utf-8",
+    )
+    for item in items:
+        project = create_project(
+            Model.model_validate(item["model"]), item["name"]["fr"]
+        )
+        project["saved_at"] = f"{RELEASE_DATE}T00:00:00Z"
+        (ROOT / "examples" / f"example-{item['id']}.quickerbridge.json").write_text(
+            json.dumps(project, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+
+
 def build_browser_assets() -> None:
     source = (
         "window.QB_SOURCE_ZIP="
@@ -176,6 +205,7 @@ def build_browser_assets() -> None:
     )
     (DIST / "version.js").write_text(version_js, encoding="utf-8")
     write_default_result()
+    write_examples()
     (DIST / ".nojekyll").touch()
 
     html = (DIST / "index.html").read_text(encoding="utf-8")
@@ -186,6 +216,7 @@ def build_browser_assets() -> None:
     script_names = (
         "version.js",
         "default-result.js",
+        "examples.js",
         "solver-bundle.js",
         "browser-solver.js",
         "app.js",
@@ -254,6 +285,7 @@ def build_release() -> None:
             "browser-solver.js",
             "version.js",
             "default-result.js",
+            "examples.js",
             "solver-bundle.js",
             "QuickerBridge-source.zip",
             ".nojekyll",

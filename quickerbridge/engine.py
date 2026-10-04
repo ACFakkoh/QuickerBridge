@@ -25,6 +25,7 @@ from .distribution import (
 from .sections import member_deflection, stiffness_profile, span_ei, properties
 from .loads import (
     CANADIAN_VEHICLES,
+    HL93_VEHICLES,
     axle_groups,
     dead_intervals,
     dynamic_factor,
@@ -59,8 +60,41 @@ def pycba_supports(model):
     for i, kind in enumerate(model.supports):
         if kind == "spring":
             out.append([-1, float(model.support_springs[i])])
+        elif kind == "split":
+            # Split pier (v0.9.8): both members are hinged on the node, whose
+            # rotation is then restrained only to keep the system regular; it
+            # carries no moment. Each side keeps its own bearing reaction.
+            out.append("fixed")
         else:
             out.append(kind)
+    return out
+
+
+def deck_breaks(model):
+    """Supports without deck continuity: split piers (v0.9.8) and supports
+    next to a simple span (hinge)."""
+    n = len(model.spans)
+    return [
+        k in (0, n)
+        or model.supports[k] == "split"
+        or model.spans[k - 1].simple
+        or model.spans[k].simple
+        for k in range(n + 1)
+    ]
+
+
+def split_stations(x, sides, support_x, model):
+    """Report-station indices (left side, right side) of every split pier."""
+    out = {}
+    x = np.asarray(x, float)
+    for k, kind in enumerate(model.supports):
+        if kind != "split":
+            continue
+        at = np.flatnonzero(np.abs(x - support_x[k]) < 1e-9)
+        left = [int(i) for i in at if sides[i] == "left"]
+        right = [int(i) for i in at if sides[i] == "right"]
+        if left and right:
+            out[k] = {"left": left[0], "right": right[0]}
     return out
 
 
@@ -76,12 +110,15 @@ def end_releases(model):
     gives zero moment and needs no release.
     """
     n = len(model.spans)
-    restrained = [kind in ("fixed", "spring") for kind in model.supports]
+    restrained = [kind in ("fixed", "spring", "split") for kind in model.supports]
     left, right = [False] * n, [False] * n
     for i, span in enumerate(model.spans):
         if span.simple:
             left[i] = restrained[0] if i == 0 else True
             right[i] = restrained[n] if i == n - 1 else True
+    for k, kind in enumerate(model.supports):
+        if kind == "split":  # interior only (validated): hinge both sides
+            right[k - 1] = left[k] = True
     for j in range(1, n):
         if right[j - 1] and left[j] and not restrained[j]:
             left[j] = False
@@ -113,6 +150,9 @@ def support_fixity(model, eis=None):
         ]
         if kind == "fixed":
             out.append(1.0 if connected else 0.0)
+            continue
+        if kind == "split":
+            out.append(0.0)
             continue
         if kind != "spring" or not connected:
             out.append(0.0)
@@ -266,6 +306,49 @@ class Basis:
         )
         return np.c_[v, m, d, r, mr]
 
+    def unit_columns(self, positions, cols):
+        """Like :meth:`unit` for the crossing rows of :func:`crossing_rows`:
+        columns ``cols`` (P, 5) = V, M, δ of one station s per row, then R and
+        Mr of a support k (or -1: 0). Only the needed spline columns are
+        evaluated, from the piecewise-cubic coefficients (v0.9.8)."""
+        p = np.atleast_1d(np.asarray(positions, float))
+        nx, ns = self.nx, self.ns
+        s = cols[:, 0]
+        r, mr, d = np.zeros((len(p), ns)), np.zeros((len(p), ns)), np.zeros(len(p))
+        for i, start in enumerate(self.support_x[:-1]):
+            rows = np.flatnonzero((p >= start) & (p <= self.support_x[i + 1]))
+            if not len(rows):
+                continue
+            spline = self.interpolators[i]
+            local = p[rows] - start
+            seg = np.clip(
+                np.searchsorted(spline.x, local, side="right") - 1,
+                0,
+                len(spline.x) - 2,
+            )
+            dx = (local - spline.x[seg])[:, None]
+            c = spline.c[:, seg, : 2 * ns]  # (4, rows, 2 ns)
+            rm = ((c[0] * dx + c[1]) * dx + c[2]) * dx + c[3]
+            r[rows], mr[rows] = rm[:, :ns], rm[:, ns:]
+            c = spline.c[:, seg, 2 * ns + s[rows]]  # (4, rows)
+            dx = dx[:, 0]
+            d[rows] = ((c[0] * dx + c[1]) * dx + c[2]) * dx + c[3]
+        on = ((p >= 0) & (p <= self.length)).astype(float)
+        left, lever = self.left[:, s].T, self.lever[:, s].T
+        out = np.zeros((len(p), 5))
+        out[:, 0] = (r * left).sum(axis=1) - (p < self.cut[s]) * on
+        out[:, 1] = (
+            (r * lever).sum(axis=1)
+            - (mr * left).sum(axis=1)
+            - np.maximum(self.x[s] - p, 0) * on
+        )
+        out[:, 2] = d
+        k = cols[:, 3] - 3 * nx
+        has = cols[:, 3] >= 0
+        out[has, 3] = r[has, k[has]]
+        out[has, 4] = mr[has, k[has]]
+        return out
+
     def static_dead(self):
         intervals = dead_intervals(self.model)
         if not intervals:
@@ -402,8 +485,8 @@ def mtq_lane_fractions(model: Model, basis):
 
     * single span: 0.63 everywhere;
     * multi-span: V 0.63 (both senses); M "high" (positive moment) 0.63 except
-      at stations inside the negative-moment zones around the supports, where
-      0.80; M "low" (negative moment) 0.80; D, Mr 0.80;
+      at stations inside the negative-moment zones around the interior piers,
+      where 0.80 (the integral-abutment zones keep 0.63); M "low" (negative moment) 0.80; D, Mr 0.80;
     * R: 0.63 at the end abutments and at supports next to a simple span
       (hinge: no deck continuity), 0.80 at continuous interior supports.
 
@@ -418,15 +501,14 @@ def mtq_lane_fractions(model: Model, basis):
         low[:], high[:] = 0.63, 0.63
         return low, high
     low[:nx] = high[:nx] = 0.63
-    zones = [z[4] for z in effective_spans(model, 0.0, 0.0)[1]]
+    zones = [z[4] for z in effective_spans(model, 0.0, 0.0)[1] if z[3] != "abutment"]
     positive = np.full(nx, 0.63)
     for a, b in zones:
         positive[(basis.x >= a - 1e-9) & (basis.x <= b + 1e-9)] = 0.8
     high[nx : 2 * nx] = positive
-    n = len(model.spans)
+    breaks = deck_breaks(model)
     for k in range(ns):
-        free = k in (0, n) or model.spans[k - 1].simple or model.spans[k].simple
-        if free:
+        if breaks[k]:
             low[3 * nx + k] = high[3 * nx + k] = 0.63
     return low, high
 
@@ -470,6 +552,185 @@ def position_record(model: Model, position: float, direction: str):
     )
 
 
+CHUNK = 64  # travel positions per vectorized block
+
+
+def truck_selector(groups, count):
+    """Exact shortcut over every axle subset of a vehicle (v0.9.8).
+
+    For a fixed number k of axles the largest (smallest) effect of any subset
+    is the sum of the k largest (smallest) axle effects. Every subset of size
+    k shares the dynamic factor of that size, except a few special groups
+    (CL-625 / CL-750-QC axles 1-2-3: 1.30 instead of 1.25), evaluated
+    explicitly. With ``base[k]`` the smallest factor of size k, the maximum
+    over k of ``base[k] x top-k`` and the special groups equals the maximum
+    over the 2^n - 1 groups. Returns None when the groups are not every
+    subset (single full-vehicle group).
+    """
+    from math import comb
+
+    if len(groups) <= 1:
+        return None
+    sizes = {}
+    for group in groups:
+        sizes.setdefault(len(group["axles"]), []).append(group)
+    if any(len(sizes.get(k, [])) != comb(count, k) for k in range(1, count + 1)):
+        return None
+    base = np.array(
+        [min(g["factor"] for g in sizes[k]) for k in range(1, count + 1)], float
+    )
+    special = [g for g in groups if g["factor"] > base[len(g["axles"]) - 1] + 1e-12]
+    return {"base": base, "special": special}
+
+
+def crossing_rows(basis, offsets, sign, begin, end):
+    """Front-axle positions putting an axle exactly on a station (and 1e-7 m
+    either side), with the response columns each one is evaluated for:
+    V, M, δ of that station, R and Mr when the station is a support (else -1).
+    """
+    nx, ns = basis.nx, basis.ns
+    support = np.full(nx, -1)
+    for k, xs in enumerate(basis.support_x):
+        support[np.abs(basis.x - xs) < 1e-9] = k
+    s = np.repeat(np.arange(nx), len(offsets) * 3)
+    shift = np.tile(np.repeat([0.0, -1e-7, 1e-7], 1), nx * len(offsets))
+    axle = np.tile(np.repeat(np.arange(len(offsets)), 3), nx)
+    p = basis.x[s] - sign * offsets[axle] + shift
+    keep = (p >= begin) & (p <= end)
+    s, p = s[keep], p[keep]
+    k = support[s]
+    cols = np.c_[
+        s,
+        nx + s,
+        2 * nx + s,
+        np.where(k >= 0, 3 * nx + k, -1),
+        np.where(k >= 0, 3 * nx + ns + k, -1),
+    ]
+    return p, cols
+
+
+def _best_rows(values, cols, is_low):
+    """Extreme candidate per response column: ``(columns, values, rows, slots)``.
+
+    ``values`` is (positions, K). Without ``cols`` slot j is column j; with a
+    (positions, K) column map, the extreme over every row holding a column
+    (first occurrence on ties, like ``argmin``/``argmax``).
+    """
+    if cols is None:
+        rows = values.argmin(axis=0) if is_low else values.argmax(axis=0)
+        slots = np.arange(values.shape[1])
+        return slots, values[rows, slots], rows, slots
+    flat, c = values.ravel(), cols.ravel()
+    order = np.lexsort((flat if is_low else -flat, c))
+    c_sorted = c[order]
+    first = np.r_[True, c_sorted[1:] != c_sorted[:-1]]
+    pick = order[first]
+    pick = pick[c[pick] >= 0]
+    k = values.shape[1]
+    return c[pick], flat[pick], pick // k, pick % k
+
+
+def _envelope_block(ctx, effects, p, cols, direction, variant):
+    """Update the live envelopes with one block of vehicle positions.
+
+    ``effects`` (axles, positions, K) holds each nominal axle's effect on the
+    K responses of the block: every response (``cols`` None) or the per-row
+    columns of ``cols``. Truck alone (every axle subset, exact shortcut of
+    ``truck_selector``) and truck + lane (Canadian: full truck only).
+    """
+    model, live = ctx["model"], ctx["model"].live
+    groups, selector, scale = ctx["groups"], ctx["selector"], ctx["scale"]
+    take = (lambda a: a) if cols is None else (lambda a: a[np.maximum(cols, 0)])
+    candidates = []  # (name, low values, high values, record(sense, row, slot))
+    if ctx["include_truck"] and selector is not None:
+        base, special = selector["base"], selector["special"]
+        # Axles on the last (contiguous) axis: sorting 5 values per cell is fast.
+        ordered = np.sort(np.moveaxis(effects, 0, -1), axis=-1)
+        pair = []
+        for is_low in (True, False):
+            sums = np.cumsum(ordered if is_low else ordered[..., ::-1], axis=-1) * base
+            k = sums.argmin(axis=-1) if is_low else sums.argmax(axis=-1)
+            best = np.take_along_axis(sums, k[..., None], axis=-1)[..., 0]
+            code = k + 1  # number of axles; special groups are -(index + 1)
+            for n, group in enumerate(special):
+                value = np.einsum("a,apc->pc", group["mask"], effects) * group["factor"]
+                better = value < best - 1e-10 if is_low else value > best + 1e-10
+                best = np.where(better, value, best)
+                code = np.where(better, -(n + 1), code)
+            pair.append((best * scale * live.factor, code))
+
+        def truck_record(is_low, row, slot, codes=(pair[0][1], pair[1][1])):
+            c = int(codes[0 if is_low else 1][row, slot])
+            if c < 0:
+                return special[-c - 1]["axles"], special[-c - 1]["factor"], {}
+            column = effects[:, row, slot]
+            order = np.argsort(column if is_low else -column, kind="stable")
+            return sorted(int(a) + 1 for a in order[:c]), float(base[c - 1]), {}
+
+        candidates.append(("truck", pair[0][0], pair[1][0], truck_record))
+        lane_groups = []
+        if ctx["include_lane"]:
+            lane_groups = groups[-1:] if live.vehicle in CANADIAN_VEHICLES else groups
+    else:
+        lane_groups = groups
+    for group in lane_groups:
+        axle_effect = np.einsum("a,apc->pc", group["mask"], effects) * scale
+
+        def group_record(is_low, row, slot, group=group, extra=None):
+            return group["axles"], group["factor"], {}
+
+        if ctx["include_truck"] and selector is None:
+            amplified = axle_effect * group["factor"] * live.factor
+            candidates.append(("truck", amplified, amplified, group_record))
+        if ctx["include_lane"] and (
+            live.vehicle not in CANADIAN_VEHICLES
+            or len(group["axles"]) == ctx["n_axles"]
+        ):
+            axle_factor = lane_axle_factor(live, group["factor"])
+            mtq = ctx["mtq"]
+            axle_lo, axle_hi = (
+                (take(mtq[0]), take(mtq[1])) if mtq else (axle_factor, axle_factor)
+            )
+            lane = take(ctx["lane"])
+            # The record factor reports dynamic allowance.  A Canadian lane
+            # reduction is deliberately not DLA.
+            reported = group["factor"] if live.vehicle in HL93_VEHICLES else 1.0
+
+            def lane_record(is_low, row, slot, group=group, reported=reported):
+                extra = {}
+                if mtq:
+                    column = slot if cols is None else cols[row, slot]
+                    extra = {"fraction": float(mtq[0 if is_low else 1][column])}
+                return group["axles"], reported, extra
+
+            candidates.append(
+                (
+                    "lane",
+                    (axle_effect * axle_lo + lane) * live.factor,
+                    (axle_effect * axle_hi + lane) * live.factor,
+                    lane_record,
+                )
+            )
+    for name, lows, highs, record in candidates:
+        for is_low, values, target, infos in (
+            (True, lows, ctx["low"], ctx["info_low"]),
+            (False, highs, ctx["high"], ctx["info_high"]),
+        ):
+            columns, cand, rows, slots = _best_rows(values, cols, is_low)
+            changed = np.flatnonzero(
+                cand < target[columns] - 1e-10
+                if is_low
+                else cand > target[columns] + 1e-10
+            )
+            for i in changed:
+                j = columns[i]
+                target[j] = cand[i]
+                axles, factor, extra = record(is_low, rows[i], slots[i])
+                infos[j] = case_record(
+                    name, direction, p[rows[i]], list(axles), factor, **variant, **extra
+                )
+
+
 def analyse(model: Model):
     if model.load_mode == "thermal":
         from .thermal import analyse_thermal
@@ -501,9 +762,26 @@ def analyse(model: Model):
     scale = displayed_axle_factor(model)
     # MTQ automatic fraction: per response column and envelope sense.
     mtq = mtq_lane_fractions(model, basis) if mtq_active(model) else None
+    selector = truck_selector(groups, len(weights))
+    timing = {"influence": 0.0, "envelope": 0.0, "crossings": 0.0}
     if model.load_mode != "dead":
         if include_lane:
             lane_lo = lane_hi = basis.full_lane(lane_w)
+        ctx = {
+            "model": model,
+            "groups": groups,
+            "selector": selector,
+            "include_truck": include_truck,
+            "include_lane": include_lane,
+            "scale": scale,
+            "lane": lane_lo,
+            "mtq": mtq,
+            "n_axles": len(weights),
+            "low": low,
+            "high": high,
+            "info_low": info_low,
+            "info_high": info_high,
+        }
         # v0.9.7: always both travel directions.
         directions = ["forward", "reverse"]
         for weights, offsets, variant in variants:
@@ -516,88 +794,34 @@ def analyse(model: Model):
                     else (-offsets[-1], basis.length)
                 )
                 travel = np.linspace(begin, end, int(np.ceil((end - begin) / step)) + 1)
-                # Exact axle/support crossings matter for reaction and shear peaks.
-                crossings = (basis.x[:, None] - sign * offsets[None, :]).ravel()
-                travel = np.unique(
-                    np.r_[travel, crossings, crossings - 1e-7, crossings + 1e-7]
-                )
-                travel = travel[(travel >= begin) & (travel <= end)]
                 steps += len(travel)
-                for start in range(0, len(travel), 64):
-                    p = travel[start : start + 64]
+                for start in range(0, len(travel), CHUNK):
+                    p = travel[start : start + CHUNK]
+                    tick = time.perf_counter()
                     effects = np.array(
                         [basis.unit(p + sign * a) * w for a, w in zip(offsets, weights)]
                     )
-                    for group in groups:
-                        raw = np.einsum(
-                            "a,apc->pc", group["mask"], effects, optimize=False
-                        )
-                        axle_effect = raw * scale
-                        cases = []
-                        if include_truck:
-                            amplified = (
-                                axle_effect * group["factor"] * model.live.factor
-                            )
-                            cases.append(
-                                ("truck", amplified, amplified, group["factor"])
-                            )
-                        if include_lane and (
-                            model.live.vehicle not in CANADIAN_VEHICLES
-                            or len(group["axles"]) == len(weights)
-                        ):
-                            axle_factor = lane_axle_factor(model.live, group["factor"])
-                            axle_lo, axle_hi = (
-                                mtq if mtq else (axle_factor, axle_factor)
-                            )
-                            # The record factor reports dynamic allowance.  A
-                            # Canadian lane reduction is deliberately not DLA.
-                            reported_factor = (
-                                group["factor"]
-                                if model.live.vehicle in {"HL93Truck", "HL93Tandem"}
-                                else 1.0
-                            )
-                            cases.append(
-                                (
-                                    "lane",
-                                    (axle_effect * axle_lo + lane_lo)
-                                    * model.live.factor,
-                                    (axle_effect * axle_hi + lane_hi)
-                                    * model.live.factor,
-                                    reported_factor,
-                                )
-                            )
-                        for name, lows, highs, factor in cases:
-                            il, ih = lows.argmin(axis=0), highs.argmax(axis=0)
-                            vl, vh = (
-                                lows[il, np.arange(count)],
-                                highs[ih, np.arange(count)],
-                            )
-                            for target, candidate, indices, infos, is_low in (
-                                (low, vl, il, info_low, True),
-                                (high, vh, ih, info_high, False),
-                            ):
-                                changed = np.flatnonzero(
-                                    candidate < target - 1e-10
-                                    if is_low
-                                    else candidate > target + 1e-10
-                                )
-                                target[changed] = candidate[changed]
-                                fractions = mtq[0 if is_low else 1] if mtq else None
-                                for j in changed:
-                                    extra = (
-                                        {"fraction": float(fractions[j])}
-                                        if name == "lane" and mtq
-                                        else {}
-                                    )
-                                    infos[j] = case_record(
-                                        name,
-                                        direction,
-                                        p[indices[j]],
-                                        group["axles"],
-                                        factor,
-                                        **variant,
-                                        **extra,
-                                    )
+                    timing["influence"] += time.perf_counter() - tick
+                    tick = time.perf_counter()
+                    _envelope_block(ctx, effects, p, None, direction, variant)
+                    timing["envelope"] += time.perf_counter() - tick
+                # v0.9.8: exact axle/station crossings (shear and reaction
+                # jumps, moment kinks) only matter for the responses AT that
+                # station: V, M, δ there and R, Mr when it is a support. They
+                # are evaluated for those columns only (was: every column).
+                tick = time.perf_counter()
+                p, cols = crossing_rows(basis, offsets, sign, begin, end)
+                steps += len(p)
+                for start in range(0, len(p), 4 * CHUNK):
+                    q, c = p[start : start + 4 * CHUNK], cols[start : start + 4 * CHUNK]
+                    effects = np.array(
+                        [
+                            basis.unit_columns(q + sign * a, c) * w
+                            for a, w in zip(offsets, weights)
+                        ]
+                    )
+                    _envelope_block(ctx, effects, q, c, direction, variant)
+                timing["crossings"] += time.perf_counter() - tick
         if include_lane:
             # Include the lane case with its truck completely off the bridge.
             for target, candidate, infos, sense in (
@@ -657,6 +881,7 @@ def analyse(model: Model):
                 }
             )
     fixity = support_fixity(model, basis.ei)
+    splits = split_stations(basis.x, basis.sides, basis.support_x, model)
     reactions = [
         {
             "support": i + 1,
@@ -675,6 +900,8 @@ def analyse(model: Model):
             "moment_min": float(low[3 * nx + ns + i]),
             "moment_max": float(high[3 * nx + ns + i]),
             "moment_index": 3 * nx + ns + i,
+            # Split pier: V stations each side; R left = −V(x⁻), R right = V(x⁺).
+            "split": splits.get(i),
         }
         for i, x in enumerate(basis.support_x)
     ]
@@ -731,6 +958,7 @@ def analyse(model: Model):
             "equilibrium_error": basis.max_equilibrium_error,
             "pycba": cba.__version__,
             "precision": model.precision,
+            "timing": {k: round(v, 3) for k, v in timing.items()},
         },
         "ft": (
             {

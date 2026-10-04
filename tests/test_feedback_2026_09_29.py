@@ -110,7 +110,8 @@ def test_modal_workbook_values_and_no_mass():
     assert wb["Modes"]["F4"].value == pytest.approx(
         sum(wb["Modes"].cell(i, 5).value for i in range(2, 5))
     )
-    assert wb["Stations"]["N2"].value == pytest.approx(0)
+    # Permanent loads alone: no min/max range columns (v0.9.7).
+    assert "ΔV (kN)" not in [c.value for c in wb["Stations"][1]]
     assert wb["Modes"].tables and wb["Stations"].tables
     m.dead = []
     m.modal.mass_source = "dead"

@@ -14,6 +14,7 @@ from .engine import (
     member_types,
     node_reactions,
     pycba_supports,
+    split_stations,
     stations,
     support_fixity,
 )
@@ -232,6 +233,7 @@ def analyse_thermal(model: Model) -> dict:
                 }
             )
     fixity = support_fixity(model, eis)
+    splits = split_stations(x, sides, support_x, model)
     reactions = [
         {
             "support": i + 1,
@@ -249,6 +251,7 @@ def analyse_thermal(model: Model) -> dict:
             "moment": float(values["Mr"][i]),
             "moment_min": float(values["Mr"][i]),
             "moment_max": float(values["Mr"][i]),
+            "split": splits.get(i),
         }
         for i, value in enumerate(values["R"])
     ]

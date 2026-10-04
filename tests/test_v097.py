@@ -196,9 +196,47 @@ def test_mtq_single_span_and_hinge_use_63():
         assert result["case_max"][3 * nx + k]["fraction"] == 0.63
 
 
+def test_mtq_integral_abutment_zone_keeps_63_for_positive_moment():
+    """Only the M− zones over interior piers take 80 % for M+ (user rule)."""
+    from quickerbridge.engine import Basis, mtq_lane_fractions
+
+    model, _ = mtq_run(True)
+    model.supports = ["fixed", "pin", "fixed"]
+    basis = Basis(model)
+    _, high = mtq_lane_fractions(model, basis)
+    x, nx = basis.x, basis.nx
+    m_hi = high[nx : 2 * nx]
+    near_abutment = x <= 0.15 * 34.8 - 1e-6
+    near_pier = (x >= 27.84 + 1e-6) & (x <= 41.76 - 1e-6)
+    assert np.all(m_hi[near_abutment] == 0.63)
+    assert np.all(m_hi[near_pier] == 0.8)
+
+
 def test_mtq_default_on_for_old_projects_and_manual_position():
     project = create_project(Model(), "old")
     del project["model"]["live"]["mtq_auto"]
     assert validate_project(json.dumps(project))["model"]["live"]["mtq_auto"] is True
     model = Model(load_mode="live", live=LiveLoad(case="lane"))
     assert position_record(model, 20.0, "forward")["fraction"] == 0.8
+
+
+def test_dead_only_exports_one_value_per_effect():
+    """Permanent loads alone: no min/max duplication in CSV and Excel."""
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+
+    from quickerbridge.exports import csv_bytes, excel_bytes
+
+    model = Model(load_mode="dead")
+    result = analyse(model)
+    header = csv_bytes(result).decode("utf-8-sig").splitlines()[0]
+    assert "V (kN)" in header and "V min" not in header
+    wb = load_workbook(BytesIO(excel_bytes(result, model=model)))
+    stations = [c.value for c in wb["Stations"][1]]
+    assert "M (kN·m)" in stations and "M max (kN·m)" not in stations
+    assert "Governing cases" not in wb.sheetnames
+    reactions = [c.value for c in wb["Reactions"][1]]
+    assert reactions[2] == "R (kN)" and "R max (kN)" not in reactions
+    total = sum(row[2].value for row in wb["Reactions"].iter_rows(min_row=2))
+    assert total == pytest.approx(sum(r["max"] for r in result["reactions"]))

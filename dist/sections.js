@@ -22,7 +22,7 @@ function qbGirderSvg(s,X,Y,cls='sp-steel'){
 }
 let spIndex=null,spData=null,spToken=0,spTimer=null;
 const SP_BARS={'10M':[11.3,100],'15M':[16.0,200],'20M':[19.5,300]};
-function spDefaults(){const d=model.distribution,be=d&&d.bridge_type==='slab_on_girder'?Math.round(d.spacing*1000):3110;return {enabled:true,slab_thickness:200,haunch:50,effective_width:be,fc:35,unit_weight:24,bar_top:'15M',spacing_top:300,bar_bottom:'15M',spacing_bottom:300,cover_top:60,cover_bottom:35,fy:345,frqr:.85,y3:500,y_steel:null,y_3n:null,y_1n:null,y_neg:null,region:'positive'};}
+function spDefaults(){const d=model.distribution,be=d&&d.bridge_type==='slab_on_girder'?Math.round(d.spacing*1000):3110;return {enabled:true,slab_thickness:225,haunch:50,effective_width:be,fc:35,unit_weight:24,bar_top:'15M',spacing_top:300,bar_bottom:'15M',spacing_bottom:300,cover_top:60,cover_bottom:35,fy:345,frqr:.85,y3:500,y_steel:null,y_3n:null,y_1n:null,y_neg:null,region:'positive'};}
 function spSci(v,unit){
  if(v===null||v===undefined||!Number.isFinite(v))return '—';
  const a=Math.abs(v);if(a<1e6)return `${fmt(v,a<100?2:0)}${unit?` <small>${unit}</small>`:''}`;
@@ -64,7 +64,7 @@ function renderSectionDialog(){
 }
 function spRequest(){
  clearTimeout(spTimer);if(spIndex===null)return;const s=model.sections[spIndex];if(!s||!['girder','nebt'].includes(s.kind)){spData=null;spRenderResults();return;}
- if($$('#section-dialog input[type="number"]').some(el=>!el.validity.valid||el.value===''))return;
+ if($$('#section-dialog input.qb-num,#section-dialog input[type="number"]').some(el=>!el.validity.valid||el.value===''))return;
  const token=++spToken;
  spTimer=setTimeout(async()=>{try{const data=await solver.request('section_properties',{section:clone(s)});if(token===spToken){spData=data;spRenderResults();}}catch(e){if(token!==spToken)return;spData={error:String(e)};spRenderResults();}},120);
 }
@@ -94,7 +94,8 @@ function spRenderResults(){
  const cl=(label,[ratio,k],limits)=>`<tr><th>${label}</th><td>${fmt(ratio,1)}</td><td class="sp-class sp-class-${k}">${t('spClass')} ${k}</td><td><small>${limits.map(v=>fmt(v,1)).join(' / ')}</small></td></tr>`;
  const dc=(label,[ratio,reduced])=>`<tr><th>${label}</th><td>${fmt(ratio,1)}</td><td class="sp-class ${reduced?'sp-class-4':'sp-class-1'}">${reduced?t('spReduced'):t('spOk')}</td><td><small>${fmt(lim.web[2],1)}</small></td></tr>`;
  h+=`<h3>${t('spClasses')}</h3><table class="sp-table sp-classes"><tbody>${cl(t('spTopFlange'),cls.top_flange,lim.flange)}${cl(t('spBottomFlange'),cls.bottom_flange,lim.flange)}${cl(t('spWeb'),cls.web,lim.web)}${neg&&ng?dc(t('spWeb2dcNeg'),ng.web_2dc):dc(t('spWeb2dc'),cls.web_2dc)}</tbody></table>`;}
- if(ng)h+=`<div class="sp-actions"><button data-sp-copy="negative">${t('spCopyNeg')} = ${fmt(ng.ratio,3)}</button></div>`;
+ if(inertiaAuto(s))h+=`<p class="note sp-auto-note">${t('inertiaAutoHelp')}</p>`;
+ else if(ng)h+=`<div class="sp-actions"><button data-sp-copy="negative">${t('spCopyNeg')} = ${fmt(ng.ratio,3)}</button></div>`;
  else if(c)h+=`<div class="sp-actions"><button data-sp-copy="1n">${t('spCopy1')} = ${fmt(c['1n'].I/st.Ix,3)}</button><button data-sp-copy="3n">${t('spCopy3')} = ${fmt(c['3n'].I/st.Ix,3)}</button></div>`;
  res.innerHTML=h;
 }
@@ -231,8 +232,8 @@ function renderStress(){
  const x=result.x[stIndex],sec=stData&&!stData.error?stData.section:null,mx=sec?stData.cases.max:null;
  dlg.querySelector('#st-title').innerHTML=`${t('stTitle')} · x = ${fmt(x)} m${sec?` · ${esc(sec.name)} · h ${fmt(mx.depth,0)} mm`:''}`;
  const xi=dlg.querySelector('#st-x'),sl=dlg.querySelector('#st-slider'),yi=dlg.querySelector('#st-y');
- if(document.activeElement!==xi)xi.value=Number(x.toFixed(3));if(document.activeElement!==sl)sl.value=stIndex;
- if(mx){dlg.querySelector('#st-y-label').textContent=t(mx.s3_ref==='1n'?'stY1n':'stYsteel');yi.disabled=stSectionIndex(stData)<0;if(document.activeElement!==yi)yi.value=mx.s3_y??500;}
+ if(document.activeElement!==xi){xi.value=qbFmtInput(Number(x.toFixed(3)));qbCheck(xi);}if(document.activeElement!==sl)sl.value=stIndex;
+ if(mx){dlg.querySelector('#st-y-label').textContent=t(mx.s3_ref==='1n'?'stY1n':'stYsteel');yi.disabled=stSectionIndex(stData)<0;if(document.activeElement!==yi){yi.value=qbFmtInput(mx.s3_y??500);qbCheck(yi);}}
  let body;
  if(!stData)body=`<p class="help">${t('axleComputing')}</p>`;
  else if(stData.error)body=`<p class="help">${t(stData.error.includes('section_kind')?'stNotSteel':stData.error.includes('composite.bars')?'composite.bars':'failed')}</p>`;
@@ -246,10 +247,12 @@ function stBody(d){
  let h='';
  if(!mx.composite){const i=stSectionIndex(d);h+=`<p class="axle-warning">⚠ ${t('stNoSlab')}${i>=0&&ST_KINDS.includes(model.sections[i].kind)?` <button class="text-button" data-section-props="${i}">${t('stDefine')}</button>`:''}</p>`;}
  h+=`<div class="st-body"><div class="sp-figure" id="st-fig">${stSvg(d)}</div><div>`;
- h+=`<h3>${t('stMoments')}</h3><table class="sp-table"><tbody><tr><th>${t('stSelf')} · ${t('stSteel')}</th><td>${fmt(mo.self_weight,1)}</td></tr><tr><th>${t('stDeadSteel')} · ${t('stSteel')}</th><td>${fmt(mo.dead_steel,1)}</td></tr><tr><th>${t('stDead')} · ${t('st3n')}</th><td>${fmt(mo.dead_3n,1)}</td></tr><tr><th>${t('stLiveMax')} · 1n</th><td>${fmt(mo.live_max,1)}</td></tr><tr><th>${t('stLiveMin')} · 1n</th><td>${fmt(mo.live_min,1)}</td></tr></tbody></table>`;
- const st=k=>mx.stages[k],cr=k=>st(k).cracked?` <small>(${t('stCracked')})</small>`:'';
- h+=`<h3>σ (MPa)</h3><table class="sp-table st-table"><thead><tr><th>${t('stFibre')}</th><th>${t('stSteel')}</th><th>3n${cr('3n')}</th><th>1n${cr('1n')}</th><th>${t('stCaseMax')}</th><th>${t('stCaseMin')}</th></tr></thead><tbody>`;
- [...mx.fibres].reverse().filter(f=>!ST_HIDDEN.has(f.name)).forEach(f=>{const v=(c,k)=>c.stages[k].sigma[f.name];const cell=s=>`<td class="${s>1e-9?'st-tension':s<-1e-9?'st-compression':''}">${fmt(s,1)}</td>`;const name=f.name==='bar_top'?'stS1':f.name==='S3'&&mx.s3_ref==='steel'?'stS3s':mx.kind==='nebt'&&(f.name==='S2'||f.name==='S5')?f.name==='S2'?'stS2n':'stS5n':ST_NAMES[f.name]||f.name;h+=`<tr><th>${t(name)}</th>${cell(v(mx,'steel'))}${cell(v(mx,'3n'))}${cell(v(mx,'1n'))}${cell(mx.total[f.name]).replace('<td','<td data-total')}${cell(mn.total[f.name]).replace('<td','<td data-total')}</tr>`;});
+ const one=stSame(mx.total,mn.total),liveOne=Math.abs(mo.live_max-mo.live_min)<1e-6;
+ const rows=[[`${t('stSelf')} · ${t('stSteel')}`,mo.self_weight],[`${t('stDeadSteel')} · ${t('stSteel')}`,mo.dead_steel],[`${t('stDead')} · ${t('st3n')}`,mo.dead_3n]].concat(liveOne?[[`${t('stLive')} · 1n`,mo.live_max]]:[[`${t('stLiveMax')} · 1n`,mo.live_max],[`${t('stLiveMin')} · 1n`,mo.live_min]]).filter(([,v])=>Math.abs(v)>=.05);
+ h+=`<h3>${t('stMoments')}</h3><table class="sp-table"><tbody>${rows.map(([k,v])=>`<tr><th>${k}</th><td>${fmt(v,1)}</td></tr>`).join('')}</tbody></table>`;
+ const stages=['steel','3n','1n'].filter(k=>[mx,mn].some(c=>c.stages[k]&&Math.abs(c.stages[k].M)>1e-9)),st=k=>mx.stages[k],cr=k=>st(k).cracked?` <small>(${t('stCracked')})</small>`:'';
+ h+=`<h3>σ (MPa)</h3><table class="sp-table st-table"><thead><tr><th>${t('stFibre')}</th>${stages.map(k=>`<th>${k==='steel'?t('stSteel'):k+cr(k)}</th>`).join('')}${one?`<th>${t('stTotal')}</th>`:`<th>${t('stCaseMax')}</th><th>${t('stCaseMin')}</th>`}</tr></thead><tbody>`;
+ [...mx.fibres].reverse().filter(f=>!ST_HIDDEN.has(f.name)).forEach(f=>{const v=(c,k)=>c.stages[k].sigma[f.name];const cell=s=>`<td class="${s>1e-9?'st-tension':s<-1e-9?'st-compression':''}">${fmt(s,1)}</td>`;const name=f.name==='bar_top'?'stS1':f.name==='S3'&&mx.s3_ref==='steel'?'stS3s':mx.kind==='nebt'&&(f.name==='S2'||f.name==='S5')?f.name==='S2'?'stS2n':'stS5n':ST_NAMES[f.name]||f.name;h+=`<tr><th>${t(name)}</th>${stages.map(k=>cell(v(mx,k))).join('')}${cell(mx.total[f.name]).replace('<td','<td data-total')}${one?'':cell(mn.total[f.name]).replace('<td','<td data-total')}</tr>`;});
  return h+`</tbody></table></div></div>`;
 }
 // Elastic neutral axes of the sections carrying moment at the station (each
@@ -284,6 +287,14 @@ function stSectionSvg(sec,composite,depth,X,Y,wMax){
 // height scale (deepest girder + slab of the model: over a haunch the girder
 // grows, the slab keeps its thickness). Drawn from plain data so the slider
 // can redraw instantly from the all-stations cache.
+// One case only (permanent loads alone, imposed deformation...): M max and M min
+// give the same stresses, so draw, list and label a single total.
+// Value labels kept at least `gap` apart vertically (close fibres: top bar, S2).
+function stLabels(list,gap,cls){
+ list.sort((a,b)=>a.y-b.y);for(let i=1;i<list.length;i++)if(list[i].y-list[i-1].y<gap)list[i].y=list[i-1].y+gap;
+ return list.map(l=>`<text x="${l.x}" y="${l.y.toFixed(1)}" text-anchor="${l.anchor}" class="${cls} ${l.cls}">${l.text}</text>`).join('');
+}
+function stSame(a,b){return Object.keys(a).every(k=>b[k]===undefined||Math.abs(a[k]-b[k])<.05);}
 function stSvg(d){const mx=d.cases.max;return stDraw({fib:Object.fromEntries(mx.fibres.map(f=>[f.name,f.y])),max:mx.total,min:d.cases.min.total,sec:d.section,composite:mx.composite,height:mx.height});}
 function stHeightMax(h){return Math.max(h,...model.sections.filter(q=>ST_KINDS.includes(q.kind)).map(q=>qbGirder(q).depth+(q.composite&&q.composite.enabled?q.composite.haunch+q.composite.slab_thickness:0)));}
 function stDraw({fib,max,min,sec,composite}){
@@ -295,10 +306,13 @@ function stDraw({fib,max,min,sec,composite}){
  const pts=[['S1',fib.bar_top],['S2',fib.S2],['S3',fib.S3],['S4',fib.S4],['S5',fib.S5]].filter(([,y])=>y!==undefined).sort((a,b)=>b[1]-a[1]);
  let lastL=-Infinity;
  pts.forEach(([k,y])=>{const yy=Y(y),yl=Math.max(yy+3,lastL+12);lastL=yl;g+=`<line x1="${X(-w/2)-4}" x2="${right}" y1="${yy}" y2="${yy}" class="st-spoint"/><circle cx="${X(-w/2)-4}" cy="${yy}" r="2.4" class="st-spoint-dot"/><text x="${X(-w/2)-10}" y="${yl}" text-anchor="end" class="st-spoint-label">${k}</text>`;});
- [[min,'st-min'],[max,'st-max']].forEach(([tot,cls])=>{const p=stCasePath(tot,fib,s,composite,d0,Y,SX,ox);g+=`<path d="${p.path}" class="${cls} st-area"/>`;if(p.band)g+=`<path d="${p.band}" class="${cls} st-bar-band"/>`;});
+ const one=stSame(max,min);
+ (one?[[max,'st-max']]:[[min,'st-min'],[max,'st-max']]).forEach(([tot,cls])=>{const p=stCasePath(tot,fib,s,composite,d0,Y,SX,ox);g+=`<path d="${p.path}" class="${cls} st-area"/>`;if(p.band)g+=`<path d="${p.band}" class="${cls} st-bar-band"/>`;});
  const keys=['S5','S2'].concat(composite?['bar_top','slab_top']:[]);
- [max,min].forEach((tot,n)=>keys.forEach(k=>{const v=tot[k];if(v===undefined||Math.abs(v)<.5)return;g+=`<text x="${SX(v)+(v>=0?5:-5)}" y="${Y(fib[k])+(n?13:-4)}" text-anchor="${v>=0?'start':'end'}" class="st-val ${stSignCls(v)}">${stVal(v)}</text>`;}));
- g+=`<text x="6" y="14" class="st-legend st-max-text">— ${t('stCaseMax')}</text><text x="6" y="28" class="st-legend st-min-text">— ${t('stCaseMin')}</text>${sc.fixed?`<text x="${right}" y="14" text-anchor="end" class="st-scale-note">${t('stScaleNote')}</text>`:''}`;
+ const labels=[];
+ (one?[max]:[max,min]).forEach((tot,n)=>keys.forEach(k=>{const v=tot[k];if(v===undefined||fib[k]===undefined||Math.abs(v)<.5)return;labels.push({x:SX(v)+(v>=0?5:-5),y:Y(fib[k])+(n?13:-4),anchor:v>=0?'start':'end',cls:stSignCls(v),text:stVal(v)});}));
+ g+=stLabels(labels,12,'st-val');
+ g+=`<text x="6" y="14" class="st-legend st-max-text">— ${t(one?'stCaseOne':'stCaseMax')}</text>${one?'':`<text x="6" y="28" class="st-legend st-min-text">— ${t('stCaseMin')}</text>`}${sc.fixed?`<text x="${right}" y="14" text-anchor="end" class="st-scale-note">${t('stScaleNote')}</text>`:''}`;
  return `<svg viewBox="0 0 ${vw} ${vh}" class="sp-svg" role="img" aria-label="${t('stTitle')}">${g}</svg>`;
 }
 // Instant redraw of the window figure from the cache while the station moves.
@@ -310,14 +324,16 @@ function stLiveFigure(){
 // --- Hover preview -------------------------------------------------------------
 // Moving over the envelope diagrams shows the stress profile at the station,
 // on the side away from the cursor, drawn from the all-stations cache.
-let stPeekIndex=null,stLastHover=null;
+let stPeekIndex=null,stLastHover=null,stPeekOn=(()=>{try{return localStorage.getItem('qb-stress-peek')==='1'}catch(e){return false}})();
+document.addEventListener('change',e=>{if(e.target.id!=='st-peek-on')return;stPeekOn=e.target.checked;try{localStorage.setItem('qb-stress-peek',stPeekOn?'1':'0')}catch(err){}if(!stPeekOn)stPeekHide();});
+Object.assign(words.fr,{stPeekToggle:'Aperçu au survol'});Object.assign(words.en,{stPeekToggle:'Preview on hover'});
 function stPeekEl(){
  let el=$('#st-peek');if(el)return el;const host=$('#diagrams-view');if(!host)return null;
  el=document.createElement('div');el.id='st-peek';el.className='st-peek';el.setAttribute('aria-hidden','true');host.appendChild(el);return el;
 }
 function stPeekHide(){stPeekIndex=null;const el=$('#st-peek');if(el)el.classList.remove('show');}
 function stPeek(i,e){
- if(!result||result.kind==='thermal'||!jobId||display!=='envelope'||(typeof deltaActive==='function'&&deltaActive())||$('#stress-dialog')?.open){stPeekHide();return;}
+ if(!stPeekOn||!result||result.kind==='thermal'||!jobId||display!=='envelope'||(typeof deltaActive==='function'&&deltaActive())||$('#stress-dialog')?.open){stPeekHide();return;}
  stLastHover=i;const el=stPeekEl();if(!el)return;
  const host=$('#diagrams-view'),charts=$('#charts'),hr=host.getBoundingClientRect(),cr=charts.getBoundingClientRect();
  const right=e.clientX-hr.left<hr.width*.55;el.style.top=`${cr.top-hr.top+4}px`;el.style.left=right?'':'104px';el.style.right=right?'10px':'';
@@ -331,7 +347,7 @@ function stPeekRender(el,i){
  const a=stAll.data,st=a&&!a.error?a.stations[i]:null;
  let h=`<div class="st-peek-head"><b>${t('stPeekTitle')}</b><span>x = ${fmt(result.x[i])} m${st?` · ${esc(a.sections[st.s].name)}`:''}</span></div>`;
  h+=st?`<div class="st-peek-svg">${stMini(st,a.sections[st.s])}</div>`:`<p class="help">${t('stNotSteel')}</p>`;
- if(st)h+=`<div class="st-peek-legend"><span class="st-max-text"><i></i>${t('stCaseMax')}</span><span class="st-min-text"><i></i>${t('stCaseMin')}</span>${st.composite?`<span class="st-bar-key">▬ ${t('stBarTop')}</span>`:''}</div>`;
+ if(st)h+=`<div class="st-peek-legend">${stSame(st.max,st.min)?`<span class="st-max-text"><i></i>${t('stCaseOne')}</span>`:`<span class="st-max-text"><i></i>${t('stCaseMax')}</span><span class="st-min-text"><i></i>${t('stCaseMin')}</span>`}${st.composite?`<span class="st-bar-key">▬ ${t('stBarTop')}</span>`:''}</div>`;
  el.innerHTML=h+`<p class="st-peek-hint">${t('stPeekHint')}</p>`;el.classList.add('show');
 }
 // Compact profile at a fixed height scale (deepest girder + slab of the model,
@@ -343,18 +359,22 @@ function stMini(st,sec){
  const left=98,right=vw-6,sc=stScale(left,right,[...Object.values(st.max),...Object.values(st.min)]),SX=sc.SX,ox=sc.ox;
  const wMax=2*Math.max(G.top_width,G.bottom_width),w=Math.max(G.top_width,G.bottom_width,composite&&sec.composite?Math.min(sec.composite.effective_width,wMax):0),sx=Math.min(62/w,sy),cx=42,X=v=>cx+v*sx;
  let g=stZones(sc,left,right,top-6,vh-pad+4,10)+stSectionSvg(sec,composite,d0,X,Y,wMax)+`<line x1="${ox}" x2="${ox}" y1="${top-6}" y2="${vh-pad+4}" class="sp-axis"/>`;
- [[st.min,'st-min'],[st.max,'st-max']].forEach(([tot,cls])=>{const p=stCasePath(tot,fib,sec,composite,d0,Y,SX,ox);g+=`<path d="${p.path}" class="${cls} st-mini-area"/>`;if(p.band)g+=`<path d="${p.band}" class="${cls} st-bar-band"/>`;});
+ const one=stSame(st.max,st.min);
+ (one?[[st.max,'st-max']]:[[st.min,'st-min'],[st.max,'st-max']]).forEach(([tot,cls])=>{const p=stCasePath(tot,fib,sec,composite,d0,Y,SX,ox);g+=`<path d="${p.path}" class="${cls} st-mini-area"/>`;if(p.band)g+=`<path d="${p.band}" class="${cls} st-bar-band"/>`;});
  // Values on the profile, in MPa, coloured by sign (M max above, M min below).
  const keys=['S5','S2'].concat(composite?['bar_top']:[]);
- [st.max,st.min].forEach((tot,n)=>keys.forEach(k=>{const v=tot[k];if(v===undefined||fib[k]===undefined||Math.abs(v)<.5)return;const x=SX(v),anchor=v>=0?(x>right-40?'end':'start'):(x<left+40?'start':'end');g+=`<text x="${x+(anchor==='start'?4:-4)}" y="${Y(fib[k])+(n?13:-4)}" text-anchor="${anchor}" class="st-val st-val-mini ${stSignCls(v)}">${stVal(v)}</text>`;}));
+ const labels=[];
+ (one?[st.max]:[st.max,st.min]).forEach((tot,n)=>keys.forEach(k=>{const v=tot[k];if(v===undefined||fib[k]===undefined||Math.abs(v)<.5)return;const x=SX(v),anchor=v>=0?(x>right-40?'end':'start'):(x<left+40?'start':'end');labels.push({x:x+(anchor==='start'?4:-4),y:Y(fib[k])+(n?13:-4),anchor,cls:stSignCls(v),text:stVal(v)});}));
+ g+=stLabels(labels,11,'st-val st-val-mini');
  return `<svg viewBox="0 0 ${vw} ${vh}" class="sp-svg" role="img" aria-label="${t('stTitle')}">${g}</svg>`;
 }
 // Visible entry point next to the display modes.
 function stCtaInstall(){
  const host=$('#display-controls .display-left');if(!host||$('#stress-cta'))return;
- const b=document.createElement('button');b.id='stress-cta';b.className='st-cta';b.type='button';host.appendChild(b);stCtaText();
+ const b=document.createElement('button');b.id='stress-cta';b.className='st-cta';b.type='button';host.appendChild(b);
+ const l=document.createElement('label');l.className='st-peek-toggle';l.innerHTML='<input type="checkbox" id="st-peek-on"><span></span>';host.appendChild(l);l.querySelector('input').checked=stPeekOn;stCtaText();
 }
-function stCtaText(){const b=$('#stress-cta');if(b){b.textContent=`${t('stCta')} ↗`;b.title=t('stCtaTitle');}}
+function stCtaText(){const b=$('#stress-cta');if(b){b.textContent=`${t('stCta')} ↗`;b.title=t('stCtaTitle');}const l=$('.st-peek-toggle span');if(l)l.textContent=t('stPeekToggle');}
 stCtaInstall();
 const stTranslate=typeof translate==='function'?translate:null;
 if(stTranslate)translate=function(){const r=stTranslate.apply(this,arguments);stCtaText();return r;};
@@ -367,12 +387,12 @@ document.addEventListener('click',e=>{
  if(e.target.closest('[data-st-close]')){$('#stress-dialog')?.close();}
 });
 document.addEventListener('input',e=>{if(e.target.id==='st-slider'&&stIndex!==null){stIndex=Number(e.target.value);stLiveTitle();stLiveFigure();stRequestSoon();}});
-function stLiveTitle(){const dlg=$('#stress-dialog');if(!dlg||!result)return;stBeamCursor();const x=result.x[stIndex],xi=dlg.querySelector('#st-x');if(xi&&document.activeElement!==xi)xi.value=Number(x.toFixed(3));const tt=dlg.querySelector('#st-title');if(tt)tt.innerHTML=tt.innerHTML.replace(/x = [^·]*m/,`x = ${fmt(x)} m`);}
+function stLiveTitle(){const dlg=$('#stress-dialog');if(!dlg||!result)return;stBeamCursor();const x=result.x[stIndex],xi=dlg.querySelector('#st-x');if(xi&&document.activeElement!==xi){xi.value=qbFmtInput(Number(x.toFixed(3)));qbCheck(xi);}const tt=dlg.querySelector('#st-title');if(tt)tt.innerHTML=tt.innerHTML.replace(/x = [^·]*m/,`x = ${fmt(x)} m`);}
 document.addEventListener('change',e=>{
- if(e.target.id==='st-x'&&stIndex!==null&&e.target.validity.valid&&e.target.value!==''){stIndex=nearest(Number(e.target.value));e.target.blur();renderStress();stRequest();return;}
+ if(e.target.id==='st-x'&&stIndex!==null&&e.target.validity.valid&&e.target.value!==''){stIndex=nearest(numValue(e.target));e.target.blur();renderStress();stRequest();return;}
  if(e.target.id==='st-y'&&stData&&!stData.error&&e.target.validity.valid&&e.target.value!==''){
   const i=stSectionIndex(stData);if(i<0)return;const s=model.sections[i];if(!s.composite)s.composite={...spDefaults(),enabled:false};
-  s.composite[stData.cases.max.s3_ref==='1n'?'y_1n':'y_steel']=Number(e.target.value);updateProjectState();stRequest();
+  s.composite[stData.cases.max.s3_ref==='1n'?'y_1n':'y_steel']=numValue(e.target);updateProjectState();stRequest();
  }
 });
 document.addEventListener('dblclick',e=>{
@@ -414,6 +434,7 @@ function stBeamDraw(){
 }
 function stBeamCursor(){
  const c=$('#st-beam-cursor');if(!c||stIndex===null||!result)return;
+ {const s=$('#st-beam');if(s){s.setAttribute('aria-valuemin','0');s.setAttribute('aria-valuemax',String(result.x.length-1));s.setAttribute('aria-valuenow',String(stIndex));s.setAttribute('aria-valuetext',`x = ${fmt(result.x[stIndex])} m`);s.setAttribute('aria-label',t('stStation'));}}
  const x=result.x[stIndex],X=stBeamX(x),txt=c.querySelector('text'),right=X>ST_BEAM.W-90;
  c.querySelector('line').setAttribute('x1',X);c.querySelector('line').setAttribute('x2',X);c.querySelector('circle').setAttribute('cx',X);
  txt.setAttribute('x',X+(right?-7:7));txt.setAttribute('text-anchor',right?'end':'start');txt.textContent=`x = ${fmt(x)} m`;
@@ -425,5 +446,9 @@ function stBeamPick(e){
 }
 document.addEventListener('pointerdown',e=>{const svg=e.target.closest?.('#st-beam');if(!svg)return;svg.setPointerCapture?.(e.pointerId);svg.dataset.drag='1';stBeamPick(e);});
 document.addEventListener('pointermove',e=>{const svg=$('#st-beam');if(svg&&svg.dataset.drag==='1')stBeamPick(e);});
-document.addEventListener('pointerup',()=>{const svg=$('#st-beam');if(svg)svg.dataset.drag='';});
+['pointerup','pointercancel','lostpointercapture'].forEach(ev=>document.addEventListener(ev,()=>{const svg=$('#st-beam');if(svg)svg.dataset.drag='';},true));
 document.addEventListener('keydown',e=>{if(e.target.id!=='st-beam'||stIndex===null||!result)return;const d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(!d)return;e.preventDefault();stIndex=Math.max(0,Math.min(result.x.length-1,stIndex+d));const sl=$('#st-slider');if(sl)sl.value=stIndex;stLiveTitle();stLiveFigure();stRequestSoon();});
+
+// v0.9.7: single-case label (M max = M min) and single live-load moment row.
+Object.assign(words.fr,{stCaseOne:'σ totale',stLive:'Surcharge'});
+Object.assign(words.en,{stCaseOne:'Total σ',stLive:'Live load'});

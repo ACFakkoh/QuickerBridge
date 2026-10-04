@@ -86,7 +86,10 @@ def effective_spans(model: Model, h_left: float, h_right: float):
             i += 1
             continue
         j = i
-        while j + 1 < n and not spans[j + 1].simple:
+        # A split pier (v0.9.8) ends a continuous chain like a simple span.
+        while (
+            j + 1 < n and not spans[j + 1].simple and model.supports[j + 1] != "split"
+        ):
             j += 1
         chains.append((i, j, False))
         i = j + 1
@@ -244,7 +247,10 @@ def truck_fraction(model: Model) -> dict:
     fs = [skew_factor(L, S, d.skew) for L in lengths]
     nspan = len(lengths)
     continuous = [
-        0 < k < nspan and not model.spans[k - 1].simple and not model.spans[k].simple
+        0 < k < nspan
+        and not model.spans[k - 1].simple
+        and not model.spans[k].simple
+        and model.supports[k] != "split"
         for k in range(nspan + 1)
     ]
     minimum = {"ULS": 1.05 * n * rl / N, "FLS": 1.05 / N}

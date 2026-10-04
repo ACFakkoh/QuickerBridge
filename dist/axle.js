@@ -16,22 +16,21 @@ function axleIntegral(){const s=model.supports,n=model.spans.length;return [['fi
 function axleWhere(where){const [kind,k]=where.split(':');return `${t(kind==='span'?'axleSpan':'axleSupport')} ${k}`;}
 function axleChoice(){
  const d=axleSettings();
- return `<div class="field-row">${select(axleSlab()?'portionType':'girderType','distribution.girder',d.girder,[['interior',t('interiorGirder')],['exterior',t('exteriorGirder')]])}${select('limitState','distribution.state',d.state,[['ULS',t('ulsState')],['FLS',t('flsState')]])}</div><label class="toggle-row axle-apply"><input type="checkbox" data-path="distribution.apply" ${d.apply?'checked':''}>${t('axleApply')}</label>${d.girder==='exterior'?`<label class="toggle-row"><input type="checkbox" data-path="distribution.fs_dead" ${d.fs_dead!==false?'checked':''}>${t('fsDead')}</label>`:''}`;
+ return `<div class="field-row">${select(axleSlab()?'portionType':'girderType','distribution.girder',d.girder,[['interior',t('interiorGirder')],['exterior',t('exteriorGirder')]])}${select('limitState','distribution.state',d.state,[['ULS',t('ulsState')],['FLS',t('flsState')]])}</div>${d.girder==='exterior'?`<label class="toggle-row"><input type="checkbox" data-path="distribution.fs_dead" ${d.fs_dead!==false?'checked':''}>${t('fsDead')}</label>`:''}`;
 }
 // Left panel: switch, the two choices and a link; the deck data live in the tab.
 function axleGroupMeta(){
- const d=axleSettings();if(!d.enabled)return t('offShort');
- return `${d.apply?'✓ ':''}${t(d.girder==='interior'?'interiorGirder':'exteriorGirder')} · ${t(d.state==='ULS'?'ulsState':'flsState')}`;
+ const d=axleSettings();if(!axleApplied())return t('offShort');
+ return `✓ ${t(d.girder==='interior'?'interiorGirder':'exteriorGirder')} · ${t(d.state==='ULS'?'ulsState':'flsState')}`;
 }
 // v0.9.6: one place for the FT settings, the FT tab. The left panel only
 // shows the state (off, computed, applied) and opens the tab.
 function axleCard(){
- const d=axleSettings();
- const state=!d.enabled?t('axleStateOff'):d.apply?t('axleStateApplied'):t('axleStateComputed');
- let html=`<section class="axle-card${d.enabled?' on':''}"><small class="axle-sub">${t('axleSub')}</small><p class="axle-state ${!d.enabled?'off':d.apply?'applied':'computed'}">${state}</p>`;
- if(d.enabled)html+=`<p class="axle-choice-summary">${t(d.girder==='interior'?'interiorGirder':'exteriorGirder')} · ${t(d.state==='ULS'?'ulsState':'flsState')}</p><div class="axle-mini" id="axle-mini">${axleMiniHtml()}</div>`;
+ const d=axleSettings(),on=axleApplied();
+ let html=`<section class="axle-card${on?' on':''}"><label class="toggle-row axle-switch"><input type="checkbox" id="ft-apply" ${on?'checked':''}>${t('axleApplySwitch')}</label>`;
+ if(on)html+=`<p class="axle-choice-summary">${t(d.girder==='interior'?'interiorGirder':'exteriorGirder')} · ${t(d.state==='ULS'?'ulsState':'flsState')}</p><div class="axle-mini" id="axle-mini">${axleMiniHtml()}</div>`;
  else if(!axleCanadian())html+=`<p class="help">${t('axleOnlyCanadian')}</p>`;
- return html+`<button class="axle-open-button" data-view="axle">${t('axleSettingsOpen')}</button></section>`;
+ return html+`<button type="button" class="axle-open-button" id="axle-open">${t('axleSettingsOpen')}</button></section>`;
 }
 function axleRange(values){const lo=Math.min(...values),hi=Math.max(...values);return Math.abs(hi-lo)<5e-4?fmt(lo,3):`${fmt(lo,3)}–${fmt(hi,3)}`;}
 function axleMiniHtml(){
@@ -41,31 +40,31 @@ function axleMiniHtml(){
 function axleDerivedHtml(){
  if(!axleData)return `<span>${t('axleComputing')}</span>`;
  const v=axleData.derived,slabType=v.Be!==undefined;
- const items=slabType?[['B',fmt(v.B,2)+' m'],['Be',fmt(v.Be,2)+' m'],['n',v.n],['RL',fmt(v.RL,2)],['We',fmt(v.We,2)+' m'],['μ',fmt(v.mu,3)],['Fs',v.spans.map(s=>fmt(s.Fs,3)).join(' / ')],[t('perMetre'),'✓']]:[['B',fmt(v.B,2)+' m'],['n',v.n],['RL',fmt(v.RL,2)],['We',fmt(v.We,2)+' m'],['μ',fmt(v.mu,3)],['DVE',fmt(v.DVE,3)+' m'],['Fs',v.spans.map(s=>fmt(s.Fs,3)).join(' / ')]];
- return items.map(([k,x])=>`<span>${k} <b>${x}</b></span>`).join('');
+ const items=slabType?[['B',fmt(v.B,2)+' m'],['Be',fmt(v.Be,2)+' m'],['n',v.n],['RL',fmt(v.RL,2)],['We',fmt(v.We,2)+' m'],['μ',fmt(v.mu,3)],['Fs',v.spans.map(s=>fmt(s.Fs,3)).join(' / ')],[t('perMetre'),'✓']]:[[`${t('overallWidth')} B = (N−1)·S + 2·Sc`,fmt(v.B,2)+' m','hl'],[t('curbWidth'),fmt(v.curb,2)+' m'],['n',v.n],['RL',fmt(v.RL,2)],['We',fmt(v.We,2)+' m'],['μ',fmt(v.mu,3)],['DVE',fmt(v.DVE,3)+' m'],['Fs',v.spans.map(s=>fmt(s.Fs,3)).join(' / ')]];
+ return items.map(([k,x,cls])=>`<span${cls?' class="axle-hl"':''}>${k} <b>${x}</b></span>`).join('');
 }
-function axleWarningsHtml(){return (axleData?.warnings||[]).map(w=>`<p class="axle-warning">⚠ ${t('axleWarn_'+w)}</p>`).join('');}
+function axleWarningsHtml(){return (axleData?.warnings||[]).filter(w=>w!=='dve_capped').map(w=>`<p class="axle-warning">⚠ ${t('axleWarn_'+w)}</p>`).join('');}
 function axleRefresh(){
  const d=axleSettings();
  // v0.9.6: the FT tab is always shown; FT stays off until the user enables it.
  $('#axle-tab')?.classList.remove('hidden');
  const mini=$('#axle-mini');if(mini)mini.innerHTML=axleMiniHtml();
- if(view==='axle')renderAxleResults();
+ if(axleDialogOpen())renderAxleResults();
 }
 function axleChanged(){
  const d=axleSettings();clearTimeout(axleTimer);
- if(!d.enabled){axleData=null;axleRefresh();return;}
+ if(!axleApplied()&&!axleDialogOpen()){axleData=null;axleRefresh();return;}
  if($$('input[data-path^="distribution."]').some(el=>!el.validity.valid||el.value===''))return;
  const token=++axleToken;
  axleTimer=setTimeout(async()=>{
-  try{const data=await solver.request('axle_factor',{model:clone(model)});if(token!==axleToken)return;axleData=data;}
+  try{const m=clone(model);m.distribution.enabled=true;const data=await solver.request('axle_factor',{model:m});if(token!==axleToken)return;axleData=data;}
   catch(e){console.error(e);if(token!==axleToken)return;axleData=null;}
   axleRefresh();
  },180);
 }
 // Tab: the inputs are drawn once (typing keeps the focus); results refresh below.
 function renderAxleView(){
- const host=$('#axle-view');if(!host)return;const d=axleSettings(),[left,right]=axleIntegral();
+ const host=$('#axle-body');if(!host)return;const d=axleSettings(),[left,right]=axleIntegral();
  // Bridge type first: slab-on-girder now, slab / voided slab prepared (5.6.5).
  const type=select('bridgeType','distribution.bridge_type',d.bridge_type,[['slab_on_girder',t('slabOnGirder')],['slab',t('slabSolid')],['voided_slab',t('slabVoided')]]);
  const cls=select('roadClass','distribution.road_class',d.road_class,[['AB',t('classAB')],['CD',t('classCD')]]);
@@ -74,12 +73,11 @@ function renderAxleView(){
  const inputs=axleSlab()?[type,cls,field('slabWidthB','distribution.slab_width',d.slab_width,'',{min:1.01,max:60}),field('equivalentWidthBe','distribution.equivalent_width',d.equivalent_width??d.slab_width,'',{min:1.01,max:60}),...(d.bridge_type==='voided_slab'?[field('voidSpacingS','distribution.spacing',d.spacing,'',{min:.31,max:10})]:[]),...common]:[type,cls,field('girdersN','distribution.girders',d.girders,'',{min:1,max:40,step:1}),field('spacingS','distribution.spacing',d.spacing,'',{min:.31,max:10}),field('overhangSc','distribution.overhang',d.overhang,'',{min:0,max:6}),...common];
  if(left)inputs.push(field('hLeft','distribution.h_left',d.h_left,'',{min:0,max:30}));
  if(right)inputs.push(field('hRight','distribution.h_right',d.h_right,'',{min:0,max:30}));
- host.innerHTML=`<div class="axle-view"><div class="axle-view-head"><span class="axle-badge">S6-25</span><div><b>${t('axleTitle')}</b><small>${t('axleSub')}</small></div><label class="toggle-row axle-enable"><input type="checkbox" data-path="distribution.enabled" ${d.enabled?'checked':''}>${t('axleEnable')}</label></div><div class="axle-inputs"><div class="axle-grid">${inputs.join('')}</div><div class="axle-choice">${axleChoice()}</div></div><div id="axle-results"></div><details class="axle-notes"><summary>${t('axleNotes')}</summary><div class="method-content"><h3>${t('axleDefsTitle')}</h3><dl class="axle-defs">${axleDefinitions().map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl><h3>${t('axleMethod')}</h3><p>${t('axleMethodBody')}</p>${axleSlab()?`<p>${t('axleSlabNote')}</p>`:''}<h3>${t('axleInterpret')}</h3><p>${t('axleInterpretBody')}</p><p>${t('axleApplyBody')}</p></div></details></div>`;
+ host.innerHTML=`<div class="axle-view"><div class="axle-inputs"><div class="axle-grid">${inputs.join('')}</div><div class="axle-choice">${axleChoice()}</div></div><div id="axle-results"></div><details class="axle-notes"><summary>${t('axleNotes')}</summary><div class="method-content"><h3>${t('axleDefsTitle')}</h3><dl class="axle-defs">${axleDefinitions().map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl><h3>${t('axleMethod')}</h3><p>${t('axleMethodBody')}</p>${axleSlab()?`<p>${t('axleSlabNote')}</p>`:''}<h3>${t('axleInterpret')}</h3><p>${t('axleInterpretBody')}</p><p>${t('axleApplyBody')}</p></div></details></div>`;
  renderAxleResults();
 }
 function renderAxleResults(){
  const host=$('#axle-results');if(!host)return;
- if(!axleSettings().enabled){host.innerHTML=`<p class="axle-off">${t('axleOffHint')}</p>`;return;}
  if(!axleData){host.innerHTML=`<p class="help">${t('axleComputing')}</p>`;return;}
  const a=axleData,dv=a.derived,nspan=dv.spans.length,d=axleSettings();
  const cols=[];
@@ -91,7 +89,7 @@ function renderAxleResults(){
  // Applied FT by zone, for the selected girder and limit state.
  const zones=a.zones.map(z=>`<td><b>${fmt(z.FT_M,3)}</b></td>`),zonesV=a.zones.map(z=>`<td><b>${fmt(z.FT_V,3)}</b></td>`);
  let html=`<div class="axle-derived">${axleDerivedHtml()}</div>${axleWarningsHtml()}`;
- html+=`<h3>${t('axleZones')} · ${t(d.girder==='interior'?'interiorGirder':'exteriorGirder')} · ${t(d.state==='ULS'?'ulsState':'flsState')}</h3><table class="axle-table-view axle-zones"><colgroup><col class="axle-labelcol">${a.zones.map(()=>'<col>').join('')}</colgroup><thead><tr><th></th>${a.zones.map(z=>`<th>${axleWhere(z.where)} <small>${z.sign==='+'?'M+':'M−'} · ${fmt(z.x0,2)}–${fmt(z.x1,2)} m</small></th>`).join('')}</tr></thead><tbody><tr class="axle-ftrow"><th>FT M</th>${zones.join('')}</tr><tr class="axle-ftrow"><th>FT V</th>${zonesV.join('')}</tr></tbody></table>`;
+ html+=`<h3>${t('axleZones')} · ${t(d.girder==='interior'?'interiorGirder':'exteriorGirder')} · ${t(d.state==='ULS'?'ulsState':'flsState')}</h3><table class="axle-table-view axle-zones"><colgroup><col class="axle-labelcol">${a.zones.map(()=>'<col>').join('')}</colgroup><thead><tr><th></th>${a.zones.map(z=>`<th>${axleWhere(z.where)} <small>${z.sign==='+'?'M+':'M−'} · ${fmt(z.x0,2)}–${fmt(z.x1,2)} m</small></th>`).join('')}</tr></thead><tbody><tr class="axle-ftrow"><th>FT M</th>${zones.join('')}</tr><tr class="axle-ftrow"><th>FT V</th>${zonesV.join('')}</tr><tr class="axle-fsrow"><th>Fs</th>${a.zones.map(z=>`<td>${Number.isFinite(z.Fs)?fmt(z.Fs,3):'·'}</td>`).join('')}</tr></tbody></table>`;
  const cell=(state,girder,effect,c,key)=>{const r=a.rows.find(r=>r.state===state&&r.girder===girder&&r.effect===effect&&r.where===c.where&&r.sign===c.sign);if(!r)return '<td class="axle-empty">·</td>';const ft=key==='FT'||key==='FT_Fs';return `<td class="${ft?'axle-ftcell':''}">${fmt(r[key],3)}${ft&&r.minimum_governs?'<sup>min</sup>':''}</td>`;};
  const row=(label,fn,cls='')=>`<tr class="${cls}"><th>${label}</th>${cols.map(fn).join('')}</tr>`;
  const group=label=>`<tr class="axle-group"><th colspan="${cols.length+1}">${label}</th></tr>`;
@@ -197,3 +195,33 @@ Object.assign(words.fr,{axleOffHint:'Aucun facteur d’essieu par défaut : coch
 Object.assign(words.en,{axleOffHint:'No axle factor by default: tick “Compute the truck load fraction” to compute it, then “Apply” to apply it to the envelopes.'});
 Object.assign(words.fr,{axleStateOff:'Non activé : aucun facteur d’essieu sur les résultats.',axleStateComputed:'Calculé, non appliqué aux enveloppes.',axleStateApplied:'Appliqué aux enveloppes.',axleSettingsOpen:'Régler le FT dans l’onglet FT · S6-25 ↗'});
 Object.assign(words.en,{axleStateOff:'Off: no axle factor on the results.',axleStateComputed:'Computed, not applied to the envelopes.',axleStateApplied:'Applied to the envelopes.',axleSettingsOpen:'Set FT in the FT · S6-25 tab ↗'});
+
+// v0.9.8: overall deck width shown first among the derived values.
+Object.assign(words.fr,{overallWidth:'Largeur hors-tout',curbWidth:'Bordure (B − Wc)/2'});
+Object.assign(words.en,{overallWidth:'Overall width',curbWidth:'Curb (B − Wc)/2'});
+
+// v0.9.95: FT in its own floating window (like the stresses), opened from the
+// Loads panel. The switch in the panel applies FT (off by default); the
+// window always computes it.
+Object.assign(words.fr,{axleApplySwitch:'Appliquer le FT S6-25 aux enveloppes',axleSettingsOpen:'Régler le FT…',axleWindowTitle:'Facteur d’essieu FT · S6-25'});
+Object.assign(words.en,{axleApplySwitch:'Apply S6-25 FT to the envelopes',axleSettingsOpen:'Set FT…',axleWindowTitle:'Truck load fraction FT · S6-25'});
+function axleDialogOpen(){return !!$('#axle-dialog')?.open;}
+function axleDialogHead(){const dlg=$('#axle-dialog');if(!dlg)return;const h=dlg.querySelector('.sp-head');if(h)h.innerHTML=`<span class="axle-badge">S6-25</span><div><b>${t('axleWindowTitle')}</b><small>${t('axleSub')}</small></div><button type="button" class="icon-button sp-close" data-axle-close title="${t('spClose')}">×</button>`;}
+function axleOpenWindow(){
+ if(!model)return;let dlg=$('#axle-dialog');
+ if(!dlg){dlg=document.createElement('dialog');dlg.id='axle-dialog';dlg.className='section-dialog axle-dialog';dlg.innerHTML='<div class="sp-head"></div><div id="axle-body"></div>';document.body.appendChild(dlg);dlg.addEventListener('close',()=>{if(!axleApplied())axleData=null;});}
+ axleDialogHead();qbFloat(dlg);renderAxleView();axleChanged();
+}
+document.addEventListener('click',e=>{
+ if(e.target.closest('#axle-open')){axleOpenWindow();return;}
+ if(e.target.closest('[data-axle-close]'))$('#axle-dialog')?.close();
+});
+// The switch sets both flags: applied = enabled and apply, as in the project file.
+document.addEventListener('change',e=>{
+ if(e.target.id!=='ft-apply'||!model)return;const d=axleSettings();d.enabled=d.apply=e.target.checked;
+ renderInputs();changed();if(axleDialogOpen())renderAxleResults();
+});
+{const tr=translate;translate=function(){const r=tr.apply(this,arguments);axleDialogHead();if(axleDialogOpen())renderAxleView();return r;};}
+
+// FT window: docked on the right so the model panel (and its switch) stays in view.
+{const ow=axleOpenWindow;axleOpenWindow=function(){ow.apply(this,arguments);const dl=$('#axle-dialog');if(!dl)return;const w=Math.min(dl.offsetWidth,innerWidth-16);dl.style.left=`${Math.max(8,innerWidth-w-16)}px`;};}
