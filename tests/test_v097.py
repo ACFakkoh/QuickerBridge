@@ -22,6 +22,7 @@ def reference(vehicle, fraction=0.8, case="governing", mtq_auto=False):
     model.live.lane_fraction = fraction
     model.live.case = case
     model.live.mtq_auto = mtq_auto
+    model.live.lane_extent = "full"  # v0.9.7 reference values (whole deck)
     result = analyse(model)
     return max(result["max"]["M"]), min(result["min"]["M"])
 
@@ -146,6 +147,7 @@ def mtq_run(auto, fraction=0.8, spans=2, length=34.8):
     model.live.case = "lane"
     model.live.mtq_auto = auto
     model.live.lane_fraction = fraction
+    model.live.lane_extent = "full"  # v0.9.7 reference values (whole deck)
     return model, analyse(model)
 
 

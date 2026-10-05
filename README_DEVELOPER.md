@@ -1,6 +1,6 @@
 # QuickerBridge — guide développeur
 
-Version 0.9.95 · Anthony Chéruel · 2026-10-04
+Version 0.9.96 · Anthony Chéruel · 2026-10-04
 
 ## Quel fichier utiliser ou envoyer ?
 
@@ -142,7 +142,17 @@ entre profondeur géométrique et interpolation EI de CSI.
   vérifie le camion ou tandem complet et enveloppe l’espacement arrière du camion
   de 4,3 à 9,0 m; sa majoration de 33 % vise les essieux, pas la charge uniforme.
   Cooper emploie le train E complet et sa charge uniforme associée dans PyCBA.
-  Les charges uniformes associées des véhicules standards couvrent le pont complet.
+  v0.9.96 : la charge uniforme associée est placée effet par effet
+  (`live.lane_extent`, S6 C3.8.4.1) : `spans` (défaut) charge les travées dont
+  la réponse unitaire a le bon signe (`Basis.span_units`), `influence` les
+  parties de ligne d’influence de ce signe (`Basis.influence_areas`,
+  `lane_pieces`), `full` tout le pont (≤ 0.9.95). Par superposition, ce
+  placement est indépendant de la position du camion (`lane_envelope`).
+  Charge piétonnière (`live.source = "pedestrian"`, `Model.pedestrian`) :
+  `pedestrian_envelope` évalue les 2^n − 1 combinaisons de travées (p dépend de
+  s); le véhicule d’entretien optionnel (`vehicle_model`) est enveloppé, jamais
+  additionné; ni FT ni facteur d’essieu (`distribution.applied`,
+  `displayed_axle_factor`). Schéma de projet 13.
   Le véhicule d’entretien 24 + 56 kN à 2,0 m n’a ni charge de voie ni CMD.
 
 `python tests/performance.py` mesure un modèle défini de deux travées avec quatre

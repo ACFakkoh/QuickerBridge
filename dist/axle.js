@@ -95,18 +95,19 @@ function renderAxleResults(){
  const group=label=>`<tr class="axle-group"><th colspan="${cols.length+1}">${label}</th></tr>`;
  const block=state=>{
   let h=`<h3>${t(state==='ULS'?'ulsState':'flsState')}</h3><table class="axle-table-view${state===d.state?' selected':''}">${head}<tbody>`;
-  h+=row('Le (m)',c=>`<td>${fmt(c.Le,3)} <small>${esc(c.rule)}</small></td>`);
+  // v0.9.96: general expression, then its numeric application (two rows).
+  h+=row(t('axleLeRule'),c=>`<td>Le = ${esc(c.rule)}</td>`)+row('Le (m)',c=>`<td>${axleLeApplied(c)}</td>`);
   // Slab bridges: same tables for both portions, no γc / γe (Tables 5.1 / 5.2).
   if(dv.Be!==undefined){
    h+=group(t('axleMoment'))+row('DT',c=>cell(state,'interior','moment',c,'DT'))+row('λ',c=>cell(state,'interior','moment',c,'lambda'))+row('FT',c=>cell(state,'interior','moment',c,'FT'),'axle-ftrow');
-   h+=group(t('axleShear'))+row('DT',c=>cell(state,'interior','shear',c,'DT'))+row(t('axleSlabShearInt'),c=>cell(state,'interior','shear',c,'FT'),'axle-ftrow')+row(t('axleSlabShearExt'),c=>cell(state,'exterior','shear',c,'FT_Fs'),'axle-ftrow');
+   h+=group(t('axleShear'))+row('DT',c=>cell(state,'interior','shear',c,'DT'))+row(t('axleSlabShearInt'),c=>cell(state,'interior','shear',c,'FT'),'axle-ftrow')+row(t('axleSlabShearExtRaw'),c=>cell(state,'exterior','shear',c,'FT'))+row(t('axleSlabShearExt'),c=>cell(state,'exterior','shear',c,'FT_Fs'),'axle-ftrow');
    return h+`</tbody></table>`;
   }
   h+=group(t('axleMomInt'))+row('DT',c=>cell(state,'interior','moment',c,'DT'))+row('λ',c=>cell(state,'interior','moment',c,'lambda'))+row('γc',c=>cell(state,'interior','moment',c,'gamma_c'))+row('FT',c=>cell(state,'interior','moment',c,'FT'),'axle-ftrow');
   h+=group(t('axleMomExt'))+row('DT',c=>cell(state,'exterior','moment',c,'DT'))+row('λ',c=>cell(state,'exterior','moment',c,'lambda'))+row('γc',c=>cell(state,'exterior','moment',c,'gamma_c'));
   if(state==='FLS')h+=row('γe',c=>cell(state,'exterior','moment',c,'gamma_e'));
   h+=row('FT',c=>cell(state,'exterior','moment',c,'FT'),'axle-ftrow');
-  h+=group(t('axleShear'))+row('DT',c=>cell(state,'interior','shear',c,'DT'))+row('γc',c=>cell(state,'interior','shear',c,'gamma_c'))+row(t('axleShearInt'),c=>cell(state,'interior','shear',c,'FT'),'axle-ftrow')+row(t('axleShearExt'),c=>cell(state,'exterior','shear',c,'FT_Fs'),'axle-ftrow');
+  h+=group(t('axleShear'))+row('DT',c=>cell(state,'interior','shear',c,'DT'))+row('γc',c=>cell(state,'interior','shear',c,'gamma_c'))+row(t('axleShearInt'),c=>cell(state,'interior','shear',c,'FT'),'axle-ftrow')+row(t('axleShearExtRaw'),c=>cell(state,'exterior','shear',c,'FT'))+row(t('axleShearExt'),c=>cell(state,'exterior','shear',c,'FT_Fs'),'axle-ftrow');
   return h+`</tbody></table>`;
  };
  host.innerHTML=html+`<div class="axle-blocks">${block('ULS')}${block('FLS')}</div><p class="help">${t('axleMinNote')}</p>`;
@@ -206,7 +207,7 @@ Object.assign(words.en,{overallWidth:'Overall width',curbWidth:'Curb (B − Wc)/
 Object.assign(words.fr,{axleApplySwitch:'Appliquer le FT S6-25 aux enveloppes',axleSettingsOpen:'Régler le FT…',axleWindowTitle:'Facteur d’essieu FT · S6-25'});
 Object.assign(words.en,{axleApplySwitch:'Apply S6-25 FT to the envelopes',axleSettingsOpen:'Set FT…',axleWindowTitle:'Truck load fraction FT · S6-25'});
 function axleDialogOpen(){return !!$('#axle-dialog')?.open;}
-function axleDialogHead(){const dlg=$('#axle-dialog');if(!dlg)return;const h=dlg.querySelector('.sp-head');if(h)h.innerHTML=`<span class="axle-badge">S6-25</span><div><b>${t('axleWindowTitle')}</b><small>${t('axleSub')}</small></div><button type="button" class="icon-button sp-close" data-axle-close title="${t('spClose')}">×</button>`;}
+function axleDialogHead(){const dlg=$('#axle-dialog');if(!dlg)return;const h=dlg.querySelector('.sp-head');if(h)h.innerHTML=`<div><b>${t('axleWindowTitle')}</b><small>${t('axleSub')}</small></div><button type="button" class="icon-button sp-close" data-axle-close title="${t('spClose')}">×</button>`;}
 function axleOpenWindow(){
  if(!model)return;let dlg=$('#axle-dialog');
  if(!dlg){dlg=document.createElement('dialog');dlg.id='axle-dialog';dlg.className='section-dialog axle-dialog';dlg.innerHTML='<div class="sp-head"></div><div id="axle-body"></div>';document.body.appendChild(dlg);dlg.addEventListener('close',()=>{if(!axleApplied())axleData=null;});}
@@ -225,3 +226,17 @@ document.addEventListener('change',e=>{
 
 // FT window: docked on the right so the model panel (and its switch) stays in view.
 {const ow=axleOpenWindow;axleOpenWindow=function(){ow.apply(this,arguments);const dl=$('#axle-dialog');if(!dl)return;const w=Math.min(dl.offsetWidth,innerWidth-16);dl.style.left=`${Math.max(8,innerWidth-w-16)}px`;};}
+
+// v0.9.96 (feedback 0.9.95): exterior-girder shear FT before and after Fs,
+// and Le as a general expression then its numeric application.
+Object.assign(words.fr,{axleShearExtRaw:'FT poutre ext.',axleSlabShearExtRaw:'FT portion ext.',axleLeRule:'Le (formule)'});
+Object.assign(words.en,{axleShearExtRaw:'FT ext. girder',axleSlabShearExtRaw:'FT exterior portion',axleLeRule:'Le (expression)'});
+function axleLeApplied(c){
+ const L=model?.spans?.map(x=>x.length)||[],d=axleSettings(),f=(v,n=2)=>fmt(v,n),rule=String(c.rule||'');
+ const [kind,num]=String(c.where).split(':'),k=Number(num);let expr='';
+ const coef=Number((rule.match(/^([0-9]+,[0-9]+)/)||[])[1]?.replace(',','.'));
+ if(kind==='span'){const l=L[k-1];expr=rule==='L'?`${f(l)}`:Number.isFinite(coef)?`${fmt(coef,2)} × ${f(l)}`:'';}
+ else if(rule.includes('L1+L2')){const l1=L[k-2],l2=L[k-1];if(Number.isFinite(l1)&&Number.isFinite(l2))expr=`${fmt(coef,2)} × (${f(l1)} + ${f(l2)})`;}
+ else if(rule.includes('+ h')){const left=k===1,l=left?L[0]:L.at(-1),h=left?d.h_left:d.h_right;expr=`${fmt(coef,2)} × ${f(l)} + ${f(h)}`;}
+ return `${expr?expr+' = ':''}<b>${fmt(c.Le,3)}</b>`;
+}

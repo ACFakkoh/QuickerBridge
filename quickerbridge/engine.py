@@ -369,31 +369,211 @@ class Basis:
             )
         return np.r_[v, m, d, r, mr], intervals
 
-    def full_lane(self, w):
-        """Response to a companion UDL covering the entire bridge deck.
-
-        This is the lane-load arrangement used by PyCBA's
-        ``BridgeAnalysis.run_load_model(..., w_lane=...)`` and the only one of
-        QuickerBridge: S6 bumper-to-bumper lane case (S6:19 3.8.3.1.3).
-        """
-        self.solve_loads(
-            [[i + 1, 3, w, 0.0, length] for i, length in enumerate(self.lengths)]
-        )
+    def udl(self, pieces):
+        """Response to uniform loads ``(start, end, w)`` in bridge coordinates
+        (kN/m), split at the supports."""
+        loads, parts = [], []
+        for start, end, w in pieces:
+            for i, (a0, length) in enumerate(zip(self.support_x[:-1], self.lengths)):
+                a, b = max(start, a0), min(end, a0 + length)
+                if w and b - a > 1e-12:
+                    loads.append([i + 1, 3, w, a - a0, b - a])
+                    parts.append((a, b, w))
+        if not loads:
+            return np.zeros(self.nresponse)
+        self.solve_loads(loads)
         reaction, d = self.read_result(self.ba)
         r, mr = reaction[: self.ns], reaction[self.ns :]
         v, m = r @ self.left, r @ self.lever - mr @ self.left
-        for start, length in zip(self.support_x[:-1], self.lengths):
-            end = start + length
-            v -= w * np.clip(self.x - start, 0, length)
+        for a, b, w in parts:
+            v -= w * np.clip(self.x - a, 0, b - a)
             m -= (
                 w
                 / 2
-                * (
-                    np.maximum(self.x - start, 0) ** 2
-                    - np.maximum(self.x - end, 0) ** 2
-                )
+                * (np.maximum(self.x - a, 0) ** 2 - np.maximum(self.x - b, 0) ** 2)
             )
         return np.r_[v, m, d, r, mr]
+
+    def full_lane(self, w):
+        """Response to a companion UDL covering the entire bridge deck
+        (PyCBA ``run_load_model(..., w_lane=...)``; QuickerBridge <= 0.9.95)."""
+        return self.udl([(0.0, self.length, w)])
+
+    def span_units(self):
+        """(spans, responses): response to 1 kN/m on each span alone.
+        Geometry only, so it is cached on this immutable Basis."""
+        if getattr(self, "_span_units", None) is None:
+            self._span_units = np.array(
+                [
+                    self.udl([(a, a + length, 1.0)])
+                    for a, length in zip(self.support_x[:-1], self.lengths)
+                ]
+            )
+        return self._span_units
+
+    def influence_grid(self):
+        """Dense unit-load grid (every station +/- 1e-6 m) and its responses,
+        for UDLs placed on the parts of an influence line of one sign."""
+        if getattr(self, "_influence_grid", None) is None:
+            n = 161 if self.model.precision == "standard" else 321
+            grid = np.concatenate(
+                [
+                    np.linspace(a, b, n)
+                    for a, b in zip(self.support_x[:-1], self.support_x[1:])
+                ]
+            )
+            q = np.unique(
+                np.clip(np.r_[grid, self.x - 1e-6, self.x + 1e-6], 0, self.length)
+            )
+            self._influence_grid = (q, self.unit(q))
+        return self._influence_grid
+
+    def influence_areas(self):
+        """Areas of the negative and positive parts of every influence line
+        (a segment changing sign is split at its linear root)."""
+        q, u = self.influence_grid()
+        h = np.diff(q)[:, None]
+        y0, y1 = u[:-1], u[1:]
+        both = np.abs(y0) + np.abs(y1)
+        safe = np.where(both > 0, both, 1)
+        mixed = (y0 < 0) != (y1 < 0)
+        pos = np.where(
+            mixed, np.maximum(y0, y1) ** 2 / (2 * safe), np.maximum((y0 + y1) / 2, 0)
+        )
+        neg = np.where(
+            mixed, -np.minimum(y0, y1) ** 2 / (2 * safe), np.minimum((y0 + y1) / 2, 0)
+        )
+        return (h * neg).sum(axis=0), (h * pos).sum(axis=0)
+
+
+def lane_envelope(basis, extent):
+    """Lowest and highest responses to a 1 kN/m lane UDL placed per response.
+
+    S6 C3.8.4.1: the uniformly distributed load is applied only where it
+    increases the total load effect. By superposition its best placement does
+    not depend on the truck position, so it simply adds to the axles.
+    """
+    if extent == "spans":
+        units = basis.span_units()
+        return np.minimum(units, 0).sum(axis=0), np.maximum(units, 0).sum(axis=0)
+    if extent == "influence":
+        return basis.influence_areas()
+    full = basis.full_lane(1.0)
+    return full, full
+
+
+def lane_pieces(basis, extent, index=None, sense="max", w=1.0):
+    """Loaded parts ``(start, end, w)`` of the lane UDL behind one extreme."""
+    if extent == "full" or index is None:
+        return [(0.0, basis.length, w)]
+    sign = 1 if sense == "max" else -1
+    if extent == "spans":
+        units = basis.span_units()[:, index]
+        return [
+            (float(basis.support_x[i]), float(basis.support_x[i + 1]), w)
+            for i in range(len(basis.lengths))
+            if sign * units[i] > 1e-12
+        ]
+    q, u = basis.influence_grid()
+    y = sign * u[:, index]
+    pieces, start = [], None
+    for k in range(len(q)):
+        if y[k] > 1e-12 and start is None:
+            start = q[k]
+            if k and y[k - 1] < 0:  # entering: root of the segment
+                start = q[k - 1] + (q[k] - q[k - 1]) * -y[k - 1] / (y[k] - y[k - 1])
+        elif y[k] <= 1e-12 and start is not None:
+            end = q[k]
+            if y[k] < 0:
+                end = q[k - 1] + (q[k] - q[k - 1]) * y[k - 1] / (y[k - 1] - y[k])
+            pieces.append((float(start), float(end), w))
+            start = None
+    if start is not None:
+        pieces.append((float(start), float(q[-1]), w))
+    # Merge pieces split only by a station duplicate (shear jump, 2e-6 m).
+    merged = []
+    for a, b, ww in pieces:
+        if merged and a - merged[-1][1] < 1e-5:
+            merged[-1] = (merged[-1][0], b, ww)
+        else:
+            merged.append((a, b, ww))
+    return merged
+
+
+def pedestrian_width(model):
+    """Tributary width (m): the slab effective width of the first section
+    with a slab, else the width entered (2000 mm by default)."""
+    ped = model.pedestrian
+    if ped.width_source == "slab":
+        for section in model.sections:
+            slab = section.composite
+            if slab is not None and slab.enabled:
+                return slab.effective_width / 1000
+    return ped.width / 1000
+
+
+def pedestrian_intensity(ped, loaded_length):
+    """S6 3.8.9: p = a - s / b (kPa), between p_min and p_max."""
+    return float(min(max(ped.a - loaded_length / ped.b, ped.p_min), ped.p_max))
+
+
+def pedestrian_record(mask, loaded_length, p, width):
+    return case_record(
+        "pedestrian",
+        "forward",
+        -1,
+        [],
+        1,
+        spans=[i + 1 for i, on in enumerate(mask) if on],
+        loaded_length=float(loaded_length),
+        intensity=float(p),
+        width=float(width),
+    )
+
+
+def pedestrian_envelope(model, basis):
+    """Envelope of the pedestrian load over every combination of loaded
+    spans (2^n - 1). The intensity depends on the total loaded length s, so
+    every combination is evaluated, not only the spans of one sign.
+
+    Returns ``[(low, infos_low), (high, infos_high)]``; an info is None
+    where no combination has the sign sought (value 0).
+    """
+    units = basis.span_units()
+    n = len(basis.lengths)
+    width = pedestrian_width(model)
+    subsets = np.array(
+        [[(m >> i) & 1 for i in range(n)] for m in range(1, 2**n)], float
+    )
+    lengths = subsets @ np.asarray(basis.lengths)
+    p = np.array([pedestrian_intensity(model.pedestrian, s) for s in lengths])
+    w = p * width * model.live.factor
+    values = (subsets * w[:, None]) @ units
+    out = []
+    for is_low in (True, False):
+        rows = values.argmin(axis=0) if is_low else values.argmax(axis=0)
+        best = values[rows, np.arange(values.shape[1])]
+        loaded = best < -1e-10 if is_low else best > 1e-10
+        infos = [
+            pedestrian_record(subsets[r], lengths[r], p[r], width) if on else None
+            for r, on in zip(rows, loaded)
+        ]
+        out.append((np.where(loaded, best, 0.0), infos))
+    return out
+
+
+def vehicle_model(model):
+    """The model whose vehicle is analysed: itself, or with pedestrians the
+    maintenance vehicle (no lane load, no axle factor); None if none."""
+    if model.live.source != "pedestrian":
+        return model
+    if not model.pedestrian.maintenance:
+        return None
+    vm = model.model_copy(deep=True)
+    vm.live.vehicle = "Maintenance"
+    vm.live.case = "truck"
+    vm.live.axle_factor = 1.0
+    return vm
 
 
 def live_scale(model, basis):
@@ -441,8 +621,11 @@ def dead_scale(model, basis):
 
 
 def displayed_axle_factor(model):
-    """Factor carried by the axle loads themselves (1 when FT zones apply)."""
-    return 1.0 if ft_applied(model) else model.live.axle_factor
+    """Factor carried by the axle loads themselves (1 when FT zones apply,
+    and with pedestrians: the maintenance vehicle takes no axle factor)."""
+    if ft_applied(model) or model.live.source == "pedestrian":
+        return 1.0
+    return model.live.axle_factor
 
 
 def structure_key(model):
@@ -526,6 +709,7 @@ def case_record(case, direction, position, axles, factor, **metadata):
 
 def position_record(model: Model, position: float, direction: str):
     """Full vehicle at a user-selected position in the selected load case."""
+    model = vehicle_model(model) or model
     weights, _ = vehicle_data(model.live)
     ids = list(range(1, len(weights) + 1))
     _, _, lane_style = lane_parameters(model.live)
@@ -691,7 +875,7 @@ def _envelope_block(ctx, effects, p, cols, direction, variant):
             axle_lo, axle_hi = (
                 (take(mtq[0]), take(mtq[1])) if mtq else (axle_factor, axle_factor)
             )
-            lane = take(ctx["lane"])
+            lane_lo, lane_hi = take(ctx["lane_lo"]), take(ctx["lane_hi"])
             # The record factor reports dynamic allowance.  A Canadian lane
             # reduction is deliberately not DLA.
             reported = group["factor"] if live.vehicle in HL93_VEHICLES else 1.0
@@ -706,8 +890,8 @@ def _envelope_block(ctx, effects, p, cols, direction, variant):
             candidates.append(
                 (
                     "lane",
-                    (axle_effect * axle_lo + lane) * live.factor,
-                    (axle_effect * axle_hi + lane) * live.factor,
+                    (axle_effect * axle_lo + lane_lo) * live.factor,
+                    (axle_effect * axle_hi + lane_hi) * live.factor,
                     lane_record,
                 )
             )
@@ -750,23 +934,36 @@ def analyse(model: Model):
     low, high = np.zeros(count), np.zeros(count)
     info_low = [case_record("unloaded", "forward", 0, [], 1) for _ in range(count)]
     info_high = [dict(r) for r in info_low]
-    weights, offsets = vehicle_data(model.live)
-    variants = vehicle_variants(model.live)
+    pedestrian = model.live.source == "pedestrian"
+    # The vehicle analysed: the model's own, the maintenance vehicle beside
+    # the pedestrians (never concomitant), or none.
+    vm = vehicle_model(model)
+    run_vehicle = vm is not None and model.load_mode != "dead"
+    vehicle_live = (vm or model).live
+    weights, offsets = vehicle_data(vehicle_live)
+    if vm is None:
+        weights, offsets = np.zeros(0), np.zeros(0)
+    variants = vehicle_variants(vehicle_live)
     step = 0.25 if model.precision == "standard" else 0.1
     steps = 0
-    groups = axle_groups(model.live)
-    lane_w, fraction, lane_style = lane_parameters(model.live)
-    include_lane = model.live.case != "truck" and lane_style != "none"
-    include_truck = model.live.case != "lane" or lane_style == "none"
+    groups = axle_groups(vehicle_live) if vm is not None else []
+    lane_w, fraction, lane_style = lane_parameters(vehicle_live)
+    if vm is None:
+        lane_w, lane_style = 0.0, "none"
+    include_lane = vehicle_live.case != "truck" and lane_style != "none"
+    include_truck = vehicle_live.case != "lane" or lane_style == "none"
     lane_lo = lane_hi = np.zeros(count)
     scale = displayed_axle_factor(model)
     # MTQ automatic fraction: per response column and envelope sense.
     mtq = mtq_lane_fractions(model, basis) if mtq_active(model) else None
     selector = truck_selector(groups, len(weights))
     timing = {"influence": 0.0, "envelope": 0.0, "crossings": 0.0}
-    if model.load_mode != "dead":
+    if run_vehicle:
+        model_live, model = model, vm
         if include_lane:
-            lane_lo = lane_hi = basis.full_lane(lane_w)
+            # v0.9.96: the UDL is placed per response (lane_extent).
+            unit_lo, unit_hi = lane_envelope(basis, model.live.lane_extent)
+            lane_lo, lane_hi = unit_lo * lane_w, unit_hi * lane_w
         ctx = {
             "model": model,
             "groups": groups,
@@ -774,7 +971,8 @@ def analyse(model: Model):
             "include_truck": include_truck,
             "include_lane": include_lane,
             "scale": scale,
-            "lane": lane_lo,
+            "lane_lo": lane_lo,
+            "lane_hi": lane_hi,
             "mtq": mtq,
             "n_axles": len(weights),
             "low": low,
@@ -832,20 +1030,29 @@ def analyse(model: Model):
                 target[changed] = candidate[changed]
                 for j in changed:
                     infos[j] = case_record("lane", "forward", -1, [], 1)
-    if (
-        model.load_mode != "dead"
-        and model.live.two_trucks
-        and model.live.vehicle in {"HL93Truck", "HL93Tandem"}
-        and include_lane
-        and basis.ns > 2
-    ):
-        steps += two_truck_envelope(basis, model, low, high, info_low, info_high, step)
+        if model.live.two_trucks and model.live.vehicle in HL93_VEHICLES:
+            if include_lane and basis.ns > 2:
+                steps += two_truck_envelope(
+                    basis, model, low, high, info_low, info_high, step
+                )
+        model = model_live
     # S6-25 FT: per-girder live effects (whole live load, by zone) and Fs on
     # the dead-load shear of an exterior girder.
     ls, ds = live_scale(model, basis), dead_scale(model, basis)
     if ls is not None and model.load_mode != "dead":
         low *= ls
         high *= ls
+    if pedestrian and model.load_mode != "dead":
+        # v0.9.96: pedestrians over every combination of loaded spans; the
+        # maintenance vehicle (if any) is an alternative, never added.
+        (p_low, p_info_low), (p_high, p_info_high) = pedestrian_envelope(model, basis)
+        for target, candidate, infos, cand_infos, sense in (
+            (low, p_low, info_low, p_info_low, -1),
+            (high, p_high, info_high, p_info_high, 1),
+        ):
+            for j in np.flatnonzero(sense * candidate > sense * target + 1e-10):
+                target[j] = candidate[j]
+                infos[j] = cand_infos[j]
     if ds is not None:
         dead = dead * ds
     low += dead
@@ -948,6 +1155,10 @@ def analyse(model: Model):
             "fraction": fraction,
             "lane_style": lane_style,
             "mtq_auto": mtq_active(model),
+            "lane_extent": model.live.lane_extent,
+            "source": model.live.source,
+            "name": vehicle_live.vehicle if vm is not None else None,
+            "pedestrian_width": pedestrian_width(model) if pedestrian else None,
         },
         "meta": {
             "elapsed": round(time.perf_counter() - started, 3),
@@ -1102,6 +1313,9 @@ def two_truck_envelope(basis, model, low, high, info_low, info_high, step):
 
 def record_axles(model, record, length):
     """Factored axle loads on the bridge for one governing/position record."""
+    if record.get("case") == "pedestrian":
+        return []
+    model = vehicle_model(model) or model
     if record.get("case") == "hl93_two_trucks":
         return [
             {
@@ -1191,6 +1405,7 @@ def traverse(model, direction="forward", frames=60):
     """
     frames = int(min(max(frames, 10), 150))
     basis = cached_basis(structure_key(model))
+    model = vehicle_model(model) or model
     nx, ns = basis.nx, basis.ns
     _, offsets = vehicle_data(model.live)
     begin, end = (
@@ -1251,8 +1466,9 @@ def snapshot(model, record, target_index=None, sense="max"):
         dead *= 0
         intervals = []
     special = record.get("case") == "hl93_two_trucks"
-    is_lane = record.get("case") == "lane" or special
-    lane_w, _, _ = lane_parameters(model.live)
+    walkers = record.get("case") == "pedestrian"
+    is_lane = record.get("case") == "lane" or special or walkers
+    lane_w, _, _ = lane_parameters((vehicle_model(model) or model).live)
     if special:
         lane_w *= 0.9
     axles = record_axles(model, record, basis.length)
@@ -1263,9 +1479,27 @@ def snapshot(model, record, target_index=None, sense="max"):
         values += basis.unit([axle["x"]])[0] * axle["load"]
     lane_intervals = []
     if is_lane and model.load_mode != "dead":
-        lane_w *= model.live.factor
-        lane_intervals.append({"start": 0.0, "end": basis.length, "w": lane_w})
-        values += basis.full_lane(lane_w)
+        if walkers:
+            # Pedestrians: the loaded spans of the record, p(s) x width.
+            w = record["intensity"] * record["width"] * model.live.factor
+            pieces = [
+                (float(basis.support_x[i - 1]), float(basis.support_x[i]), w)
+                for i in record["spans"]
+            ]
+        else:
+            # v0.9.96: the lane UDL is on the parts that increase the effect
+            # sought (whole bridge for a user-positioned vehicle).
+            extent = "full" if special else model.live.lane_extent
+            manual = record.get("manual") or target_index is None
+            pieces = lane_pieces(
+                basis,
+                extent,
+                None if manual else target_index,
+                sense,
+                lane_w * model.live.factor,
+            )
+        lane_intervals = [{"start": a, "end": b, "w": w} for a, b, w in pieces]
+        values += basis.udl(pieces)
     nx = basis.nx
     total_load = sum(a["load"] for a in axles) + sum(
         (v["end"] - v["start"]) * v["w"] for v in intervals
@@ -1274,9 +1508,14 @@ def snapshot(model, record, target_index=None, sense="max"):
         (v["end"] - v["start"]) * v["w"] * (v["end"] + v["start"]) / 2
         for v in intervals
     )
-    if is_lane and model.load_mode != "dead":
-        total_load += lane_w * basis.length
-        total_moment += lane_w * basis.length**2 / 2
+    for load in lane_intervals:
+        total_load += load["w"] * (load["end"] - load["start"])
+        total_moment += (
+            load["w"]
+            * (load["end"] - load["start"])
+            * (load["end"] + load["start"])
+            / 2
+        )
     r = values[3 * nx : 3 * nx + basis.ns]
     mr = values[3 * nx + basis.ns :]
     # Add both sides of every applied point load to the plotted snapshot. The

@@ -270,9 +270,9 @@ def test_thermal_depth_from_sections_and_bilinear_gradient():
     c1, tc = comp["1n"], 200.0
     b = comp["concrete_area"] / comp["n"] / tc
     e = 1250.0 - c1["y_bottom"]
-    q = b * 35 / tc * (e * tc**2 / 2 + tc**3 / 3)
+    q = b * 30 / tc * (e * tc**2 / 2 + tc**3 / 3)  # 30 °C: v0.9.96 default
     q += sum(
-        bar["area"] * comp["m"] * 35 * bar["y_in_slab"] / tc * (e + bar["y_in_slab"])
+        bar["area"] * comp["m"] * 30 * bar["y_in_slab"] / tc * (e + bar["y_in_slab"])
         for bar in comp["bars"]
     )
     assert free_curvature(m, s) == pytest.approx(alpha * q / c1["I"] * 1000)

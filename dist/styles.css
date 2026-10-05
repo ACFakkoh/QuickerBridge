@@ -388,7 +388,7 @@ svg.plot:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-
 .qb-float .sp-head{touch-action:none}
 .results>.warning{margin:8px 0 2px;padding:0 2px;justify-content:flex-start;color:#4f5b57}
 .metrics{position:relative}
-.metrics-flag{position:absolute;right:10px;top:-9px;padding:1px 8px;border-radius:999px;background:#fff8e8;border:1px solid #e6cf97;color:#7a5410;font-size:.6875rem;font-weight:600}
+.metrics-flag{margin-left:auto;flex:none;white-space:nowrap;padding:1px 8px;border-radius:999px;background:#fff8e8;border:1px solid #e6cf97;color:#7a5410;font-size:.6875rem;font-weight:600}
 @media(pointer:coarse){#case-band button,#display-mode button,.menu-button,.view-tabs button,.input-tabs button,.st-cta,#en,#fr,[data-spans],#collapse-inputs{min-height:40px}}
 .panel-heading h1{font-size:1.25rem;letter-spacing:-.005em}
 .chart-label small small{font-size:1em}

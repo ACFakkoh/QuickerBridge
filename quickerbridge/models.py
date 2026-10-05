@@ -244,6 +244,15 @@ class LiveLoad(InputModel):
         default_factory=lambda: [3.6, 1.2, 6.6, 6.6], max_length=6
     )
     case: Literal["governing", "truck", "lane"] = "governing"
+    # v0.9.96: live-load source. "pedestrian" replaces the vehicle by the
+    # S6 pedestrian load (Model.pedestrian); the two are never combined.
+    source: Literal["vehicle", "pedestrian"] = "vehicle"
+    # v0.9.96: extent of the lane-load UDL (S6 C3.8.4.1: applied only where
+    # it increases the load effect). "spans": the spans whose unit-UDL effect
+    # has the sign sought, per response; "influence": the parts of the
+    # influence line of that sign (partial spans); "full": whole bridge
+    # (method of v0.9.95 and earlier).
+    lane_extent: Literal["spans", "influence", "full"] = "spans"
     lane_fraction: Literal[0.63, 0.8] = 0.8
     # CL-750-QC only: MTQ Info-structures A2023-05 chooses 63 % or 80 % of the
     # axles per response; when on, lane_fraction is ignored.
@@ -274,6 +283,32 @@ class LiveLoad(InputModel):
         return self
 
 
+class Pedestrian(InputModel):
+    """S6 pedestrian load on a sidewalk (3.8.9), v0.9.96.
+
+    p = a − s / b (kPa), between ``p_min`` and ``p_max``, with s the total
+    loaded length (sum of the loaded spans). Defaults: S6-19, placeholder
+    until the S6-25 expression is confirmed. The load per girder is p times
+    the tributary width. No dynamic allowance, no FT, no axle factor. With
+    ``maintenance`` the envelope also covers the maintenance vehicle
+    (3.8.11), never concomitant with the pedestrians.
+    """
+
+    width_source: Literal["slab", "manual"] = "slab"
+    width: float = Field(default=2000, gt=0, le=30000)  # tributary width, mm
+    a: float = Field(default=5.0, ge=0, le=50)
+    b: float = Field(default=30.0, gt=0, le=10000)
+    p_min: float = Field(default=1.6, ge=0, le=50)
+    p_max: float = Field(default=4.0, ge=0, le=50)
+    maintenance: bool = False
+
+    @model_validator(mode="after")
+    def bounds(self):
+        if self.p_min > self.p_max:
+            raise ValueError("pedestrian.bounds")
+        return self
+
+
 class ThermalLoad(InputModel):
     """Imposed deformations (v0.9.7), each analysed on its own.
 
@@ -299,7 +334,7 @@ class ThermalLoad(InputModel):
     # Linear through the depth, or bilinear (S6-25 type, composite deck):
     # slab_delta_T from the top of the slab to its bottom, constant below.
     profile: Literal["linear", "bilinear"] = "linear"
-    slab_delta_T: float = Field(default=35, ge=-100, le=100)
+    slab_delta_T: float = Field(default=30, ge=-100, le=100)
 
 
 class Distribution(InputModel):
@@ -361,6 +396,7 @@ class Model(InputModel):
     dead: list[DeadLoad] = Field(default_factory=lambda: [DeadLoad()], max_length=30)
     self_weight: SelfWeight = Field(default_factory=SelfWeight)
     live: LiveLoad = Field(default_factory=LiveLoad)
+    pedestrian: Pedestrian = Field(default_factory=Pedestrian)
     thermal: ThermalLoad = Field(default_factory=ThermalLoad)
     modal: ModalSettings = Field(default_factory=ModalSettings)
     distribution: Distribution = Field(default_factory=Distribution)

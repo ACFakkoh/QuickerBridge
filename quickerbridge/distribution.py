@@ -439,7 +439,12 @@ def station_factors(model: Model, xs, sides, data=None):
 
 
 def applied(model: Model) -> bool:
-    return model.distribution.enabled and model.distribution.apply
+    # v0.9.96: FT is a truck load fraction; never applied to pedestrians.
+    return (
+        model.distribution.enabled
+        and model.distribution.apply
+        and model.live.source != "pedestrian"
+    )
 
 
 # --- Slab and voided-slab bridges (clauses 5.6.4.2 and 5.6.5) ----------------

@@ -1,4 +1,4 @@
-# QuickerBridge 0.9.95 — guide en français
+# QuickerBridge 0.9.96 — guide en français
 
 [English README](README.md)
 
@@ -11,7 +11,7 @@ compacte. Aucune installation de Python et aucun serveur local pour les utilisat
 ## Démarrer
 
 - **Sur le web :** https://acfakkoh.github.io/QuickerBridge/ (GitHub Pages, publié à chaque mise à jour de `main`).
-- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.9.95-2026-10-04.html`) dans un navigateur moderne. Si vous
+- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.9.96-2026-10-04.html`) dans un navigateur moderne. Si vous
   recevez l’archive portable, extrayez-la avant d’ouvrir le HTML.
 - Une connexion Internet est nécessaire au démarrage pour charger Pyodide et ses
   bibliothèques. Le cache peut accélérer les ouvertures suivantes; cette édition
@@ -277,6 +277,16 @@ GitHub Pages, consultez [le guide développeur](README_DEVELOPER.md).
   fenêtre complète, où l’on change la station (◀ ▶, x, curseur) et le y de S3.
   Profils en trait continu depuis σ = 0, ANE en pointillés; lignes dessus /
   dessous de dalle et armature inf. retirées du tableau.
+
+## Nouveautés 0.9.96
+
+- **Charge de voie là où elle augmente l’effet.** Commentaire S6, C3.8.4.1 : les essieux et la charge uniformément répartie ne s’appliquent que là où ils augmentent l’effet total. Pour chaque effet, la charge répartie de la voie ne charge plus que les travées dont la contribution a le signe recherché (nouveau défaut « Travées qui augmentent l’effet »). Options : « Parties de ligne d’influence » (portions de travée là où la ligne d’influence a ce signe) et « Pont complet » (méthode jusqu’à 0.9.95). La vue « Surcharge gouvernante » dessine les travées chargées. Les anciens projets s’ouvrent avec le nouveau défaut.
+- **Charge piétonnière (S6, art. 3.8.9).** Nouvelle sous-section « Charge piétonnière » dans Charges, utilisée à la place du véhicule (jamais les deux). p = a − s/b kPa entre p min et p max, s étant la longueur chargée totale; les valeurs par défaut sont celles de la S6-19 (5 − s/30, de 1,6 à 4,0 kPa) en attendant de confirmer l’expression de la S6-25, et chaque coefficient est modifiable. La largeur tributaire est la largeur effective de la dalle si une dalle est définie, sinon 2000 mm (modifiable). Toutes les combinaisons de travées chargées (2^n − 1) sont évaluées : l’enveloppe suit la disposition la plus critique. Option : enveloppe avec le véhicule d’entretien, qui est une autre surcharge, jamais ajoutée aux piétons. Ni CMD, ni facteur d’essieu, ni FT; le facteur de charge vive s’applique. Un clic sur les diagrammes montre la disposition gouvernante (travées chargées, s, p, w).
+- **Noms.** « Camion gouvernant » devient « Surcharge gouvernante »; les onglets de cas deviennent « Vive » et « Permanente + vive ». Le gradient bilinéaire s’appelle « ossature type B », 30 °C dans la dalle par défaut (au lieu de 35). La pastille S6-25 est retirée des titres de la sous-section et de la fenêtre FT.
+- **Tableaux FT.** Cisaillement de la poutre extérieure : une ligne FT, puis une ligne FT × Fs (deux états limites). Le a deux lignes : son expression (0,75 L, 0,20 (L1+L2)…) et son application numérique (0,75 × 34,80 = 26,100).
+- **Étiquettes des diagrammes.** Un plateau (cisaillement constant d’une déformation imposée) n’est étiqueté qu’une fois. Les moments affichent toujours le M+ maximal de chaque travée et le M− de chaque pile, en enveloppe comme en écarts Δ; les écarts Δ suivent les mêmes règles que l’enveloppe.
+- **Langue et Excel.** L’interface s’ouvre dans la langue du navigateur (français ou anglais) si aucun choix n’a été enregistré. Le nom du fichier Excel contient le nom du modèle, la version de QuickerBridge et la date d’export; la feuille Modèle reprend le nom et la date et l’heure d’export.
+- **Pastille FT.** « FT S6-25 appliqué : valeurs par poutre » est maintenant sur la ligne de l’avertissement au lieu de chevaucher le croquis.
 
 ## Nouveautés 0.9.95
 

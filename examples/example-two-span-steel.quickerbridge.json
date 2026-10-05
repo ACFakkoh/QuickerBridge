@@ -1,7 +1,7 @@
 {
   "format": "QuickerBridgeProject",
-  "schema_version": 12,
-  "app_version": "0.9.95",
+  "schema_version": 13,
+  "app_version": "0.9.96",
   "name": "2 travées acier 34,8 m · CL-750-QC",
   "saved_at": "2026-10-04T00:00:00Z",
   "model": {
@@ -131,6 +131,8 @@
         6.6
       ],
       "case": "governing",
+      "source": "vehicle",
+      "lane_extent": "spans",
       "lane_fraction": 0.8,
       "mtq_auto": true,
       "lane_w": 9.0,
@@ -140,6 +142,15 @@
       "dynamic": true,
       "two_trucks": false,
       "direction": "both"
+    },
+    "pedestrian": {
+      "width_source": "slab",
+      "width": 2000.0,
+      "a": 5.0,
+      "b": 30.0,
+      "p_min": 1.6,
+      "p_max": 4.0,
+      "maintenance": false
     },
     "thermal": {
       "imposed": "thermal",
@@ -152,7 +163,7 @@
       "depth_source": "sections",
       "depth": 1200.0,
       "profile": "linear",
-      "slab_delta_T": 35.0
+      "slab_delta_T": 30.0
     },
     "modal": {
       "mass_source": "dead",

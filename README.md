@@ -9,7 +9,7 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 
 ![QuickerBridge — envelopes of a two-span girder with rotational-spring abutments](docs/screenshots/envelopes.png)
 
-*Version 0.9.95 · 2026-10-04 · Anthony Chéruel · [Guide en français](README.fr.md)*
+*Version 0.9.96 · 2026-10-04 · Anthony Chéruel · [Guide en français](README.fr.md)*
 
 ---
 
@@ -19,7 +19,7 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 |---|---|
 | **Moving-load envelopes** | CL-625, CL-750-QC (MTQ), AASHTO HL-93 truck & tandem, Cooper E, maintenance vehicle, or a custom 1–7 axle vehicle. CAN/CSA S6 dynamic allowance on every axle subset, lane loads over the full deck, load and axle factors. Optional HL-93 90% two-truck case for negative moments and interior reactions. Click any extreme to see its governing arrangement; a “Δ ranges” tab replaces V, M, δ by ΔV, ΔM, Δδ = max − min, read with the same cursor. |
 | **Influence lines** | V, M and deflection at any station, plus the reaction (and moment reaction) at the nearest support, with the governing axles drawn on the line. |
-| **Governing truck** | The axle arrangement of any extreme drawn on the beam, with its V, M and δ diagrams over the faint envelope. |
+| **Governing live load** | The arrangement (axles, loaded lane spans or pedestrian spans) of any extreme drawn on the beam, with its V, M and δ diagrams over the faint envelope. |
 | **Supports** | Pinned, roller, **fixed (integral abutment)** or **rotational spring k** with the resulting degree of fixity. Any span can be made **simple (isostatic)**, hinged at both ends *(v0.8.6)*. Uplift is flagged automatically. |
 | **Sections** | Steel I-girders from plate dimensions, standard **precast prestressed NEBT 1000–1800** girders *(v0.8.6, concrete E 28 GPa by default)* or direct EI, inertia modifier, non-prismatic zones with linear or parabolic depth (steel girders; NEBT bridges stay prismatic), EI(x) diagram and stiffness-step warnings. Girder **self-weight** is added to the permanent loads by default (steel +15%, NEBT +10%, adjustable, can be switched off). |
 | **Vibration modes** *(v0.8)* | Up to 12 natural frequencies and periods in vertical bending from the same model (non-prismatic EI, integral abutments, springs), mass from the unfactored permanent loads. Animated deck, mode thumbnails, frequency spectrum with pedestrian resonance bands, modal mass. Six modes and real-time animation by default; optional slow motion. |
@@ -106,6 +106,16 @@ every push to `main`). In the repository settings, **Pages → Source** must be 
 Built on [PyCBA](https://github.com/ccaprani/pycba) by Colin Caprani (AGPL-3.0-or-later),
 vendored with local additions (CL-750-QC, non-prismatic performance); runs on
 [Pyodide](https://pyodide.org). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## What's new in 0.9.96
+
+- **Lane load where it increases the effect.** S6 commentary C3.8.4.1: the truck axles and the uniformly distributed load are applied only where they increase the total load effect. The lane UDL now loads, for every response, only the spans whose contribution has the sign sought (new default, "Spans increasing the effect"). Options: "Influence-line parts" (partial spans, where the influence line has that sign) and "Whole bridge" (method up to 0.9.95). The "Governing live load" view draws the loaded spans. Older projects open with the new default.
+- **Pedestrian load (S6 3.8.9).** New "Pedestrian load" subsection in Loads, used instead of the vehicle (never both). p = a − s/b kPa between p min and p max, with s the total loaded length; the defaults are those of S6-19 (5 − s/30, 1.6 to 4.0 kPa) until the S6-25 expression is confirmed, and every coefficient is editable. The tributary width is the slab effective width when a slab is defined, else 2000 mm (editable). Every combination of loaded spans (2^n − 1) is evaluated, so the envelope follows the most critical arrangement. Option: envelope with the maintenance vehicle, which is an alternative, never added to the pedestrians. No dynamic allowance, axle factor or FT; the live load factor applies. A click on the diagrams shows the governing arrangement (loaded spans, s, p, w).
+- **Names.** "Governing truck" becomes "Governing live load"; the French case tabs read "Vive" and "Permanente + vive". The bilinear gradient is "type B superstructure", 30 °C in the slab by default (was 35). The S6-25 badge is removed from the FT subsection and window titles.
+- **FT tables.** Exterior girder shear: one row for FT, then one for FT × Fs (both limit states). Le has two rows: its expression (0,75 L, 0,20 (L1+L2)…) and its numeric application (0,75 × 34,80 = 26,100).
+- **Diagram labels.** A plateau (constant shear of an imposed deformation) is labelled once. Moments always show the M+ maximum of every span and the M− at every pier, in the envelope and in Δ ranges; Δ ranges use the same labels as the envelope.
+- **Language and Excel.** The interface opens in the browser language (French or English) when no choice was saved. The Excel file name holds the model name, QuickerBridge version and export date; the Model sheet repeats the name and the export date and time.
+- **FT flag.** "S6-25 FT applied: values per girder" now sits on the disclaimer line instead of overlapping the beam drawing.
 
 ## What's new in 0.9.95
 

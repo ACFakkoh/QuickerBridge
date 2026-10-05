@@ -10,7 +10,7 @@ from .version import APP_VERSION
 
 
 FORMAT = "QuickerBridgeProject"
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 MAX_PROJECT_BYTES = 1024 * 1024
 
 
@@ -105,12 +105,14 @@ def validate_project(text: str) -> dict:
                     ):
                         raise ValueError("project.legacy_taper")
         raw["schema_version"] = SCHEMA_VERSION
-    elif version in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
+    elif version in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
         # v0.4 files: zones without ``plates`` keep the start-section
         # convention, which is the default. Pin/roller supports are unchanged.
         raw["schema_version"] = SCHEMA_VERSION
         # v0.5-v0.7 files have no ``modal`` block: the defaults apply.
         # Schema 4 files have no isostatic spans (``simple`` defaults false).
+        # Schema 12 and older: the lane UDL takes the new default extent
+        # (loaded spans, v0.9.96) and the live load stays the vehicle.
     elif version != SCHEMA_VERSION:
         raise ValueError("project.version")
     return ProjectFile.model_validate(raw).model_dump(mode="json")

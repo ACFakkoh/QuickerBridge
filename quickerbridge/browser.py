@@ -106,8 +106,12 @@ def dispatch(raw: str) -> str:
                 export_model.distribution = Distribution.model_validate(
                     data["distribution"]
                 )
+            info = {
+                "name": str(data.get("name") or "")[:120],
+                "exported": str(data.get("exported") or "")[:40],
+            }
             value = base64.b64encode(
-                excel_bytes(result, language, export_model)
+                excel_bytes(result, language, export_model, info)
             ).decode("ascii")
         else:
             if result.get("kind") == "thermal":

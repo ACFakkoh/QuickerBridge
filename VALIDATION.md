@@ -614,3 +614,31 @@ chart peaks and cursor values are rounded up like the headline values (5 676
 everywhere, U+2212 minus), the disclaimer sits under the headline values,
 File menu has Redo, the example dialog says "Charger sans enregistrer", and the
 FT window opens on the right of the model panel.
+
+## v0.9.96 lane extent, pedestrian load, feedback 0.9.95 (verified 2026-10-04)
+
+- 271 native tests pass (13 new in `tests/test_v0996.py`); `QB_SCIPY_LITE=1
+  QB_MPL_STUB=1` on the v0.9.96 and v0.9.7 files: 28 pass. The v0.9.7 lane
+  reference values (4 002 / 3 379 kN·m, MTQ fractions) are kept with
+  `lane_extent = "full"`; with the new default the 2 × 34.8 m CL-750-QC lane
+  case gives M+ 3 757 kN·m (one span loaded) instead of 3 379.
+- Hand checks: lane UDL alone on 2 × 20 m: M+ 0.0957 wL², M− 0.125 wL²;
+  pedestrians 1 × 20 m: 8 kN/m, M 400 kN·m; 2 × 30 m: M+ 689 kN·m (one span,
+  p = 4.0), M− −675 kN·m (both spans, s = 60 m, p = 3.0).
+- Every lane and pedestrian extreme sampled is reproduced by its snapshot
+  (spans: 1e-6; influence parts: 1e-4, piecewise-linear influence areas) with
+  zero force and moment equilibrium error.
+- Pedestrians + maintenance vehicle = max/min of the two separate envelopes
+  (never their sum); FT and the axle factor do not change pedestrian results;
+  the live load factor scales them.
+- Comparative study (`tmp/study_v0996.py`, 13 bridges, CL-625 and CL-750-QC,
+  governing case): loaded spans vs whole bridge changes M+ by 0 % (the truck
+  governs), M− by up to +5 to +12 % for 3 to 5 spans, interior reactions up to
+  +6 %, deflections up to +11 %. Influence parts vs spans: < 0.01 % on the
+  extremes, up to 1.7 % on station shears.
+- Browser (Pyodide, FR): tabs "Vive", "Permanente + vive", "Surcharge
+  gouvernante"; pedestrian mode 2 × 34.8 m: M+ 2 048 / M− −3 315 kN·m
+  (dead + pedestrians), governing click "Piétons · travée 2 · s = 34,80 m ·
+  p = 3,84 kPa"; imposed deformation shear labelled once (17 / −17); Δ ranges
+  labelled per span and pier; FT tables with FT ext. and FT ext. × Fs rows and
+  Le "0,75 × 34,80 = 26,100"; FT flag on the disclaimer line. No console errors.

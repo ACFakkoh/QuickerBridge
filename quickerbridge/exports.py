@@ -271,7 +271,7 @@ def distribution_sheet(wb, model, language):
         sheet.append([label, value])
 
 
-def excel_bytes(result, language="en", model=None):
+def excel_bytes(result, language="en", model=None, info=None):
     from .models import Model
     from .modal import analyse_modal
 
@@ -375,7 +375,14 @@ def excel_bytes(result, language="en", model=None):
                             sense,
                             result[sense][effect][i],
                             case["case"],
-                            "–".join(map(str, case["axles"])),
+                            (
+                                "spans/travées "
+                                + ", ".join(map(str, case["spans"]))
+                                + f" · s = {case['loaded_length']:.2f} m"
+                                + f" · p = {case['intensity']:.3f} kPa"
+                                if case["case"] == "pedestrian"
+                                else "–".join(map(str, case["axles"]))
+                            ),
                             case["factor"],
                             result["model"]["live"].get("factor", 1),
                             result["model"]["live"].get("axle_factor", 1),
@@ -461,6 +468,11 @@ def excel_bytes(result, language="en", model=None):
         distribution_sheet(wb, model, language)
     meta = wb.create_sheet("Modèle" if language == "fr" else "Model")
     meta.append(["QuickerBridge", APP_VERSION])
+    # v0.9.96: model name and export date (also in the file name).
+    info = info or {}
+    fr = language == "fr"
+    meta.append(["Nom du modèle" if fr else "Model name", info.get("name") or ""])
+    meta.append(["Date d’export" if fr else "Export date", info.get("exported") or ""])
     meta.append(["Warning / Avertissement", WARNING[language]])
     meta.append(["Version", f"QuickerBridge {APP_VERSION} · {RELEASE_DATE} · {AUTHOR}"])
     if thermal:
@@ -584,12 +596,41 @@ def excel_bytes(result, language="en", model=None):
                 "Code dynamic/lane factors and the user load/axle factors are applied separately.",
             ]
         )
+        extent = result["model"]["live"].get("lane_extent", "spans")
         meta.append(
             [
                 "Lane / Voie",
-                "Companion UDL over the full bridge length (S6 bumper-to-bumper lane case).",
+                {
+                    "full": "Companion UDL over the full bridge length / "
+                    "charge répartie sur tout le pont.",
+                    "spans": "Companion UDL on the spans that increase each effect "
+                    "(S6 C3.8.4.1) / charge répartie sur les travées qui augmentent "
+                    "chaque effet.",
+                    "influence": "Companion UDL on the parts of each influence line "
+                    "that increase the effect (S6 C3.8.4.1) / charge répartie sur les "
+                    "parties de la ligne d’influence qui augmentent l’effet.",
+                }[extent],
             ]
         )
+        if result["model"]["live"].get("source") == "pedestrian":
+            ped = result["model"].get("pedestrian", {})
+            width = (result.get("vehicle") or {}).get("pedestrian_width")
+            meta.append(
+                [
+                    "Pedestrian load / Charge piétonnière (S6 3.8.9)",
+                    f"p = {ped.get('a', 5):g} − s/{ped.get('b', 30):g} kPa, "
+                    f"{ped.get('p_min', 1.6):g} ≤ p ≤ {ped.get('p_max', 4):g}; "
+                    f"width / largeur = {width if width is None else round(width, 3)} m; "
+                    "every combination of loaded spans / toutes les combinaisons "
+                    "de travées chargées"
+                    + (
+                        "; or maintenance vehicle, not concomitant / ou véhicule "
+                        "d’entretien, non concomitant"
+                        if ped.get("maintenance")
+                        else ""
+                    ),
+                ]
+            )
         if vehicle == "CL750QC" and model.live.mtq_auto:
             meta.append(
                 [
