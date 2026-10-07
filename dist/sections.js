@@ -31,12 +31,18 @@ function spSci(v,unit){
 function spDialog(){
  let dlg=$('#section-dialog');if(dlg)return dlg;
  dlg=document.createElement('dialog');dlg.id='section-dialog';dlg.className='section-dialog';document.body.appendChild(dlg);
- dlg.addEventListener('close',()=>{spIndex=null;});
+ // v0.9.99: edits are validated with OK (or closing the window): a slab
+ // edit can change the analysis inertia (3n, 1n, I′), so the bridge is
+ // recalculated once, when the window closes, if the section changed.
+ dlg.addEventListener('close',()=>{const i=spIndex;spIndex=null;spApply(i);});
  return dlg;
 }
 // A steel girder always gets a composite block (slab off) so that Fy, y and
 // the region can be set for the steel section alone.
-function openSectionProps(i){spIndex=i;const s=model.sections[i];if(s&&['girder','nebt'].includes(s.kind)&&!s.composite)s.composite={...spDefaults(),enabled:false};const dlg=spDialog();renderSectionDialog();qbFloat(dlg);spRequest();}
+let spOpenState=null;
+function spApply(i){const s=model?.sections?.[i],before=spOpenState;spOpenState=null;if(s&&before!==null&&before!==spStateOf(s)){renderInputs();changed();}}
+function spStateOf(s){const c=s.composite?{...s.composite}:null;if(c)['region','y3','y_steel','y_3n','y_1n','y_neg'].forEach(k=>delete c[k]);return JSON.stringify({...s,composite:c});}
+function openSectionProps(i){const already=$('#section-dialog')?.open&&spIndex===i;spIndex=i;const s=model.sections[i];if(s&&['girder','nebt'].includes(s.kind)&&!s.composite)s.composite={...spDefaults(),enabled:false};if(s&&!already)spOpenState=spStateOf(s);const dlg=spDialog();renderSectionDialog();qbFloat(dlg);spRequest();}
 function spField(key,sub,value,opts={}){return field(key,`sections.${spIndex}.composite.${sub}`,value,'',opts);}
 const spRegionOf=c=>c&&c.region==='negative'?'negative':'positive';
 const spY=(c,k)=>c['y_'+k]??c.y3;
@@ -59,7 +65,7 @@ function renderSectionDialog(){
    left+=`<h3>${t('spBars')}</h3>${barRow('top','spTop')}${barRow('bottom','spBottom')}`;
   }
  }
- dlg.innerHTML=`<div class="sp-head"><span class="axle-badge">S6</span><div><b>${t('spTitle')} · ${esc(s.name)}${steel?` · ${t(neg?'spNegR':'spPos')}`:''}</b><small>${t('spAxisNote')}</small></div><button class="icon-button sp-close" data-sp-close title="${t('spClose')}">×</button></div><div class="sp-body"><div class="sp-inputs">${left}</div><div class="sp-figure" id="sp-figure"></div><div class="sp-results" id="sp-results"></div></div><details class="sp-notes"><summary>${t('spMethod')}</summary><p>${t('spMethodBody')}</p></details>`;
+ dlg.innerHTML=`<div class="sp-head"><span class="axle-badge">S6</span><div><b>${t('spTitle')} · ${esc(s.name)}${steel?` · ${t(neg?'spNegR':'spPos')}`:''}</b><small>${t('spAxisNote')}</small></div><button class="icon-button sp-close" data-sp-close title="${t('spClose')}">×</button></div><div class="sp-body"><div class="sp-inputs">${left}</div><div class="sp-figure" id="sp-figure"></div><div class="sp-results" id="sp-results"></div></div><details class="sp-notes"><summary>${t('spMethod')}</summary><p>${t('spMethodBody')}</p></details><div class="sp-foot"><span>${t('spOkHelp')}</span><button type="button" class="primary sp-ok" data-sp-close>OK</button></div>`;
  spRenderResults();
 }
 function spRequest(){
@@ -94,9 +100,7 @@ function spRenderResults(){
  const cl=(label,[ratio,k],limits)=>`<tr><th>${label}</th><td>${fmt(ratio,1)}</td><td class="sp-class sp-class-${k}">${t('spClass')} ${k}</td><td><small>${limits.map(v=>fmt(v,1)).join(' / ')}</small></td></tr>`;
  const dc=(label,[ratio,reduced])=>`<tr><th>${label}</th><td>${fmt(ratio,1)}</td><td class="sp-class ${reduced?'sp-class-4':'sp-class-1'}">${reduced?t('spReduced'):t('spOk')}</td><td><small>${fmt(lim.web[2],1)}</small></td></tr>`;
  h+=`<h3>${t('spClasses')}</h3><table class="sp-table sp-classes"><tbody>${cl(t('spTopFlange'),cls.top_flange,lim.flange)}${cl(t('spBottomFlange'),cls.bottom_flange,lim.flange)}${cl(t('spWeb'),cls.web,lim.web)}${neg&&ng?dc(t('spWeb2dcNeg'),ng.web_2dc):dc(t('spWeb2dc'),cls.web_2dc)}</tbody></table>`;}
- // v0.9.99: the analysis inertia is a choice (girder alone, 3n, 1n, I′), never a copied M.
- if(c){const src=s.inertia_source||'steel',opts=neg?[['steel',t('inertiaSteel'),1],['negative','I′',ng.ratio]]:[['steel',t('inertiaSteel'),1],['3n','3n',c['3n'].I/st.Ix],['1n','1n',c['1n'].I/st.Ix]];
-  h+=`<div class="sp-actions"><span class="sp-use-label">${t('spUseInertia')} :</span>${opts.map(([k,l,r])=>`<button data-sp-copy="${k}" class="${src===k?'active':''}" aria-pressed="${src===k}">${l} · I/I<sub>poutre</sub> ${fmt(r,3)}</button>`).join('')}</div>`;}
+ // v0.9.99: the analysis inertia is chosen on the section card (4 types), not here.
  res.innerHTML=h;
 }
 // Cross-section drawing: true proportions, y up from the bottom of the girder.
@@ -142,11 +146,9 @@ function spSvg(s,data){
 function sectionPropsChanged(path){if(spIndex!==null&&path.startsWith(`sections.${spIndex}.`)){if(/\.composite\.y_/.test(path))spRenderResults();spRequest();}}
 document.addEventListener('click',e=>{
  const open=e.target.closest('[data-section-props]');if(open){openSectionProps(Number(open.dataset.sectionProps));return;}
- if(e.target.closest('[data-sp-close]')){$('#section-dialog')?.close();return;}
+ if(e.target.closest('[data-sp-close]')){spApply(spIndex);$('#section-dialog')?.close();return;}
  const region=e.target.closest('[data-sp-region]');
  if(region&&spIndex!==null){const s=model.sections[spIndex];if(s.composite){s.composite.region=region.dataset.spRegion;updateProjectState();renderSectionDialog();spRequest();}return;}
- const copy=e.target.closest('[data-sp-copy]');
- if(copy&&spData?.composite){const s=model.sections[spIndex],k=copy.dataset.spCopy;s.inertia_source=k;renderInputs();changed();$('#status').textContent=`${t('spInertiaUsed')} : ${k==='steel'?t('inertiaSteel'):k==='negative'?'I′':k}`;renderSectionDialog();spRequest();}
 });
 document.addEventListener('change',e=>{
  const box=e.target.closest?.('[data-sp-composite]');if(!box)return;
@@ -452,3 +454,6 @@ document.addEventListener('keydown',e=>{if(e.target.id!=='st-beam'||stIndex===nu
 // v0.9.7: single-case label (M max = M min) and single live-load moment row.
 Object.assign(words.fr,{stCaseOne:'σ totale',stLive:'Surcharge'});
 Object.assign(words.en,{stCaseOne:'Total σ',stLive:'Live load'});
+
+Object.assign(words.fr,{spOkHelp:'OK valide la section : si l’inertie de l’analyse est mixte (3n, 1n ou I′), le pont est recalculé avec cette dalle.'});
+Object.assign(words.en,{spOkHelp:'OK validates the section: when the analysis inertia is composite (3n, 1n or I′), the bridge is recalculated with this slab.'});

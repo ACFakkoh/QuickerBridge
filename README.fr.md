@@ -288,6 +288,8 @@ GitHub Pages, consultez [le guide développeur](README_DEVELOPER.md).
 - **Onglet Résistance :** plus de Mr/Vr sur les diagrammes principaux (Enveloppe, Surcharge gouvernante) ni d’interrupteur « Déterminer la résistance »; les D/C maximaux et le bouton **Note de calcul** sont en bas du panneau.
 - **Note de calcul refaite :** diagrammes V et M superposés avec Vr et Mr (tirets), bandes rouges en cas de dépassement, rapports gouvernants, curseur de station (clic, glisser, ← →); choix des efforts comparés : **permanentes, surcharge ou les deux**; pastilles D/C compactes; à gauche, section, **propriétés géométriques** et **matériaux et coefficients**; à droite, les **efforts à la station par étape de charge** (M et V : poids propre, charges « poutre seule », autres permanentes, surcharge max/min) puis les calculs, **une valeur par ligne**.
 - **Poutre mixte :** pas de déversement en M− des classes 1-2 (semelle comprimée retenue), et Frd (10.10.4.4) réservé à la poutre acier seule.
+- **Fenêtre Propriétés de section :** un bouton **OK** valide la section; le pont est alors recalculé si la dalle change une inertie mixte de l’analyse. L’inertie de l’analyse se choisit seulement sur la carte de section (4 types une fois la dalle définie).
+- **Correctif (trouvé après le premier envoi 0.9.99) :** la base d’analyse en cache était reconstruite sans la dalle, donc une inertie mixte (3n, 1n, I′) revenait à la poutre seule. Vérifié par la méthode des forces sur l’exemple mixte : M− des permanentes = −2 101 kN·m (indépendant −2 102; −2 898 avant le correctif).
 - **Fenêtres flottantes** redimensionnables depuis chaque bord et chaque coin.
 - Schéma de projet 16.
 

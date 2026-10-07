@@ -911,7 +911,20 @@ def displayed_axle_factor(model):
 def structure_key(model):
     data = model.model_dump()
     for section in data["sections"]:
-        section.pop("composite", None)  # display-only section properties
+        # The slab matters for the stiffness only through a composite
+        # inertia (3n, 1n, I′), recomputed at every depth of a taper: keep it
+        # then, without its display-only data (v0.9.99 fix: the basis was
+        # rebuilt without slab, i.e. with the girder alone).
+        slab = section.get("composite")
+        if (
+            slab
+            and slab.get("enabled")
+            and section.get("inertia_source") in ("3n", "1n", "negative")
+        ):
+            for key in ("region", "y3", "y_steel", "y_3n", "y_1n", "y_neg", "frqr"):
+                slab.pop(key, None)
+        else:
+            section.pop("composite", None)
     for key in (
         "live",
         "dead",

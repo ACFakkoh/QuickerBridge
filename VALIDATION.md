@@ -737,3 +737,18 @@ FT window opens on the right of the model panel.
   order; calculation sheet (V/M diagrams, station pick by pointer, effects
   buttons, composite and steel-alone sheets); window resized from its left
   edge. No console errors besides the intended unstable case.
+
+### v0.9.99 fix: composite inertia in the analysis (verified 2026-10-07)
+
+- `structure_key` dropped the slab of every section; since v0.9.99 a 3n / 1n
+  / I′ section without slab is the girder alone, so the cached basis used
+  the steel girder only (the interface showed M = 3.91). The key now keeps
+  the slab (minus display-only data) when it sets the inertia.
+- Force-method check (rotation compatibility at the pier, same EI(x) and
+  loads, 40 001 points): default model −2 435 / −2 435 kN·m (constant EI
+  −2 246: the haunches attract moment); composite example −2 101 / −2 102
+  (before the fix −2 898). Basis EI(x) = model EI(x) to 1e-9, tapers
+  included (`test_analysis_uses_the_composite_inertia_once`).
+- Section properties: OK button; a slab edit of a composite-inertia section
+  recalculates once on OK (300 mm slab: M 3.91 → 4.47, M− −2 101 → −2 017);
+  OK without change does nothing. 313 native tests.

@@ -224,3 +224,33 @@ def test_schema_16_migration():
     assert data["model"]["joint"]["enabled"] is False
     assert data["model"]["resistance"]["effects"] == "both"
     assert {s["inertia_source"] for s in data["model"]["sections"]} == {"steel"}
+
+
+def test_analysis_uses_the_composite_inertia_once():
+    """v0.9.99 fix: the cached basis kept the slab-derived M (it fell back to
+    the girder alone). Pier moment of the composite example under permanent
+    loads checked by the force method with the same EI(x) and loads."""
+    from quickerbridge.engine import cached_basis, structure_key
+    from quickerbridge.loads import dead_intervals
+    from quickerbridge.presets import two_span_steel
+    from quickerbridge.sections import span_ei
+
+    m = Model.model_validate({**two_span_steel().model_dump(), "load_mode": "dead"})
+    basis = cached_basis(structure_key(m))
+    x = np.linspace(0, 34.8, 801)
+    for k in range(2):
+        np.testing.assert_allclose(basis.ei[k](x), span_ei(m, k)(x), rtol=1e-9)
+    length, x = 34.8, np.linspace(0, 34.8, 40001)
+    num = den = 0.0
+    for k, f in ((0, x / length), (1, 1 - x / length)):
+        w = np.zeros_like(x)
+        for v in dead_intervals(m):
+            if v["span"] == k:
+                w += v["w"] * ((x >= v["a"]) & (x <= v["b"]))
+        cw = np.r_[0, np.cumsum((w[1:] + w[:-1]) / 2 * np.diff(x))]
+        cm = np.r_[0, np.cumsum((w[1:] * x[1:] + w[:-1] * x[:-1]) / 2 * np.diff(x))]
+        m0 = (cw[-1] * length - cm[-1]) / length * x - (x * cw - cm)
+        ei = np.asarray(span_ei(m, k)(x), float)
+        num += np.trapezoid(m0 * f / ei, x)
+        den += np.trapezoid(f * f / ei, x)
+    assert min(analyse(m)["dead"]["M"]) == pytest.approx(-num / den, rel=0.01)
