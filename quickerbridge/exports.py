@@ -299,12 +299,12 @@ def excel_bytes(result, language="en", model=None, info=None):
         # Integral (fixed) abutments also carry a moment reaction, CCW +.
         column = 4 if single else 5
         labels = (
-            ["Mr (kN·m, anti-horaire +)"] if language == "fr" else ["Mr (kN·m, CCW +)"]
+            ["Me (kN·m, anti-horaire +)"] if language == "fr" else ["Me (kN·m, CCW +)"]
         )
         if not single:
             labels = [
-                label.replace("Mr", name)
-                for name in ("Mr min", "Mr max")
+                label.replace("Me", name)
+                for name in ("Me min", "Me max")
                 for label in labels
             ]
         for offset, label in enumerate(labels):
@@ -617,9 +617,8 @@ def excel_bytes(result, language="en", model=None, info=None):
             width = (result.get("vehicle") or {}).get("pedestrian_width")
             meta.append(
                 [
-                    "Pedestrian load / Charge piétonnière (S6 3.8.9)",
-                    f"p = {ped.get('a', 5):g} − s/{ped.get('b', 30):g} kPa, "
-                    f"{ped.get('p_min', 1.6):g} ≤ p ≤ {ped.get('p_max', 4):g}; "
+                    "Pedestrian load / Charge piétonnière (S6-25 3.8.9)",
+                    "p = 4.25 (0.5 + √(5/s)) ≤ 4.25 kPa; "
                     f"width / largeur = {width if width is None else round(width, 3)} m; "
                     "every combination of loaded spans / toutes les combinaisons "
                     "de travées chargées"
@@ -631,7 +630,26 @@ def excel_bytes(result, language="en", model=None, info=None):
                     ),
                 ]
             )
-        if vehicle == "CL750QC" and model.live.mtq_auto:
+        live = result["model"]["live"]
+        if vehicle == "CL625" and live.get("evaluation", "design") != "design":
+            level = live["evaluation"]
+            w = 625
+            q = {"A": 9, "B": 8, "CD": 7}[live.get("road_class", "A")]
+            meta.append(
+                [
+                    "Evaluation / Évaluation (S6-25 14.9.1)",
+                    f"Level / Niveau {level}: CL{level}-W, W = {w} kN "
+                    f"({ {'1': 5, '2': 4, '3': 3}[level]} axles / essieux); "
+                    f"lane / voie: 80 % axles + q = {q} kN/m "
+                    f"(road class / classe de route "
+                    f"{live.get('road_class', 'A').replace('CD', 'C/D')}).",
+                ]
+            )
+        if (
+            vehicle == "CL750QC"
+            and model.live.mtq_auto
+            and (live.get("evaluation", "design") == "design")
+        ):
             meta.append(
                 [
                     "MTQ automatic fraction / Fraction MTQ automatique",

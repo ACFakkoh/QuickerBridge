@@ -94,9 +94,9 @@ function spRenderResults(){
  const cl=(label,[ratio,k],limits)=>`<tr><th>${label}</th><td>${fmt(ratio,1)}</td><td class="sp-class sp-class-${k}">${t('spClass')} ${k}</td><td><small>${limits.map(v=>fmt(v,1)).join(' / ')}</small></td></tr>`;
  const dc=(label,[ratio,reduced])=>`<tr><th>${label}</th><td>${fmt(ratio,1)}</td><td class="sp-class ${reduced?'sp-class-4':'sp-class-1'}">${reduced?t('spReduced'):t('spOk')}</td><td><small>${fmt(lim.web[2],1)}</small></td></tr>`;
  h+=`<h3>${t('spClasses')}</h3><table class="sp-table sp-classes"><tbody>${cl(t('spTopFlange'),cls.top_flange,lim.flange)}${cl(t('spBottomFlange'),cls.bottom_flange,lim.flange)}${cl(t('spWeb'),cls.web,lim.web)}${neg&&ng?dc(t('spWeb2dcNeg'),ng.web_2dc):dc(t('spWeb2dc'),cls.web_2dc)}</tbody></table>`;}
- if(inertiaAuto(s))h+=`<p class="note sp-auto-note">${t('inertiaAutoHelp')}</p>`;
- else if(ng)h+=`<div class="sp-actions"><button data-sp-copy="negative">${t('spCopyNeg')} = ${fmt(ng.ratio,3)}</button></div>`;
- else if(c)h+=`<div class="sp-actions"><button data-sp-copy="1n">${t('spCopy1')} = ${fmt(c['1n'].I/st.Ix,3)}</button><button data-sp-copy="3n">${t('spCopy3')} = ${fmt(c['3n'].I/st.Ix,3)}</button></div>`;
+ // v0.9.99: the analysis inertia is a choice (girder alone, 3n, 1n, I′), never a copied M.
+ if(c){const src=s.inertia_source||'steel',opts=neg?[['steel',t('inertiaSteel'),1],['negative','I′',ng.ratio]]:[['steel',t('inertiaSteel'),1],['3n','3n',c['3n'].I/st.Ix],['1n','1n',c['1n'].I/st.Ix]];
+  h+=`<div class="sp-actions"><span class="sp-use-label">${t('spUseInertia')} :</span>${opts.map(([k,l,r])=>`<button data-sp-copy="${k}" class="${src===k?'active':''}" aria-pressed="${src===k}">${l} · I/I<sub>poutre</sub> ${fmt(r,3)}</button>`).join('')}</div>`;}
  res.innerHTML=h;
 }
 // Cross-section drawing: true proportions, y up from the bottom of the girder.
@@ -146,7 +146,7 @@ document.addEventListener('click',e=>{
  const region=e.target.closest('[data-sp-region]');
  if(region&&spIndex!==null){const s=model.sections[spIndex];if(s.composite){s.composite.region=region.dataset.spRegion;updateProjectState();renderSectionDialog();spRequest();}return;}
  const copy=e.target.closest('[data-sp-copy]');
- if(copy&&spData?.composite){const s=model.sections[spIndex],k=copy.dataset.spCopy,ratio=k==='negative'?spData.composite.negative.ratio:spData.composite[k].I/spData.steel.Ix;s.inertia_modifier=Math.round(ratio*1000)/1000;renderInputs();changed();$('#status').textContent=`${t('spCopied')} : ${fmt(s.inertia_modifier,3)}`;renderSectionDialog();spRequest();}
+ if(copy&&spData?.composite){const s=model.sections[spIndex],k=copy.dataset.spCopy;s.inertia_source=k;renderInputs();changed();$('#status').textContent=`${t('spInertiaUsed')} : ${k==='steel'?t('inertiaSteel'):k==='negative'?'I′':k}`;renderSectionDialog();spRequest();}
 });
 document.addEventListener('change',e=>{
  const box=e.target.closest?.('[data-sp-composite]');if(!box)return;

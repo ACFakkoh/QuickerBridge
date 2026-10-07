@@ -10,7 +10,10 @@ extends it to what QuickerBridge models:
   the mesh breaks at every zone limit so EI steps fall on nodes;
 * mass from the permanent loads (unfactored, m = w / g), which may cover part
   of a span only: the mesh also breaks at every load limit;
-* pinned, roller, fixed (integral) and rotational-spring supports.
+* pinned, roller, fixed (integral) and rotational-spring supports;
+* v0.9.99 deck joint: a hinge splits the rotation of its node, a cut its
+  rotation and deflection; a removed part (cut, one side kept) is fixed
+  and its mass is not counted.
 
 For a prismatic model with uniform mass the mesh is PyCBA's uniform mesh and
 the matrices are identical; ``tests/test_modal.py`` checks both agree, and
@@ -27,7 +30,7 @@ import numpy as np
 from .sections import span_ei
 from .models import Model
 from .loads import self_weight_intervals
-from .engine import end_releases
+from .engine import deck_joint, end_releases
 
 G = 9.81  # m/s2, weight (kN/m) -> mass (t/m)
 _GAUSS = (
@@ -102,9 +105,12 @@ def mesh(model: Model, profile, per_span: int):
     """Element list ``(span, global x0, local x0, h)`` with breaks at limits."""
     elements = []
     start = 0.0
+    joint = deck_joint(model)
     for i, span in enumerate(model.spans):
         length = span.length
         breaks = {0.0, length}
+        if joint and 0 < joint[0] - start < length:
+            breaks.add(joint[0] - start)
         if model.nonprismatic:
             breaks.update(z.end * length for z in span.zones)
         for a, b, _ in profile:
@@ -143,7 +149,14 @@ def analyse_modal(model: Model) -> dict:
     profile = mass_profile(model)
     lengths = [s.length for s in model.spans]
     total_length = float(sum(lengths))
-    total_mass = sum((b - a) * m for a, b, m in profile)
+    joint = deck_joint(model)
+    lo, hi = 0.0, total_length
+    if joint and joint[2] == "left":
+        hi = joint[0]
+    elif joint and joint[2] == "right":
+        lo = joint[0]
+    # Mass of the deck analysed (a removed part of a cut deck is not there).
+    total_mass = sum(max(0.0, min(b, hi) - max(a, lo)) * m for a, b, m in profile)
     if total_mass <= 0:
         raise ValueError("modal.no_mass")
     per_span = 40 if model.precision == "standard" else 80
@@ -166,14 +179,23 @@ def analyse_modal(model: Model) -> dict:
         restrained_sides[j] = [
             s for s, rel in (("l", left), ("r", right)) if rel is False
         ]
-    # DOF map: vertical, rotation seen from the left, rotation seen from the right.
-    vdof, rl, rr = [], [], []
+    # v0.9.99 deck joint: a hinge splits the rotation of its node, a cut
+    # also its deflection (two independent deck ends).
+    joint_node = int(np.argmin(np.abs(x_nodes - joint[0]))) if joint else None
+    if joint:
+        split[joint_node] = True
+    cut = bool(joint and joint[1] == "cut")
+    # DOF map: deflection and rotation seen from the left and from the right.
+    vdof, vr, rl, rr = [], [], [], []
     count = 0
     for node in range(n_nodes):
+        two = cut and node == joint_node
         vdof.append(count)
-        rl.append(count + 1)
-        rr.append(count + 2 if split.get(node) else count + 1)
-        count += 3 if split.get(node) else 2
+        vr.append(count + 1 if two else count)
+        count += 2 if two else 1
+        rl.append(count)
+        rr.append(count + 1 if split.get(node) else count)
+        count += 2 if split.get(node) else 1
     ndof = count
     K = np.zeros((ndof, ndof))
     M = np.zeros((ndof, ndof))
@@ -186,7 +208,7 @@ def analyse_modal(model: Model) -> dict:
         m = _mass_at(profile, gx0 + h / 2)
         if m <= 0:
             unloaded += h
-        dofs = np.array([vdof[e], rr[e], vdof[e + 1], rl[e + 1]])
+        dofs = np.array([vr[e], rr[e], vdof[e + 1], rl[e + 1]])
         K[np.ix_(dofs, dofs)] += _stiffness(eis[span], lx0, h)
         M[np.ix_(dofs, dofs)] += _mass(max(m, floor), h)
     fixed = []
@@ -201,6 +223,20 @@ def analyse_modal(model: Model) -> dict:
         elif kind == "spring":
             for dof in rotations:
                 K[dof, dof] += float(model.support_springs[j])
+    if joint and joint[2] != "both":
+        # Removed part: every degree of freedom fixed.
+        for node in range(n_nodes):
+            if node == joint_node:
+                fixed += (
+                    [vr[node], rr[node]]
+                    if joint[2] == "left"
+                    else [
+                        vdof[node],
+                        rl[node],
+                    ]
+                )
+            elif (x_nodes[node] > hi) if joint[2] == "left" else (x_nodes[node] < lo):
+                fixed += sorted({vdof[node], vr[node], rl[node], rr[node]})
     free = np.setdiff1d(np.arange(ndof), fixed)
     Kff, Mff = K[np.ix_(free, free)], M[np.ix_(free, free)]
     try:
@@ -215,7 +251,17 @@ def analyse_modal(model: Model) -> dict:
     # vertical excitation, as a share of the total mass of the deck.
     r = np.zeros(ndof)
     r[vdof] = 1.0
+    r[vr] = 1.0
     r = r[free]
+    # Output points: the two deck ends of a cut share their x.
+    out_x, out_dof = [], []
+    for node in range(n_nodes):
+        out_x.append(x_nodes[node])
+        out_dof.append(vdof[node])
+        if vr[node] != vdof[node]:
+            out_x.append(x_nodes[node])
+            out_dof.append(vr[node])
+    out_x = np.asarray(out_x)
     modes, shapes = [], []
     for n in range(count):
         phi = vectors[:, n]
@@ -223,7 +269,7 @@ def analyse_modal(model: Model) -> dict:
         gamma = float(phi @ Mff @ r)
         full = np.zeros(ndof)
         full[free] = phi
-        v = full[vdof]
+        v = full[out_dof]
         peak = float(np.max(np.abs(v)))
         if peak > 0:
             v = v / peak
@@ -238,7 +284,7 @@ def analyse_modal(model: Model) -> dict:
                 "f": f,
                 "T": 1 / f if f > 0 else None,
                 "mass_ratio": gamma * gamma / generalized / total_mass,
-                "symmetry": _classify(x_nodes, v),
+                "symmetry": _classify(out_x, v),
             }
         )
         shapes.append([round(float(value), 5) for value in v])
@@ -267,7 +313,7 @@ def analyse_modal(model: Model) -> dict:
         )
     return {
         "kind": "modal",
-        "x": [round(float(v), 5) for v in x_nodes],
+        "x": [round(float(v), 5) for v in out_x],
         "support_x": [float(v) for v in support_x],
         "supports": list(model.supports),
         "modes": modes,

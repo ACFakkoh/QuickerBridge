@@ -194,7 +194,8 @@ def test_excel_reports_moment_reactions_for_integral_abutments():
     wb = load_workbook(BytesIO(excel_bytes(r, "en")))
     sheet = wb["Reactions"]
     header = [c.value for c in sheet[1]]
-    assert "Mr (kN·m, CCW +)" in header and "Type" in header  # dead only
+    # v0.9.98: fixed-end moment "Me" (Mr is the moment resistance).
+    assert "Me (kN·m, CCW +)" in header and "Type" in header  # dead only
     assert sheet.cell(2, header.index("Type") + 1).value == "fixed"
     thermal = analyse_thermal(
         Model(
@@ -204,7 +205,7 @@ def test_excel_reports_moment_reactions_for_integral_abutments():
         )
     )
     wb = load_workbook(BytesIO(excel_bytes(thermal, "fr")))
-    assert "Mr (kN·m, anti-horaire +)" in [c.value for c in wb["Réactions"][1]]
+    assert "Me (kN·m, anti-horaire +)" in [c.value for c in wb["Réactions"][1]]
 
 
 def test_project_round_trip_with_fixed_supports_and_plates():

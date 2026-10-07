@@ -22,7 +22,13 @@ from .distribution import (
     station_factors,
     truck_fraction,
 )
-from .sections import member_deflection, stiffness_profile, span_ei, properties
+from .sections import (
+    LinearSectionEI,
+    member_deflection,
+    stiffness_profile,
+    span_ei,
+    properties,
+)
 from .loads import (
     CANADIAN_VEHICLES,
     HL93_VEHICLES,
@@ -39,6 +45,7 @@ from .loads import (
 def stations(model):
     xs, spans, sides = [], [], []
     start = 0.0
+    joint = deck_joint(model)
     for i, span in enumerate(model.spans):
         local = np.unique(
             np.r_[
@@ -46,7 +53,17 @@ def stations(model):
                 np.linspace(0, span.length, model.subdivisions + 1),
             ]
         )
+        cut = None
+        if joint and start < joint[0] < start + span.length:
+            # v0.9.99: the deck joint is a station on both of its sides.
+            cut = joint[0] - start
+            local = np.sort(np.r_[local[np.abs(local - cut) > 1e-6], cut])
         for a in local:
+            if cut is not None and a == cut:
+                xs += [joint[0], joint[0]]
+                spans += [i, i]
+                sides += ["left", "right"]
+                continue
             xs.append(start + a)
             spans.append(i)
             sides.append("left" if a == span.length else "right")
@@ -189,6 +206,260 @@ def node_reactions(ba):
     return np.r_[full[0::2], full[1::2]]
 
 
+JOINT_LINK = 1e-5  # m: zero-stiffness pinned-pinned link of a deck cut
+_RELEASE_CODES = {
+    (False, False): 1,
+    (False, True): 2,
+    (True, False): 3,
+    (True, True): 4,
+}
+
+
+def deck_joint(model):
+    """Active deck joint (v0.9.99) as ``(x, kind, keep)``, else None."""
+    joint = getattr(model, "joint", None)
+    if joint is None or not joint.enabled:
+        return None
+    keep = joint.keep if joint.kind == "cut" else "both"
+    return float(joint.x), joint.kind, keep
+
+
+def sub_ei(ei, a, b, length):
+    """EI of the part ``[a, b]`` (local x) of a span of ``length``."""
+    if not isinstance(ei, cba.SectionEI) or (a <= 0 and b >= length):
+        return ei
+    out = LinearSectionEI()
+    for piece in ei.pieces:
+        u0, u1 = max(piece.x0, a), min(piece.x1, b)
+        if u1 - u0 > 1e-9 * max(1.0, length):
+            values = [float(np.polyval(piece.coeffs, u)) for u in (u0, u1)]
+            out.add_segment("pwl", [u0 - a, u1 - a], values)
+    return out
+
+
+class Structure:
+    """PyCBA members and nodes of the deck (v0.9.99).
+
+    Without a deck joint: one member per span between the support nodes, as
+    before. A hinge splits its span at a free node, the left member being
+    released there (the shear crosses, the moment is zero). A cut adds a
+    pinned-pinned link of ``JOINT_LINK`` metres between two free nodes; such
+    a link has no stiffness at all, so neither V nor M crosses it. With one
+    side kept only, the removed part has all its nodes fixed and receives no
+    load: it is isolated and its responses are zero.
+
+    Members carry the stations and loads of ``[seg_a, seg_b]`` (bridge x);
+    their PyCBA geometry is ``[start, end]``. The member right of a cut
+    owns its segment from the cut, open on that side.
+    """
+
+    def __init__(self, model, eis=None):
+        self.lengths = [s.length for s in model.spans]
+        self.support_x = np.r_[0.0, np.cumsum(self.lengths)]
+        self.length = float(self.support_x[-1])
+        if eis is None:
+            eis = [span_ei(model, i) for i in range(len(self.lengths))]
+        self.eis = eis
+        self.joint = joint = deck_joint(model)
+        supports = pycba_supports(model)
+        releases = end_releases(model)
+        self.lo, self.hi, self.open_lo = 0.0, self.length, False
+        if joint and joint[2] == "left":
+            self.hi = joint[0]
+        elif joint and joint[2] == "right":
+            self.lo, self.open_lo = joint[0], True
+        nodes, node_x, members, self.support_nodes = [], [], [], []
+
+        def node(spec, x):
+            nodes.append(spec)
+            node_x.append(float(x))
+
+        def member(span, a, b, release, start=None, end=None, **flags):
+            members.append(
+                {
+                    "span": span,
+                    "seg_a": float(a),
+                    "seg_b": float(b),
+                    "start": float(a if start is None else start),
+                    "end": float(b if end is None else end),
+                    "release": release,
+                    **flags,
+                }
+            )
+
+        for i in range(len(self.lengths)):
+            a0, a1 = self.support_x[i], self.support_x[i + 1]
+            self.support_nodes.append(len(nodes))
+            node(supports[i], a0)
+            left, right = releases[i]
+            if joint and a0 < joint[0] < a1:
+                xc = joint[0]
+                if joint[1] == "hinge":
+                    member(i, a0, xc, (left, True))
+                    node("free", xc)
+                    member(i, xc, a1, (False, right))
+                else:
+                    member(i, a0, xc, (left, False))
+                    node("free", xc)
+                    member(None, xc, xc, (True, True), end=xc + JOINT_LINK, link=True)
+                    node("free", xc + JOINT_LINK)
+                    member(i, xc, a1, (False, right), start=xc + JOINT_LINK, open=True)
+            else:
+                member(i, a0, a1, (left, right))
+        self.support_nodes.append(len(nodes))
+        node(supports[-1], self.length)
+        if joint and joint[2] != "both":
+            # The removed part: every node fixed, so it is stable and isolated.
+            for k, x in enumerate(node_x):
+                if (joint[2] == "left" and x > self.hi + 1e-9) or (
+                    joint[2] == "right" and x < self.lo + JOINT_LINK / 2
+                ):
+                    nodes[k] = "fixed"
+        for m in members:
+            m["active"] = not m.get("link") and (
+                m["seg_b"] <= self.hi + 1e-9 and m["seg_a"] >= self.lo - 1e-9
+            )
+        self.nodes, self.node_x, self.members = nodes, node_x, members
+        self.held = [spec != "free" for spec in nodes]
+        self.member_lengths = [m["end"] - m["start"] for m in members]
+        self.member_eis = [
+            (
+                1.0
+                if m.get("link")
+                else sub_ei(
+                    self.eis[m["span"]],
+                    m["start"] - self.support_x[m["span"]],
+                    m["end"] - self.support_x[m["span"]],
+                    self.lengths[m["span"]],
+                )
+            )
+            for m in members
+        ]
+        self.eletypes = [_RELEASE_CODES[m["release"]] for m in members]
+
+    def analysis(self):
+        ba = cba.BeamAnalysis(
+            self.member_lengths,
+            self.member_eis,
+            supports=self.nodes,
+            eletype=self.eletypes,
+        )
+        if self.joint and not ba.is_stable():
+            # A part of the deck left without enough supports (mechanism).
+            raise ValueError("joint.unstable")
+        return ba
+
+    def reactions(self, ba):
+        """Vertical then moment reactions of the supports only."""
+        full = node_reactions(ba)
+        n = len(self.nodes)
+        idx = self.support_nodes
+        return np.r_[full[:n][idx], full[n:][idx]]
+
+    def active(self, p):
+        """Load positions on the deck that is analysed (kept part)."""
+        p = np.asarray(p, float)
+        low = p > self.lo if self.open_lo else p >= self.lo
+        return low & (p <= self.hi)
+
+    def in_member(self, m, p):
+        p = np.asarray(p, float)
+        low = p > m["seg_a"] if m.get("open") else p >= m["seg_a"]
+        return low & (p <= m["seg_b"])
+
+    def station_members(self, x, sides):
+        """Member owning each station (the joint side decides at a joint)."""
+        tol = 1e-9 * max(1.0, self.length)
+        out = np.full(len(x), -1)
+        for i, (xi, side) in enumerate(zip(x, sides)):
+            for k, m in enumerate(self.members):
+                if m.get("link"):
+                    continue
+                a, b = m["seg_a"], m["seg_b"]
+                after = xi > a + tol or (
+                    abs(xi - a) <= tol and (side == "right" or a <= tol)
+                )
+                before = xi < b - tol or (
+                    abs(xi - b) <= tol and (side == "left" or b >= self.length - tol)
+                )
+                if after and before:
+                    out[i] = k
+                    break
+        return out
+
+    def clip(self, pieces):
+        """Distributed loads ``(start, end, w)`` limited to the kept part."""
+        out = []
+        for a, b, w in pieces:
+            a, b = max(a, self.lo), min(b, self.hi)
+            if b - a > 1e-12:
+                out.append((float(a), float(b), w))
+        return out
+
+    def clip_intervals(self, intervals):
+        out = []
+        for v in intervals:
+            a, b = max(v["start"], self.lo), min(v["end"], self.hi)
+            if b - a <= 1e-12:
+                continue
+            out.append(
+                {
+                    **v,
+                    "a": v["a"] + a - v["start"],
+                    "b": v["b"] + b - v["end"],
+                    "start": a,
+                    "end": b,
+                }
+            )
+        return out
+
+    def pycba_udl(self, start, end, w):
+        """PyCBA uniform loads ``[member, 3, w, a, c]`` for ``(start, end)``."""
+        loads = []
+        for k, m in enumerate(self.members):
+            if not m["active"]:
+                continue
+            a = max(start, m["seg_a"], m["start"])
+            b = min(end, m["seg_b"], m["end"])
+            if w and b - a > 1e-12:
+                loads.append([k + 1, 3, w, a - m["start"], b - a])
+        return loads
+
+    def deflections(self, ba, x, owner, kappas=None):
+        """Downward deflection (mm) at the stations ``x`` of their members."""
+        out = np.zeros(len(x))
+        for k, (m, result) in enumerate(zip(self.members, ba.beam_results.vRes)):
+            sel = np.flatnonzero(owner == k)
+            if m.get("link") or not len(sel):
+                continue
+            length = m["end"] - m["start"]
+            local_x = result.x[1:-1] - m["start"]
+            local_d = result.D[1:-1].copy()
+            held = self.held[k] and self.held[k + 1]
+            # A free end (deck joint) keeps PyCBA's nodal deflection.
+            ends = (0.0, 0.0) if held else (float(local_d[0]), float(local_d[-1]))
+            kappa = 0.0 if kappas is None else kappas[m["span"]]
+            refined = member_deflection(
+                local_x, result.M[1:-1], self.member_eis[k], kappa, ends
+            )
+            if refined is not None:
+                local_x, local_d = refined
+            elif held:
+                # Both end deflections are known to be zero. Correct the
+                # integration constant's small trapezoidal drift.
+                local_d -= local_d[0] + local_x / length * (local_d[-1] - local_d[0])
+            query = np.clip(np.asarray(x)[sel] - m["start"], 0, length)
+            out[sel] = -1000 * np.interp(query, local_x, local_d)
+        return out
+
+    def extra_points(self):
+        """Influence-grid points on both sides of the joint."""
+        if not self.joint:
+            return np.zeros(0)
+        x = self.joint[0]
+        return np.array([x - 1e-6, x, x + 1e-6, x + JOINT_LINK + 1e-6])
+
+
 class Basis:
     def __init__(self, model):
         self.model = model
@@ -201,12 +472,10 @@ class Basis:
         # V, M, D at every station, then vertical and moment reactions.
         self.nresponse = 3 * self.nx + 2 * self.ns
         self.ei = [span_ei(model, i) for i in range(len(self.lengths))]
-        self.ba = cba.BeamAnalysis(
-            self.lengths,
-            self.ei,
-            supports=pycba_supports(model),
-            eletype=member_types(model),
-        )
+        # v0.9.99: PyCBA members and nodes (deck joint included).
+        self.structure = Structure(model, self.ei)
+        self.ba = self.structure.analysis()
+        self.owner = self.structure.station_members(self.x, self.sides)
         # A Basis has immutable geometry/EI; only its loads change. These small
         # per-instance caches must never be shared with another Basis.
         beam = self.ba._beam
@@ -228,30 +497,22 @@ class Basis:
 
     def read_result(self, ba):
         """Member-local interpolation; R is read from support reactions only."""
-        ds = []
-        start = 0.0
-        for i, (length, result) in enumerate(zip(self.lengths, ba.beam_results.vRes)):
-            local_x = result.x[1:-1] - start
-            refined = member_deflection(local_x, result.M[1:-1], self.ei[i])
-            if refined is not None:
-                local_x, local_d = refined
-            else:
-                local_d = result.D[1:-1].copy()
-                # Both end deflections are known to be zero. Correct the
-                # integration constant's small trapezoidal drift.
-                local_d -= local_d[0] + local_x / length * (local_d[-1] - local_d[0])
-            query = self.x[np.array(self.span_ids) == i] - start
-            ds.extend(-1000 * np.interp(query, local_x, local_d))
-            start += length
-        return node_reactions(ba), np.array(ds)
+        st = self.structure
+        return st.reactions(ba), st.deflections(ba, self.x, self.owner)
 
     def build(self):
         samples = 48 if self.model.precision == "standard" else 96
-        for i, length in enumerate(self.lengths):
+        for i, m in enumerate(self.structure.members):
+            if not m["active"]:
+                # Cut link or removed part: no load is ever applied there.
+                self.interpolators.append(None)
+                continue
+            length = m["end"] - m["start"]
+            ei = self.structure.member_eis[i]
             q = np.linspace(0, length, samples + 1)
             # Include section discontinuities in the load interpolation grid.
-            if isinstance(self.ei[i], cba.SectionEI):
-                q = np.unique(np.r_[q, self.ei[i].breakpoints])
+            if isinstance(ei, cba.SectionEI):
+                q = np.unique(np.r_[q, ei.breakpoints])
                 # Merge near-coincident knots (floating-point twins such as
                 # 1.0875 and 1.0875000000000001). A CubicSpline with knots
                 # 1e-16 m apart is ill-conditioned and silently breaks the
@@ -268,11 +529,7 @@ class Basis:
                 vertical, moment = reaction[: self.ns], reaction[self.ns :]
                 err = max(
                     abs(vertical.sum() - 1),
-                    abs(
-                        vertical @ self.support_x
-                        + moment.sum()
-                        - (a + self.support_x[i])
-                    )
+                    abs(vertical @ self.support_x + moment.sum() - (a + m["start"]))
                     / max(1, self.length),
                 )
                 self.max_equilibrium_error = max(self.max_equilibrium_error, float(err))
@@ -291,13 +548,17 @@ class Basis:
         """Rows are point-load locations; columns V, M, downward D, R, Mr."""
         p = np.atleast_1d(np.asarray(positions, float))
         rd = np.zeros((len(p), 2 * self.ns + self.nx))
-        for i, length in enumerate(self.lengths):
-            mask = (p >= self.support_x[i]) & (p <= self.support_x[i + 1])
+        st = self.structure
+        for m, spline in zip(st.members, self.interpolators):
+            if spline is None:
+                continue
+            mask = st.in_member(m, p)
             if mask.any():
-                rd[mask] = self.interpolators[i](p[mask] - self.support_x[i])
+                rd[mask] = spline(np.maximum(p[mask] - m["start"], 0))
         r, mr = rd[:, : self.ns], rd[:, self.ns : 2 * self.ns]
         d = rd[:, 2 * self.ns :]
-        on = (p >= 0) & (p <= self.length)
+        # On the deck that is analysed (kept part of a cut deck).
+        on = st.active(p)
         v = r @ self.left - ((p[:, None] < self.cut) & on[:, None])
         m = (
             r @ self.lever
@@ -315,12 +576,14 @@ class Basis:
         nx, ns = self.nx, self.ns
         s = cols[:, 0]
         r, mr, d = np.zeros((len(p), ns)), np.zeros((len(p), ns)), np.zeros(len(p))
-        for i, start in enumerate(self.support_x[:-1]):
-            rows = np.flatnonzero((p >= start) & (p <= self.support_x[i + 1]))
+        st = self.structure
+        for m, spline in zip(st.members, self.interpolators):
+            if spline is None:
+                continue
+            rows = np.flatnonzero(st.in_member(m, p))
             if not len(rows):
                 continue
-            spline = self.interpolators[i]
-            local = p[rows] - start
+            local = np.maximum(p[rows] - m["start"], 0)
             seg = np.clip(
                 np.searchsorted(spline.x, local, side="right") - 1,
                 0,
@@ -333,7 +596,7 @@ class Basis:
             c = spline.c[:, seg, 2 * ns + s[rows]]  # (4, rows)
             dx = dx[:, 0]
             d[rows] = ((c[0] * dx + c[1]) * dx + c[2]) * dx + c[3]
-        on = ((p >= 0) & (p <= self.length)).astype(float)
+        on = st.active(p).astype(float)
         left, lever = self.left[:, s].T, self.lever[:, s].T
         out = np.zeros((len(p), 5))
         out[:, 0] = (r * left).sum(axis=1) - (p < self.cut[s]) * on
@@ -350,12 +613,16 @@ class Basis:
         return out
 
     def static_dead(self):
-        intervals = dead_intervals(self.model)
-        if not intervals:
+        st = self.structure
+        intervals = st.clip_intervals(dead_intervals(self.model))
+        loads = [
+            load
+            for v in intervals
+            for load in st.pycba_udl(v["start"], v["end"], v["w"])
+        ]
+        if not loads:
             return np.zeros(self.nresponse), intervals
-        self.solve_loads(
-            [[v["span"] + 1, 3, v["w"], v["a"], v["b"] - v["a"]] for v in intervals]
-        )
+        self.solve_loads(loads)
         reaction, d = self.read_result(self.ba)
         r, mr = reaction[: self.ns], reaction[self.ns :]
         v, m = r @ self.left, r @ self.lever - mr @ self.left
@@ -373,12 +640,11 @@ class Basis:
         """Response to uniform loads ``(start, end, w)`` in bridge coordinates
         (kN/m), split at the supports."""
         loads, parts = [], []
-        for start, end, w in pieces:
-            for i, (a0, length) in enumerate(zip(self.support_x[:-1], self.lengths)):
-                a, b = max(start, a0), min(end, a0 + length)
-                if w and b - a > 1e-12:
-                    loads.append([i + 1, 3, w, a - a0, b - a])
-                    parts.append((a, b, w))
+        for a, b, w in self.structure.clip(pieces):
+            if not w:
+                continue
+            loads += self.structure.pycba_udl(a, b, w)
+            parts.append((a, b, w))
         if not loads:
             return np.zeros(self.nresponse)
         self.solve_loads(loads)
@@ -423,7 +689,16 @@ class Basis:
                 ]
             )
             q = np.unique(
-                np.clip(np.r_[grid, self.x - 1e-6, self.x + 1e-6], 0, self.length)
+                np.clip(
+                    np.r_[
+                        grid,
+                        self.x - 1e-6,
+                        self.x + 1e-6,
+                        self.structure.extra_points(),
+                    ],
+                    0,
+                    self.length,
+                )
             )
             self._influence_grid = (q, self.unit(q))
         return self._influence_grid
@@ -512,9 +787,14 @@ def pedestrian_width(model):
     return ped.width / 1000
 
 
+PEDESTRIAN_MAX = 4.25  # kPa, S6-25 3.8.9
+
+
 def pedestrian_intensity(ped, loaded_length):
-    """S6 3.8.9: p = a - s / b (kPa), between p_min and p_max."""
-    return float(min(max(ped.a - loaded_length / ped.b, ped.p_min), ped.p_max))
+    """S6-25 3.8.9: p = 4.25 (0.5 + √(5 / s)) kPa, at most 4.25 kPa, with s
+    the total loaded length (m). ``ped`` is kept for the call signature."""
+    s = max(float(loaded_length), 1e-9)
+    return float(min(PEDESTRIAN_MAX * (0.5 + (5.0 / s) ** 0.5), PEDESTRIAN_MAX))
 
 
 def pedestrian_record(mask, loaded_length, p, width):
@@ -640,6 +920,8 @@ def structure_key(model):
         "load_mode",
         "modal",
         "distribution",
+        "pedestrian",
+        "resistance",
     ):
         data.pop(key)
     return json.dumps(data, sort_keys=True)
@@ -652,7 +934,11 @@ def cached_basis(key):
 
 def mtq_active(model: Model) -> bool:
     """MTQ automatic 63 % / 80 % axle fraction applies to this model."""
-    return model.live.vehicle == "CL750QC" and model.live.mtq_auto
+    return (
+        model.live.vehicle == "CL750QC"
+        and model.live.mtq_auto
+        and model.live.evaluation == "design"  # v0.9.97: S6-25 14.9.1.7
+    )
 
 
 def mtq_lane_fractions(model: Model, basis):
@@ -1372,7 +1658,13 @@ def influence(model, station, support=None, case_max=None, case_min=None):
             for a, b in zip(basis.support_x[:-1], basis.support_x[1:])
         ]
     )
-    q = np.unique(np.clip(np.r_[grid, xi - 1e-6, xi + 1e-6], 0, basis.length))
+    q = np.unique(
+        np.clip(
+            np.r_[grid, xi - 1e-6, xi + 1e-6, basis.structure.extra_points()],
+            0,
+            basis.length,
+        )
+    )
     u = basis.unit(q)
     out = {
         "x": q.tolist(),
@@ -1472,6 +1764,8 @@ def snapshot(model, record, target_index=None, sense="max"):
     if special:
         lane_w *= 0.9
     axles = record_axles(model, record, basis.length)
+    # v0.9.99: an axle on a removed part of a cut deck carries nothing.
+    axles = [a for a in axles if basis.structure.active(a["x"])]
     # Physical arrangement first (equilibrium, reactions, graph); the S6-25
     # zone fractions are applied to the per-girder effects at the end.
     values = dead.copy()
@@ -1498,6 +1792,7 @@ def snapshot(model, record, target_index=None, sense="max"):
                 sense,
                 lane_w * model.live.factor,
             )
+        pieces = basis.structure.clip(pieces)
         lane_intervals = [{"start": a, "end": b, "w": w} for a, b, w in pieces]
         values += basis.udl(pieces)
     nx = basis.nx
@@ -1601,10 +1896,16 @@ def snapshot(model, record, target_index=None, sense="max"):
 
 def _static_moments(model, result, self_weight: bool, loads):
     """Moments (kN·m) at every report station of a subset of permanent loads."""
+    return _static_response(model, result, self_weight, loads)[1]
+
+
+def _static_response(model, result, self_weight: bool, loads):
+    """V (kN) and M (kN·m) at every report station of a subset of permanent
+    loads (v0.9.99: V too, for the resistance sheet)."""
     nx = len(result["x"])
     with_sw = self_weight and model.self_weight.apply
     if model.load_mode == "live" or (not loads and not with_sw):
-        return [0.0] * nx
+        return [0.0] * nx, [0.0] * nx
     subset = model.model_copy(deep=True)
     subset.dead = [load.model_copy() for load in loads]
     subset.self_weight.apply = with_sw
@@ -1613,7 +1914,11 @@ def _static_moments(model, result, self_weight: bool, loads):
     basis.model = subset
     values, _ = basis.static_dead()
     basis.model = old
-    return [float(v) for v in values[nx : 2 * nx]]
+    shear = values[:nx]
+    ds = dead_scale(model, basis)
+    if ds is not None:  # Fs on the dead-load shear of an exterior girder
+        shear = shear * ds[:nx]
+    return [float(v) for v in shear], [float(v) for v in values[nx : 2 * nx]]
 
 
 def stage_moments(model, result):
@@ -1632,6 +1937,27 @@ def stage_moments(model, result):
     m_steel = _static_moments(model, result, False, steel_loads)
     m_3n = [result["dead"]["M"][i] - m_sw[i] - m_steel[i] for i in range(nx)]
     return m_sw, m_steel, m_3n
+
+
+def stage_effects(model, result):
+    """Permanent-load V and M per stage at every station (v0.9.99).
+
+    Same stages as :func:`stage_moments`: girder self-weight and "girder
+    alone" loads on the steel, the other permanent loads on the 3n section
+    (the remainder of the analysed permanent effects).
+    """
+    nx = len(result["x"])
+    if model.load_mode == "live":
+        zero = [0.0] * nx
+        return {"V": (zero, zero, zero), "M": (zero, zero, zero)}
+    v_sw, m_sw = _static_response(model, result, True, [])
+    steel_loads = [d for d in model.dead if d.stage == "steel"]
+    v_st, m_st = _static_response(model, result, False, steel_loads)
+    dead = result["dead"]
+    return {
+        "V": (v_sw, v_st, [dead["V"][i] - v_sw[i] - v_st[i] for i in range(nx)]),
+        "M": (m_sw, m_st, [dead["M"][i] - m_sw[i] - m_st[i] for i in range(nx)]),
+    }
 
 
 def stress_at(model, result, index, moments=None):

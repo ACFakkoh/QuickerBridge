@@ -17,6 +17,7 @@
   <script src="./comparison.js" defer></script>
   <script src="./axle.js" defer></script>
   <script src="./sections.js" defer></script>
+  <script src="./resistance.js" defer></script>
 </head>
 <body>
 <div id="qb-splash" aria-hidden="true">
@@ -209,7 +210,7 @@
           <input id="project-file" type="file" accept=".quickerbridge.json,application/json" hidden><input id="compare-file" type="file" accept=".quickerbridge.json,application/json" hidden>
         </div>
       </div>
-      <div class="input-tabs" role="tablist" aria-label="Données du modèle"><button class="active" data-panel="geometry" data-i18n="geometry">Geometry</button><button data-panel="sections" data-i18n="sections">Sections</button><button data-panel="loads" data-i18n="loads">Loads</button></div>
+      <div class="input-tabs" role="tablist" aria-label="Données du modèle"><button class="active" data-panel="geometry" data-i18n="geometry">Geometry</button><button data-panel="sections" data-i18n="sections">Sections</button><button data-panel="loads" data-i18n="loads">Loads</button><button data-panel="resistance" data-i18n="resistanceTab">Résistance</button></div>
       <div id="input-content" role="tabpanel"></div>
     </aside>
     <section class="results" aria-labelledby="results-title"><h2 id="results-title" class="sr-only">Résultats</h2>

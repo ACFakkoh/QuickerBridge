@@ -1,4 +1,4 @@
-# QuickerBridge 0.9.96 — guide en français
+# QuickerBridge 0.9.99 — guide en français
 
 [English README](README.md)
 
@@ -11,7 +11,7 @@ compacte. Aucune installation de Python et aucun serveur local pour les utilisat
 ## Démarrer
 
 - **Sur le web :** https://acfakkoh.github.io/QuickerBridge/ (GitHub Pages, publié à chaque mise à jour de `main`).
-- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.9.96-2026-10-04.html`) dans un navigateur moderne. Si vous
+- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.9.99-2026-10-06.html`) dans un navigateur moderne. Si vous
   recevez l’archive portable, extrayez-la avant d’ouvrir le HTML.
 - Une connexion Internet est nécessaire au démarrage pour charger Pyodide et ses
   bibliothèques. Le cache peut accélérer les ouvertures suivantes; cette édition
@@ -68,15 +68,17 @@ pont ne sont pas envoyées à un serveur de calcul. Fermer l’onglet interrompt
 
 Le modèle initial comporte **2 × 34,8 m**, une poutre de **1200 mm** de hauteur,
 une semelle supérieure **350 × 25 mm**, une âme de **14 mm** et une semelle
-inférieure **600 × 50 mm**. E = 200 GPa; multiplicateur d’inertie M = 1.
+inférieure **600 × 50 mm**. E = 200 GPa; inertie de la poutre seule.
 Ces valeurs sont des données de départ, pas une validation de ce pont.
 
 ### Rigidité et zones non prismatiques
 
-Le multiplicateur d’inertie M agit sur **EI = E × I acier × M**. M = 4 quadruple
-la rigidité. L’inertie affichée reste celle de l’acier brut; EI inclut M. Ce moyen
-permet une hypothèse de rigidité effective, sans calculer une dalle transformée,
-son centre de gravité, les contraintes ou la résistance composite.
+L’inertie utilisée par l’analyse (v0.9.99) se choisit par section : **poutre
+seule**, section **mixte 3n** ou **1n** (M+), ou inertie **fissurée I′** (M−,
+acier + armatures), calculées avec la dalle des « Propriétés de section ».
+EI = E × I de la configuration choisie; le rapport I / I poutre est affiché. Un
+projet antérieur avec un multiplicateur M ≠ 1 le conserve, signalé, jusqu’à un
+autre choix.
 
 Les zones se suivent de 0 à 100 % de chaque travée. La section initiale d’une zone
 fournit sa hauteur initiale, la section finale **la hauteur cible**. L’option
@@ -211,8 +213,8 @@ access is required to download the browser runtime; guaranteed offline use is no
 included. Calculations run locally in your browser. Use the top EN/FR toggle.
 
 Define 1–7 spans, supports, steel plates or direct constant EI, then select dead,
-live, combined, or thermal-only loading. An inertia modifier multiplies the gross
-steel I for stiffness only; it does not calculate composite section properties.
+live, combined, or thermal-only loading. The analysis inertia of a steel or NEBT
+girder is the girder alone, composite 3n or 1n (M+) or cracked I′ (M−).
 In a non-prismatic zone, only height varies. “Plates, E and M from” selects the
 start section (default), the end section or the deeper section; choose Deeper on both
 sides of a pier for a true mirrored haunch. See [depth versus EI interpolation](NONPRISMATIC.md).
@@ -241,7 +243,8 @@ and fixed 14 ft truck axle spacings. The maintenance vehicle is 24 + 56 kN at 2.
 or dynamic allowance. Truck and lane cases are alternatives. No automatic self-weight,
 load combinations, transverse
 load distribution, shear deformation, staged construction, prestress, cracking,
-resistance checks or code compliance verification is included. Numerical envelopes
+code compliance verification is included (the Resistance tab checks one
+steel girder section against effects entered or taken from the envelope). Numerical envelopes
 are sampled; compare Standard and Fine when assessing sensitivity.
 
 **Valeurs préliminaires indicatives seulement — ne remplacent pas une conception détaillée.**
@@ -277,6 +280,39 @@ GitHub Pages, consultez [le guide développeur](README_DEVELOPER.md).
   fenêtre complète, où l’on change la station (◀ ▶, x, curseur) et le y de S3.
   Profils en trait continu depuis σ = 0, ANE en pointillés; lignes dessus /
   dessous de dalle et armature inf. retirées du tableau.
+
+## Nouveautés 0.9.99
+
+- **Coupure ou rotule du tablier à n’importe quelle station** (onglet Géométrie, « Coupure du tablier ») : étapes de lancement ou de démolition. Une **coupure** (sciage) sépare le tablier en deux poutres indépendantes, ni V ni M ne la traversent; une **rotule** transmet l’effort tranchant avec M = 0 (elle ne représente pas un tablier scié). Avec une coupure, on garde les deux tronçons, ou seulement celui de gauche ou de droite : le tronçon retiré n’a ni rigidité, ni charge, ni réaction (hachuré sur la poutre et les diagrammes). Chaque tronçon conservé doit tenir sur ses propres appuis, sinon un message « mécanisme » clair. Enveloppes, lignes d’influence, surcharge gouvernante, déformations imposées et modes propres tiennent compte du joint (PyCBA : nœud libre, membrure relâchée ou lien sans rigidité).
+- **Inertie des sections simplifiée :** pour une poutre en acier ou NEBT, l’analyse prend la poutre seule, la section mixte 3n ou 1n (M+) ou l’inertie fissurée I′ (M−, acier + armatures). Le multiplicateur M n’est plus saisi (il vaut I config / I poutre, affiché). Les projets avec M ≠ 1 le gardent, signalé, jusqu’à un autre choix. L’exemple « deux travées » a maintenant une dalle : S1 mixte 1n (3,91, au lieu de M = 3,92), S2 I′ fissurée (1,09, au lieu de 1,12).
+- **Onglet Résistance :** plus de Mr/Vr sur les diagrammes principaux (Enveloppe, Surcharge gouvernante) ni d’interrupteur « Déterminer la résistance »; les D/C maximaux et le bouton **Note de calcul** sont en bas du panneau.
+- **Note de calcul refaite :** diagrammes V et M superposés avec Vr et Mr (tirets), bandes rouges en cas de dépassement, rapports gouvernants, curseur de station (clic, glisser, ← →); choix des efforts comparés : **permanentes, surcharge ou les deux**; pastilles D/C compactes; à gauche, section, **propriétés géométriques** et **matériaux et coefficients**; à droite, les **efforts à la station par étape de charge** (M et V : poids propre, charges « poutre seule », autres permanentes, surcharge max/min) puis les calculs, **une valeur par ligne**.
+- **Poutre mixte :** pas de déversement en M− des classes 1-2 (semelle comprimée retenue), et Frd (10.10.4.4) réservé à la poutre acier seule.
+- **Fenêtres flottantes** redimensionnables depuis chaque bord et chaque coin.
+- Schéma de projet 16.
+
+## Nouveautés 0.9.98
+
+- **Résistance le long du pont.** L’onglet Résistance ne demande plus Mf, Vf ni coefficients de résistance : à chaque station, il prend les efforts pondérés de l’analyse (permanentes + vive, facteurs saisis : Mf+ = max(M max, 0), Mf− = max(−M min, 0), Vf = max |V|) et la section en place, goussets compris. Plus de sous-onglets ni de groupe Résultats. Première commande : **« Déterminer la résistance »** : Mr+, Mr− et ±Vr tracés en tirets autour des enveloppes M et V (vues Enveloppe et Surcharge gouvernante, pas en Écarts ni en lignes d’influence), avec la station gouvernante, son D/C, des bandes rouges là où l’enveloppe dépasse la résistance et les valeurs sous le curseur. Le panneau affiche les D/C maximaux de M+, M−, V et de l’interaction V-M avec leur position (clic : note de calcul à cette station).
+- **Type de résistance par section.** Liste des sections de poutre avec deux cases à cocher, Mixte et Acier seul (mixte : dalle des « Propriétés de section »).
+- **Poutre d’acier seule (S6-25 10.10).** M+ et M− avec déversement sur la longueur non retenue L (6000 mm par défaut, seule donnée), ω2 = 1 : Mu avec βx (C10.10.2.3), B1, B2, J, Cw; classes 1-2 avec Mp, classe 3 avec My = Fy min(S); âme de classe 4 : Mr × Frd (10.10.4.4) calculé pour le Mf de chaque station; semelle de classe 4 : Se (10.10.3.4). Reproduit la feuille de l’auteur : βx −852 mm, B1 −2,1, B2 2,8, Mu 8 151 kN·m, My 5 060, Mr 4 567, Frd 0,992, Mr′ 4 531 kN·m, Mf 4 500 → 99,3 %.
+- **Classe = la pire des trois plaques** (semelle sup., semelle inf., âme; âme h/w en mixte, 2dc/w pour l’acier seul). Classe 4 en poutre mixte : règles de la classe 3, signalée.
+- **M− mixte de classe 3 :** Fcr de la semelle inférieure par déversement sur L (10.10.3.3); Mfd est la part « poutre seule » du moment permanent (poids propre et charges « poutre seule »); le D/C utilise un Mr équivalent = Mfd + le plus grand moment mixte qui respecte a), b), c).
+- **Interaction V-M (10.10.5.2)** calculée pour les âmes raidies avec champ de tension (h/w > 502 √(kv/Fy)) : 0,727 Mf/Mr + 0,455 Vf/Vr ≤ 1, avec le plus grand des rapports M+ et M− (enveloppes : conservateur).
+- **Note de calcul** dans une large fenêtre flottante : choix de la station sur un ruban D/C le long du pont (clic, glisser, ← →, ◀ ▶ ou x), récapitulatif des efforts, résistances et rapports en tête, blocs compacts côte à côte (section et classe, cisaillement et interaction, M+, M−).
+- **Niveaux d’évaluation pour le CL-625 seulement** (le CL-750-QC n’est pas un véhicule d’évaluation; les anciens projets reviennent à ses charges de calcul). Classes de route C et D réunies (q = 7 kN/m); la classe d’évaluation suit la classe de route FT (A/B, C/D).
+- **Culées intégrales :** le moment d’encastrement s’appelle **Me** (diagrammes, lignes d’influence, Excel); Mr est réservé au moment résistant.
+- Schéma de projet 15 (les données de résistance de 0.9.97 sont retirées).
+
+## Nouveautés 0.9.97
+
+- **Onglet Résistance (nouveau).** Quatrième onglet du modèle, à droite de Charges, avec un premier sous-onglet « Poutre en acier » : résistance pondérée d’une poutre assemblée mixte, CSA S6-25, chapitre 10. Classe de section (10.9.2.1 : semelle sup. et âme en M+, semelle inf. et âme en M−); Mr+ entièrement plastique (10.11.5.2, axe neutre plastique dans la dalle ou dans l’acier) ou classe 3 (10.11.6.2, profondeur d’âme comprimée comparée à 850 w/√Fy, figure 10.8 au-delà); Mr− plastique pour les classes 1 et 2 (10.11.5.3.1, semelle retenue) ou contraintes élastiques pour la classe 3 (10.11.6.3.1 : Mfd sur l’acier, Mfsd + Mfl sur acier + armatures); Vr (10.10.5.1, espacement a des raidisseurs ou âme non raidie, signal si Vf > 0,6 Vr). Géométrie, dalle et armatures viennent de la section et de sa dalle des « Propriétés de section »; Mf+, |Mf−| et Vf sont saisis ou repris de l’enveloppe actuelle. Barres D/C dans le panneau; une feuille de calcul flottante donne toutes les valeurs intermédiaires. Reproduit exactement la feuille de validation de l’auteur (Mr+ 17 494 kN·m, 62,9 %; Vr 2 602 kN, 92,2 %). Affichage seulement : ne modifie jamais l’analyse. Poutre d’acier seule et classe 4 : à venir.
+- **Niveaux d’évaluation (S6-25, chapitre 14).** CL-625 et CL-750-QC acceptent un niveau d’évaluation : 1 (CL1-W, 5 essieux), 2 (CL2-W, essieux 1 à 4, 0,76 W) ou 3 (CL3-W, essieux 1 à 3, 0,48 W), W = 625 ou 750 kN, essieux 0,08, 0,2, 0,2, 0,28, 0,24 W (figure 14.1). Charge de voie : 80 % des essieux du niveau plus q de la classe de route (A 9, B 8, C/D 7 kN/m). En évaluation, la fraction MTQ automatique 63/80 % est désactivée.
+- **Charge piétonnière, expression S6-25.** p = 4,25 (0,5 + √(5/s)) kPa, au plus 4,25 kPa, s étant la longueur chargée totale; les coefficients modifiables de 0.9.96 sont retirés. Le tableau suit la largeur tributaire pendant la saisie; le titre de la sous-section n’affiche plus de valeur de charge.
+- **Implantation de la charge de voie.** Toujours sur les travées qui augmentent chaque effet (le défaut de 0.9.96); l’option et ses explications sont retirées, les anciens projets s’ouvrent ainsi.
+- **Étiquettes des diagrammes.** Le cisaillement et la flèche affichent le maximum et le minimum de chaque travée, en enveloppe et en écarts Δ, comme les moments.
+- **Surcharge gouvernante.** Une astuce au-dessus des diagrammes indique qu’on peut cliquer sur n’importe quel diagramme, à n’importe quelle station, pour voir la surcharge qui produit cet effet (masquable).
+- **Ressorts de culée intégrale.** L’aide explique le degré de fixité : k / (k + Σ 3EI/L des travées adjacentes), soit la rigidité relative du ressort et de la superstructure.
 
 ## Nouveautés 0.9.96
 

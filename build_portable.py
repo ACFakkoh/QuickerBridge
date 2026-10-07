@@ -95,6 +95,7 @@ def source_entries():
         "comparison.js",
         "axle.js",
         "sections.js",
+        "resistance.js",
         "browser-solver.js",
         "version.js",
         "default-result.js",
@@ -224,6 +225,7 @@ def build_browser_assets() -> None:
         "comparison.js",
         "axle.js",
         "sections.js",
+        "resistance.js",
     )
     for filename in script_names:
         html = html.replace(f'<script src="./{filename}" defer></script>', "")
@@ -282,6 +284,7 @@ def build_release() -> None:
             "comparison.js",
             "axle.js",
             "sections.js",
+            "resistance.js",
             "browser-solver.js",
             "version.js",
             "default-result.js",

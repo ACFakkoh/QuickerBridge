@@ -179,8 +179,8 @@ def span_ei(model: Model, index: int):
     return sec
 
 
-def member_deflection(local_x, moment, ei, kappa=0.0):
-    """Deflection of one simply-supported-ends member from M(x)/EI(x) + kappa.
+def member_deflection(local_x, moment, ei, kappa=0.0, ends=(0.0, 0.0)):
+    """Deflection of one member from M(x)/EI(x) + kappa and its end values.
 
     PyCBA integrates curvature on a uniform grid. When an EI step falls between
     (or exactly on) grid points, that trapezoidal rule is only first-order
@@ -188,7 +188,8 @@ def member_deflection(local_x, moment, ei, kappa=0.0):
     mirrored non-prismatic bridge gets visibly asymmetric deflections. Here
     the grid is augmented on BOTH sides of every EI breakpoint, so each EI
     piece is integrated separately. Returns (x, D) in PyCBA's sign convention,
-    with D(0) = D(L) = 0 (all QuickerBridge supports are vertically fixed).
+    with D(0), D(L) = ``ends``: zero on supports (all QuickerBridge supports
+    are vertically fixed), the nodal deflection at a deck joint (v0.9.99).
     Prismatic members return None: PyCBA's closed-form path is already exact.
     """
     if not isinstance(ei, cba.SectionEI):
@@ -206,6 +207,7 @@ def member_deflection(local_x, moment, ei, kappa=0.0):
     slope = cumulative_trapezoid(curvature, x, initial=0)
     d = cumulative_trapezoid(slope, x, initial=0)
     d -= x / length * d[-1]
+    d += ends[0] + (ends[1] - ends[0]) * x / length
     return x, d
 
 
@@ -268,6 +270,12 @@ def section_at(model: Model, x: float, side: str = "right") -> Section:
     The returned section carries the composite slab of the section that
     supplies the plates (start section of a constant zone).
     """
+    return section_source(model, x, side)[1]
+
+
+def section_source(model: Model, x: float, side: str = "right"):
+    """(index, section) at global x: ``index`` is the model section that
+    supplies the plates and the slab (v0.9.98, resistance type per section)."""
     start = 0.0
     spans = model.spans
     for i, span in enumerate(spans):
@@ -278,18 +286,19 @@ def section_at(model: Model, x: float, side: str = "right") -> Section:
         start = end
     local = min(max(x - start, 0.0), span.length) / span.length
     if not model.nonprismatic or not span.zones:
-        return model.sections[span.section]
+        return span.section, model.sections[span.section]
     previous = 0.0
     for zone in span.zones:
         if local <= zone.end + 1e-12:
             break
         previous = zone.end
+    end_index = zone.end_section if zone.end_section is not None else zone.section
     a = model.sections[zone.section]
-    b = model.sections[
-        zone.end_section if zone.end_section is not None else zone.section
-    ]
+    b = model.sections[end_index]
     if zone.profile == "constant" or a == b:
-        return a
+        return zone.section, a
     t = (local - previous) / (zone.end - previous) if zone.end > previous else 0.0
     shape = float(profile_fraction(a, b, t, zone.profile))
-    return interpolate(a, b, shape, plate_source(zone, a, b))
+    source = plate_source(zone, a, b)
+    index = zone.section if source is a else end_index
+    return index, interpolate(a, b, shape, source)

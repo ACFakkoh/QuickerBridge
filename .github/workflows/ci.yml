@@ -26,4 +26,5 @@ jobs:
       - run: node --check dist/modes.js
       - run: node --check dist/axle.js
       - run: node --check dist/sections.js
+      - run: node --check dist/resistance.js
 

@@ -13,6 +13,27 @@ CANADIAN_VEHICLES = {"CL625", "CL750QC"}
 HL93_VEHICLES = {"HL93Truck", "HL93Tandem"}
 FULL_VEHICLES = HL93_VEHICLES | {"Cooper", "Maintenance"}
 
+# v0.9.97: S6-25 Section 14 evaluation loads (Figure 14.1): CL-W truck,
+# level 1 all five axles, level 2 axles 1-4 (0.76 W), level 3 axles 1-3
+# (0.48 W). Lane load q by road class (14.9.1.7), with 80 % of the axles of
+# the level. v0.9.98: CL-625 only (W = 625 kN); classes C and D share q.
+CLW_AXLES = (0.08, 0.2, 0.2, 0.28, 0.24)
+CLW_SPACINGS = (3.6, 1.2, 6.6, 6.6)
+EVALUATION_AXLES = {"1": 5, "2": 4, "3": 3}
+EVALUATION_LANE = {"A": 9.0, "B": 8.0, "CD": 7.0}  # q, kN/m
+
+
+def evaluation_active(live: LiveLoad) -> bool:
+    """A Section 14 evaluation level applies (CL-625 only, v0.9.98)."""
+    return live.vehicle == "CL625" and live.evaluation != "design"
+
+
+def evaluation_vehicle(live: LiveLoad):
+    """CLi-W axle loads (kN) and spacings (m) of the evaluation level."""
+    w = 625.0
+    n = EVALUATION_AXLES[live.evaluation]
+    return [round(f * w, 6) for f in CLW_AXLES[:n]], list(CLW_SPACINGS[: n - 1])
+
 
 def vehicle_data(live: LiveLoad, rear_spacing: float | None = None):
     """Return the nominal PyCBA axle pattern in kN and m.
@@ -20,7 +41,9 @@ def vehicle_data(live: LiveLoad, rear_spacing: float | None = None):
     ``rear_spacing`` is used only by the variable-spacing HL-93 truck.  Its
     range is enveloped by :func:`vehicle_variants` during an analysis.
     """
-    if live.vehicle == "CL625":
+    if evaluation_active(live):
+        veh = cba.Vehicle(*reversed(evaluation_vehicle(live)))
+    elif live.vehicle == "CL625":
         veh = cba.VehicleLibrary.CA.get_cl625()
     elif live.vehicle == "CL750QC":
         veh = cba.VehicleLibrary.CA.get_cl750qc()
@@ -100,7 +123,10 @@ def lane_parameters(live: LiveLoad):
     matches PyCBA's ``run_load_model(..., w_lane=...)`` companion UDL.
     ``CL750QC`` returns the manual ``lane_fraction``; with ``mtq_auto`` the
     engine picks 63 % or 80 % per response instead (``mtq_lane_fractions``).
+    An evaluation level (S6-25 14.9.1.7) takes q of the road class and 80 %.
     """
+    if evaluation_active(live):
+        return EVALUATION_LANE[live.road_class], 0.8, "full"
     if live.vehicle == "CL625":
         return 9.0, 0.8, "full"
     if live.vehicle == "CL750QC":

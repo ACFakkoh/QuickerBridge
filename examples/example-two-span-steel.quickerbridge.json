@@ -1,9 +1,9 @@
 {
   "format": "QuickerBridgeProject",
-  "schema_version": 13,
-  "app_version": "0.9.96",
+  "schema_version": 16,
+  "app_version": "0.9.99",
   "name": "2 travées acier 34,8 m · CL-750-QC",
-  "saved_at": "2026-10-04T00:00:00Z",
+  "saved_at": "2026-10-06T00:00:00Z",
   "model": {
     "spans": [
       {
@@ -62,19 +62,40 @@
         "nebt": "NEBT1400",
         "EI": 20000000.0,
         "E": 200.0,
-        "inertia_modifier": 3.92,
+        "inertia_modifier": 3.909825,
         "depth": 1200.0,
         "top_width": 350.0,
         "top_thickness": 25.0,
         "web_thickness": 14.0,
         "bottom_width": 600.0,
         "bottom_thickness": 50.0,
-        "composite": null,
+        "composite": {
+          "enabled": true,
+          "slab_thickness": 225.0,
+          "haunch": 50.0,
+          "effective_width": 3110.0,
+          "fc": 35.0,
+          "unit_weight": 24.0,
+          "bar_top": "15M",
+          "spacing_top": 300.0,
+          "bar_bottom": "15M",
+          "spacing_bottom": 300.0,
+          "cover_top": 60.0,
+          "cover_bottom": 35.0,
+          "fy": 345.0,
+          "frqr": 0.85,
+          "y3": 500.0,
+          "y_steel": null,
+          "y_3n": null,
+          "y_1n": null,
+          "y_neg": null,
+          "region": "positive"
+        },
         "stiffness_input": "EI",
         "I_direct": 0.25,
         "fc": 35.0,
         "unit_weight": 24.0,
-        "inertia_source": "manual"
+        "inertia_source": "1n"
       },
       {
         "name": "S2",
@@ -82,19 +103,40 @@
         "nebt": "NEBT1400",
         "EI": 20000000.0,
         "E": 200.0,
-        "inertia_modifier": 1.12,
+        "inertia_modifier": 1.084548,
         "depth": 1800.0,
         "top_width": 600.0,
         "top_thickness": 50.0,
         "web_thickness": 14.0,
         "bottom_width": 600.0,
         "bottom_thickness": 50.0,
-        "composite": null,
+        "composite": {
+          "enabled": true,
+          "slab_thickness": 225.0,
+          "haunch": 50.0,
+          "effective_width": 3110.0,
+          "fc": 35.0,
+          "unit_weight": 24.0,
+          "bar_top": "15M",
+          "spacing_top": 300.0,
+          "bar_bottom": "15M",
+          "spacing_bottom": 300.0,
+          "cover_top": 60.0,
+          "cover_bottom": 35.0,
+          "fy": 345.0,
+          "frqr": 0.85,
+          "y3": 500.0,
+          "y_steel": null,
+          "y_3n": null,
+          "y_1n": null,
+          "y_neg": null,
+          "region": "negative"
+        },
         "stiffness_input": "EI",
         "I_direct": 0.25,
         "fc": 35.0,
         "unit_weight": 24.0,
-        "inertia_source": "manual"
+        "inertia_source": "negative"
       }
     ],
     "nonprismatic": true,
@@ -137,6 +179,8 @@
       "mtq_auto": true,
       "lane_w": 9.0,
       "cooper_e": 80.0,
+      "evaluation": "design",
+      "road_class": "A",
       "factor": 1.0,
       "axle_factor": 1.0,
       "dynamic": true,
@@ -146,10 +190,6 @@
     "pedestrian": {
       "width_source": "slab",
       "width": 2000.0,
-      "a": 5.0,
-      "b": 30.0,
-      "p_min": 1.6,
-      "p_max": 4.0,
       "maintenance": false
     },
     "thermal": {
@@ -169,6 +209,20 @@
       "mass_source": "dead",
       "mass": 10.0,
       "modes": 6
+    },
+    "resistance": {
+      "enabled": false,
+      "types": [],
+      "stiffened": true,
+      "stiffener_spacing": 3000.0,
+      "unbraced_length": 6000.0,
+      "effects": "both"
+    },
+    "joint": {
+      "enabled": false,
+      "x": 10.0,
+      "kind": "cut",
+      "keep": "both"
     },
     "distribution": {
       "enabled": false,

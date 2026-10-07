@@ -642,3 +642,98 @@ FT window opens on the right of the model panel.
   p = 3,84 kPa"; imposed deformation shear labelled once (17 / −17); Δ ranges
   labelled per span and pier; FT tables with FT ext. and FT ext. × Fs rows and
   Le "0,75 × 34,80 = 26,100"; FT flag on the disclaimer line. No console errors.
+
+## v0.9.97 resistance module, evaluation levels, S6-25 pedestrian load (verified 2026-10-05)
+
+- 285 native tests pass (14 new in `tests/test_v0997.py`, v0.9.96 pedestrian
+  tests updated to the S6-25 expression); `QB_SCIPY_LITE=1 QB_MPL_STUB=1`:
+  268 pass, 1 skipped. `black --check` clean.
+- Resistance, author's validation sheet (350×25 / 1125×14 / 600×50 girder,
+  225 mm slab, 50 mm haunch, be 3110 mm, 2 × 4200 mm² bars, Fy 345, fy 400,
+  f'c 35, a = 3000 mm): Cc 14 649, Cr 3 024, C1 17 673, C2 17 862 kN; PNA in
+  the top flange, dc 0.8 mm; Cs 95, Ts 17 768 kN; yst 823, ec 985, er 1 050 /
+  921, es 823 mm; Mr+ 17 494 kN·m, Mf/Mr 62.9 %; kv 5.90, h/w 80.4 (inelastic),
+  Fcr 162.9, Ft 11.05, Fs 173.9 MPa, Vr 2 602 kN, Vf/Vr 92.2 %. All equal to
+  the sheet to the last digit shown.
+- Other branches checked by equilibrium and hand recomputation: PNA in the slab
+  (Cc + Cr = C2, Mr about the steel centroid), class 3 positive with Figure
+  10.8 (Cc + Cr + Cs = Ts, A'sc, A'st), negative plastic (Cs = Ts + Tr, tension
+  depth in the web), negative class 3 elastic stresses (S of the steel alone by
+  hand, limits φs Fy and φr fy), shear regimes a, b, c and a/h < 1.
+- Evaluation: CLi-W axles and gross loads 1.00 / 0.76 / 0.48 W for both
+  trucks, lane q 9 / 8 / 7 kN/m, CL3-W full truck DLA 1.30, MTQ fraction off;
+  level 1 CL-625 equals the design CL-625 (truck and class A lane).
+- Pedestrians: 20 m → 4.25 kPa (cap), 80 m → 3.1875 kPa; 2 × 30 m with p(30)
+  and p(60). Schema 13 projects lose a, b, p min, p max and take the lane on
+  the spans.
+- Browser (Pyodide, FR and EN): Résistance tab and sheet on the validation
+  example (62,9 %, 92,2 %), CL3-625 class C governing lane case (3 axles,
+  7 kN/m, ×0,80), per-span V and δ labels in envelope and Δ, governing tip,
+  live pedestrian table, v0.9.96 autosave restored. No console errors.
+
+## v0.9.98 resistance along the bridge, steel girder alone, feedback 0.9.97 (verified 2026-10-06)
+
+- 298 native tests pass (14 new in `tests/test_v0998.py`; v0.9.97 resistance
+  tests moved to the new API with the same validation values; Excel label
+  `Me`); `QB_SCIPY_LITE=1 QB_MPL_STUB=1`: 281 pass, 1 skipped. `black --check`
+  clean, `node --check` on every script.
+- Girder alone, author's sheet (same 350×25 / 1125×14 / 600×50 girder, L =
+  6000 mm, ω2 = 1): Iyc 89.3E6 mm⁴, βx −851.5 mm (sheet −852), B1 −2.14
+  (−2.1), B2 2.81 (2.8), Mu 8 151 kN·m (8 149), My 5 060, Mr class 3 4 567,
+  2dc/w 113.4 > 102.3 (class 4 web), Frd 0.992, Mr′ 4 531, Mf 4 500 → 99.3 %:
+  equal to the sheet. Mp: 6 745 kN·m here (Zx 19.55E6 mm³, PNA 4.6 mm into the
+  bottom flange) against 6 563 in the sheet: to be checked in the sheet; it
+  only affects classes 1-2.
+- Composite (unchanged code): Mr+ 17 494 kN·m, Vr 2 602 kN; interaction
+  0.727 × 11 000/17 494 + 0.455 × 2 400/2 602 checked.
+- Along the bridge: per-station Mr equals the single-section result at that
+  station (tapered girder: Mr− over the pier above Mr− in the span), section
+  type per index (steel alone over S2 only), detail at a station = row of the
+  all-stations result, JSON without NaN/∞, non-girder stations empty, thermal
+  refused; Mfd = girder-alone stage moment of `stage_moments`.
+- Class 3 composite M−: at Mr,eq the governing stress reaches its limit
+  exactly; Fcr = Fy for a 600 mm flange braced at 6 m, below Fy at 25 m.
+- Evaluation: CL-750-QC levels return to design; road classes C, D → CD
+  (q 7 kN/m). Schema 14 → 15: v0.9.97 resistance block reduced to the kept
+  fields. The three root projects (Yamaska, Melocheville, St-Hyacinthe) open
+  and run.
+- Browser (Pyodide, FR and EN): Résistance tab, toggle, check boxes, overlay in
+  Envelope and Governing live load (absent in Δ ranges and influence lines),
+  calculation sheet with the D/C strip, composite and steel-alone sheets,
+  integral example labelled Me, CL-625 level 2 with class C/D synchronised with
+  FT. No console errors; no missing English strings.
+
+
+## v0.9.99 deck cut or hinge, section inertia, calculation sheet, feedback 0.9.98 (verified 2026-10-06)
+
+- 312 native tests pass (14 new in `tests/test_v0999.py`); `QB_SCIPY_LITE=1
+  QB_MPL_STUB=1`: 295 pass, 1 skipped. `black` clean, `node --check` on every
+  script. Without a joint the PyCBA model is unchanged (one member per span,
+  same EI objects): every earlier result is identical.
+- Hinge, 2 × 10 m, w = 10 kN/m, hinge at 13 m (Gerber beam): R = 35 / 130 /
+  35 kN, M = 0 at the hinge, V = 35 kN carried through it.
+- Cut, 3 × 10 m, cut at 15 m, both parts kept: V = M = 0 on both sides,
+  R = 37.5 / 112.5 / 112.5 / 37.5 kN (link 0.01 mm: 2·10⁻⁴ kN).
+- Cut at 13 m, left part kept (10 m span + 3 m overhang): R = 45.5 / 84.5 /
+  0 kN, tip deflection = wa(3a³ + 4a²L − L³)/(24EI) = −6.9875 mm exactly; the
+  removed part has V = M = δ = 0; the right part alone (one support): message
+  "mechanism" (joint.unstable). Influence lines: a load beyond the cut never
+  reaches the other part. Snapshot equilibrium with a removed part: < 1e-6.
+- Gerber beam under imposed curvature: M = 0 (statically determinate).
+  Modes: a cut duplicates the node (two deck ends); the removed part changes
+  the frequencies.
+- Inertia: default "girder alone" (M = 1); old files with M = 1 → girder
+  alone, M ≠ 1 kept ("manual"); 3n/1n/I′ without slab → girder alone. The
+  historic example: 1n = 3.910 (was 3.92), I′ = 1.085 (was 1.12).
+- Resistance effects: D/C with permanent loads only = M dead / Mr, live only =
+  (M max − M dead) / Mr, both = M max / Mr. Load stages of the sheet add up
+  to the analysed permanent V and M; the live parts to the envelopes.
+- Composite M− classes 1-2: no lateral-torsional buckling (author's
+  decision): Mr is the same for L = 1 m and L = 40 m.
+- The three root projects open in schema 16 and run (St-Hyacinthe keeps M =
+  3.92 / 1.12, flagged).
+- Browser (Pyodide, FR and EN, 1600 px and 375 px): deck cut UI, beam and
+  diagram marks, unstable message; inertia radio group; Résistance panel
+  order; calculation sheet (V/M diagrams, station pick by pointer, effects
+  buttons, composite and steel-alone sheets); window resized from its left
+  edge. No console errors besides the intended unstable case.

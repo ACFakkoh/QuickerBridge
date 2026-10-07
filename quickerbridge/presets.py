@@ -13,7 +13,7 @@ def _section(**data):
 
 
 def two_span_steel() -> Model:
-    """Historic default: 2 × 34.8 m steel girder with haunches to 1800 mm."""
+    """Historic default: 2 × 34.8 m composite steel girder, haunches to 1800 mm."""
     zones_1 = [
         {"end": 0.8, "section": 0, "end_section": 0, "profile": "constant"},
         {
@@ -35,14 +35,17 @@ def two_span_steel() -> Model:
                 {"length": 34.8, "section": 0, "zones": zones_2},
             ],
             "supports": ["roller", "pin", "roller"],
+            # v0.9.99: the historic M = 3.92 / 1.12 are the composite 1n
+            # (3.91) and cracked I′ (1.09) inertias of the default slab.
             "sections": [
-                _section(inertia_modifier=3.92, depth=1200),
+                _section(depth=1200, composite={}, inertia_source="1n"),
                 _section(
                     name="S2",
-                    inertia_modifier=1.12,
                     depth=1800,
                     top_width=600,
                     top_thickness=50,
+                    composite={"region": "negative"},
+                    inertia_source="negative",
                 ),
             ],
             "nonprismatic": True,

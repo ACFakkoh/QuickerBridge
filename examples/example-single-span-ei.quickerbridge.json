@@ -1,9 +1,9 @@
 {
   "format": "QuickerBridgeProject",
-  "schema_version": 13,
-  "app_version": "0.9.96",
+  "schema_version": 16,
+  "app_version": "0.9.99",
   "name": "1 travée 17 m · EI direct · CL-625",
-  "saved_at": "2026-10-04T00:00:00Z",
+  "saved_at": "2026-10-06T00:00:00Z",
   "model": {
     "spans": [
       {
@@ -37,7 +37,7 @@
         "I_direct": 0.25,
         "fc": 35.0,
         "unit_weight": 24.0,
-        "inertia_source": "manual"
+        "inertia_source": "steel"
       }
     ],
     "nonprismatic": false,
@@ -80,6 +80,8 @@
       "mtq_auto": true,
       "lane_w": 9.0,
       "cooper_e": 80.0,
+      "evaluation": "design",
+      "road_class": "A",
       "factor": 0.9,
       "axle_factor": 1.0,
       "dynamic": true,
@@ -89,10 +91,6 @@
     "pedestrian": {
       "width_source": "slab",
       "width": 2000.0,
-      "a": 5.0,
-      "b": 30.0,
-      "p_min": 1.6,
-      "p_max": 4.0,
       "maintenance": false
     },
     "thermal": {
@@ -112,6 +110,20 @@
       "mass_source": "dead",
       "mass": 10.0,
       "modes": 6
+    },
+    "resistance": {
+      "enabled": false,
+      "types": [],
+      "stiffened": true,
+      "stiffener_spacing": 3000.0,
+      "unbraced_length": 6000.0,
+      "effects": "both"
+    },
+    "joint": {
+      "enabled": false,
+      "x": 10.0,
+      "kind": "cut",
+      "keep": "both"
     },
     "distribution": {
       "enabled": false,

@@ -11,7 +11,7 @@ import pytest
 from quickerbridge.engine import analyse, snapshot
 from quickerbridge.exports import excel_bytes
 from quickerbridge.models import Model, Section, Span, ThermalLoad
-from quickerbridge.projects import create_project, validate_project
+from quickerbridge.projects import SCHEMA_VERSION, create_project, validate_project
 
 
 def bridge(lengths, **live):
@@ -116,18 +116,20 @@ def test_lane_snapshot_loads_only_the_helpful_spans():
 
 
 def test_pedestrian_load_hand_values():
-    # 20 m: s = 20 m, p = min(5 - 20/30, 4) = 4 kPa, 2 m wide: 8 kN/m.
+    # v0.9.97 (S6-25): p = 4.25 (0.5 + √(5/s)) ≤ 4.25 kPa.
+    # 20 m: s = 20 m, p = 4.25 (0.5 + 0.5) = 4.25 kPa, 2 m wide: 8.5 kN/m.
     m = bridge([20], source="pedestrian")
     r = analyse(m)
-    assert max(r["max"]["M"]) == pytest.approx(8 * 20**2 / 8, rel=1e-6)
+    assert max(r["max"]["M"]) == pytest.approx(8.5 * 20**2 / 8, rel=1e-6)
     assert r["vehicle"]["weights"] == [] and r["vehicle"]["pedestrian_width"] == 2.0
-    # 2 x 30 m: M+ with one span (p = 4), M- with both (s = 60, p = 3).
+    # 2 x 30 m: M+ with one span (s = 30), M- with both (s = 60).
+    p30, p60 = (4.25 * (0.5 + (5 / s) ** 0.5) for s in (30, 60))
     r = analyse(bridge([30, 30], source="pedestrian"))
-    assert max(r["max"]["M"]) == pytest.approx(0.095703 * 8 * 900, rel=2e-3)
-    assert min(r["min"]["M"]) == pytest.approx(-0.125 * 6 * 900, rel=1e-6)
+    assert max(r["max"]["M"]) == pytest.approx(0.095703 * 2 * p30 * 900, rel=2e-3)
+    assert min(r["min"]["M"]) == pytest.approx(-0.125 * 2 * p60 * 900, rel=1e-6)
     e = next(x for x in r["extrema"] if x["response"] == "M" and x["sense"] == "min")
     assert e["case"] == "pedestrian" and e["spans"] == [1, 2]
-    assert e["intensity"] == pytest.approx(3.0)
+    assert e["intensity"] == pytest.approx(p60)
 
 
 def test_pedestrian_combinations_beat_sign_rule():
@@ -135,7 +137,6 @@ def test_pedestrian_combinations_beat_sign_rule():
     # the others. Every combination is checked: the envelope is at least the
     # best single-span and all-same-sign arrangements.
     m = bridge([40, 10, 40], source="pedestrian")
-    m.pedestrian.p_min = 0.5
     r = analyse(m)
     nx = len(r["x"])
     for j in range(0, 3 * nx, 7):
@@ -156,12 +157,12 @@ def test_pedestrian_slab_width_and_bounds():
     ).CompositeSlab(effective_width=3000)
     r = analyse(m)
     assert r["vehicle"]["pedestrian_width"] == pytest.approx(3.0)
-    assert max(r["max"]["M"]) == pytest.approx(4 * 3 * 100 / 8, rel=1e-6)
+    assert max(r["max"]["M"]) == pytest.approx(4.25 * 3 * 100 / 8, rel=1e-6)
     m.pedestrian.width_source = "manual"
     m.pedestrian.width = 1500
-    assert max(analyse(m)["max"]["M"]) == pytest.approx(4 * 1.5 * 100 / 8, rel=1e-6)
-    with pytest.raises(ValueError):
-        Model.model_validate({"pedestrian": {"p_min": 5, "p_max": 4}})
+    assert max(analyse(m)["max"]["M"]) == pytest.approx(4.25 * 1.5 * 100 / 8, rel=1e-6)
+    with pytest.raises(ValueError):  # v0.9.97: no editable formula parameters
+        Model.model_validate({"pedestrian": {"p_min": 1.6}})
 
 
 def test_pedestrian_and_maintenance_are_never_added():
@@ -206,13 +207,15 @@ def test_pedestrian_ignores_ft_and_axle_factor():
 
 
 def test_project_schema_13_round_trip():
+    # v0.9.97: schema 14; a schema-13 file is read with the lane UDL on the
+    # spans (no choice any more) and without the old formula parameters.
     m = Model()
     m.live.source = "pedestrian"
     m.live.lane_extent = "influence"
     m.pedestrian.maintenance = True
     text = json.dumps(create_project(m, "piétons"))
     data = validate_project(text)
-    assert data["schema_version"] == 13
+    assert data["schema_version"] == SCHEMA_VERSION
     assert data["model"]["live"]["source"] == "pedestrian"
     assert data["model"]["pedestrian"]["maintenance"] is True
     old = json.loads(text)

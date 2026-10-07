@@ -11,15 +11,13 @@ import numpy as np
 import pycba as cba
 
 from .engine import (
-    member_types,
-    node_reactions,
-    pycba_supports,
+    Structure,
     split_stations,
     stations,
     support_fixity,
 )
 from .models import Model
-from .sections import member_deflection, stiffness_profile, properties, span_ei
+from .sections import stiffness_profile, properties, span_ei
 
 
 def thermal_curvature(model: Model) -> float:
@@ -182,41 +180,33 @@ def analyse_thermal(model: Model) -> dict:
     support_x = np.r_[0.0, np.cumsum(lengths)]
     x, span_ids, sides = stations(model)
     eis = [span_ei(model, i) for i in range(len(lengths))]
-    ba = cba.BeamAnalysis(
-        lengths,
-        eis,
-        supports=pycba_supports(model),
-        eletype=member_types(model),
-    )
+    # v0.9.99: PyCBA members and nodes, deck joint included.
+    structure = Structure(model, eis)
+    ba = structure.analysis()
     kappas = span_curvatures(model)
-    for member, kappa in enumerate(kappas, start=1):
-        ba.add_ic(member, kappa)
+    for k, member in enumerate(structure.members, start=1):
+        if member["active"]:  # not the cut link, not a removed part
+            ba.add_ic(k, kappas[member["span"]])
     npts = 480 if model.precision == "standard" else 960
     ba.analyze(npts=npts)
 
-    shear, moment, deflection = [], [], []
-    for i, result in enumerate(ba.beam_results.vRes):
-        mask = np.asarray(span_ids) == i
-        query = x[mask]
-        physical_x = result.x[1:-1]
-        shear.extend(np.interp(query, physical_x, result.V[1:-1]))
-        moment.extend(np.interp(query, physical_x, result.M[1:-1]))
-        local_x = physical_x - support_x[i]
-        refined = member_deflection(local_x, result.M[1:-1], eis[i], kappas[i])
-        if refined is not None:
-            fine_x, fine_d = refined
-            deflection.extend(-1000 * np.interp(query - support_x[i], fine_x, fine_d))
+    owner = structure.station_members(x, sides)
+    shear, moment = np.zeros(len(x)), np.zeros(len(x))
+    for k, (member, result) in enumerate(zip(structure.members, ba.beam_results.vRes)):
+        sel = np.flatnonzero(owner == k)
+        if not len(sel):
             continue
-        local_d = result.D[1:-1].copy()
-        local_d -= local_d[0] + local_x / lengths[i] * (local_d[-1] - local_d[0])
-        deflection.extend(-1000 * np.interp(query, physical_x, local_d))
-
+        query = np.clip(x[sel], member["start"], member["end"])
+        physical_x = result.x[1:-1]
+        shear[sel] = np.interp(query, physical_x, result.V[1:-1])
+        moment[sel] = np.interp(query, physical_x, result.M[1:-1])
+    reactions = structure.reactions(ba)
     values = {
-        "V": np.asarray(shear, float),
-        "M": np.asarray(moment, float),
-        "D": np.asarray(deflection, float),
-        "R": node_reactions(ba)[: len(support_x)],
-        "Mr": node_reactions(ba)[len(support_x) :],
+        "V": shear,
+        "M": moment,
+        "D": structure.deflections(ba, x, owner, kappas),
+        "R": reactions[: len(support_x)],
+        "Mr": reactions[len(support_x) :],
     }
     packed = {key: value.tolist() for key, value in values.items()}
     extrema = []

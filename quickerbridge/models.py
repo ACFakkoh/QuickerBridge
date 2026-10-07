@@ -13,10 +13,10 @@ BAR_DIAMETERS = {"10M": 11.3, "15M": 16.0, "20M": 19.5}  # mm
 
 
 class CompositeSlab(BaseModel):
-    """Concrete deck acting with a steel girder, for section properties only.
+    """Concrete deck acting with a steel girder.
 
-    Display only (v0.9.3bis): it never changes the beam stiffness; the user may
-    copy a composite / steel inertia ratio into the inertia modifier M.
+    Section properties, stresses and resistance. It changes the beam stiffness
+    only through ``Section.inertia_source`` (3n, 1n or I′, v0.9.99).
     Lengths in mm, f'c and Fy in MPa, concrete unit weight in kN/m³.
     """
 
@@ -105,11 +105,14 @@ class Section(InputModel):
     I_direct: float = Field(default=0.25, gt=0, le=1e6)  # m⁴, direct-EI section
     fc: float = Field(default=35, gt=0, le=150)  # MPa (NEBT: 50)
     unit_weight: float = Field(default=24, gt=10, le=40)  # kN/m³ (NEBT: 24.5)
-    # v0.9.8: inertia used by the analysis for a steel or NEBT girder with a
-    # slab. "manual": I girder × M as entered. "1n", "3n", "negative" (I′):
-    # M is set automatically to I(config) / I(girder alone) from the section
-    # properties, so the composite inertia is applied exactly once.
-    inertia_source: Literal["manual", "1n", "3n", "negative"] = "manual"
+    # Inertia used by the analysis for a steel or NEBT girder (v0.9.99):
+    # "steel": the girder alone (M+ or M−); "3n", "1n": composite section
+    # (M+); "negative": cracked I′ = steel + bars (M−). The modifier M is
+    # set automatically to I(config) / I(girder alone), so the composite
+    # inertia is applied exactly once; without a slab, the girder alone.
+    # "manual" (I girder × M as entered) only survives in projects saved
+    # before v0.9.99 with M ≠ 1; the interface no longer offers it.
+    inertia_source: Literal["steel", "3n", "1n", "negative", "manual"] = "steel"
 
     @model_validator(mode="before")
     @classmethod
@@ -117,6 +120,12 @@ class Section(InputModel):
         if not isinstance(data, dict):
             return data
         data = dict(data)
+        # v0.9.99: the entered multiplier is gone. An older section (no
+        # source, or "manual") with M = 1 is the girder alone; with M ≠ 1 it
+        # keeps its multiplier ("manual", legacy) until another choice.
+        if data.get("inertia_source", "manual") == "manual":
+            legacy = float(data.get("inertia_modifier", 1) or 1) != 1
+            data["inertia_source"] = "manual" if legacy else "steel"
         if data.get("kind") == "nebt":
             # Projects before 0.9.8 entered E for NEBT girders: keep it.
             data.setdefault("stiffness_input", "modulus" if "E" in data else "concrete")
@@ -135,11 +144,14 @@ class Section(InputModel):
             self.E = round(concrete_modulus(self.fc, self.unit_weight) / 1000, 6)
         if self.kind == "ei" and mode in ("concrete", "modulus"):
             self.EI = self.E * 1e6 * self.I_direct
-        if (
-            self.inertia_source != "manual"
-            and self.kind in ("girder", "nebt")
-            and self.composite is not None
-            and self.composite.enabled
+        slab = self.composite is not None and self.composite.enabled
+        if self.kind in ("girder", "nebt") and (
+            self.inertia_source == "steel"
+            or (self.inertia_source != "manual" and not slab)
+        ):
+            self.inertia_modifier = 1.0
+        elif (
+            self.inertia_source != "manual" and self.kind in ("girder", "nebt") and slab
         ):
             from .section_props import section_properties
 
@@ -259,6 +271,14 @@ class LiveLoad(InputModel):
     mtq_auto: bool = True
     lane_w: float = Field(default=9, ge=0, le=1000)  # custom vehicle only
     cooper_e: float = Field(default=80, ge=10, le=200)  # AREA / AREMA Cooper E
+    # v0.9.97: S6-25 Section 14 evaluation level (Figure 14.1). "design":
+    # the design truck and lane load of Section 3. Levels 1, 2, 3: CL1-W
+    # (5 axles), CL2-W (axles 1-4), CL3-W (axles 1-3), axles 0.08, 0.2, 0.2,
+    # 0.28, 0.24 W; lane load 80 % of those axles plus q of the road class
+    # (14.9.1.7). v0.9.98: CL-625 only (W = 625 kN), the CL-750-QC is not an
+    # evaluation vehicle; road classes C and D (same q) are one option.
+    evaluation: Literal["design", "1", "2", "3"] = "design"
+    road_class: Literal["A", "B", "CD"] = "A"
     factor: float = Field(default=1, ge=0, le=1000)
     axle_factor: float = Field(default=1, ge=0, le=1000)
     dynamic: bool = True
@@ -267,9 +287,25 @@ class LiveLoad(InputModel):
     # may still hold "forward"/"reverse"; they are read as "both".
     direction: Literal["both", "forward", "reverse"] = "both"
 
+    @model_validator(mode="before")
+    @classmethod
+    def road_class_cd(cls, data):
+        # v0.9.98: classes C and D merged; v0.9.97 files may hold either.
+        if isinstance(data, dict) and data.get("road_class") in ("C", "D"):
+            data = dict(data)
+            data["road_class"] = "CD"
+        return data
+
     @model_validator(mode="after")
     def both_directions(self):
         self.direction = "both"
+        return self
+
+    @model_validator(mode="after")
+    def evaluation_cl625_only(self):
+        # v0.9.98: Section 14 evaluation levels for the CL-625 only.
+        if self.vehicle != "CL625":
+            self.evaluation = "design"
         return self
 
     @model_validator(mode="after")
@@ -284,11 +320,10 @@ class LiveLoad(InputModel):
 
 
 class Pedestrian(InputModel):
-    """S6 pedestrian load on a sidewalk (3.8.9), v0.9.96.
+    """S6-25 pedestrian load on a sidewalk (3.8.9), v0.9.96, formula v0.9.97.
 
-    p = a − s / b (kPa), between ``p_min`` and ``p_max``, with s the total
-    loaded length (sum of the loaded spans). Defaults: S6-19, placeholder
-    until the S6-25 expression is confirmed. The load per girder is p times
+    p = 4.25 (0.5 + √(5 / s)) kPa, at most 4.25 kPa, with s (m) the total
+    loaded length (sum of the loaded spans). The load per girder is p times
     the tributary width. No dynamic allowance, no FT, no axle factor. With
     ``maintenance`` the envelope also covers the maintenance vehicle
     (3.8.11), never concomitant with the pedestrians.
@@ -296,17 +331,7 @@ class Pedestrian(InputModel):
 
     width_source: Literal["slab", "manual"] = "slab"
     width: float = Field(default=2000, gt=0, le=30000)  # tributary width, mm
-    a: float = Field(default=5.0, ge=0, le=50)
-    b: float = Field(default=30.0, gt=0, le=10000)
-    p_min: float = Field(default=1.6, ge=0, le=50)
-    p_max: float = Field(default=4.0, ge=0, le=50)
     maintenance: bool = False
-
-    @model_validator(mode="after")
-    def bounds(self):
-        if self.p_min > self.p_max:
-            raise ValueError("pedestrian.bounds")
-        return self
 
 
 class ThermalLoad(InputModel):
@@ -369,6 +394,82 @@ class Distribution(InputModel):
     fs_dead: bool = True
 
 
+V0997_RESISTANCE = (
+    "mode",
+    "section",
+    "fy_bar",
+    "phi_s",
+    "phi_r",
+    "phi_c",
+    "mf_pos",
+    "mf_neg",
+    "mf_neg_steel",
+    "vf",
+)
+
+
+class Resistance(InputModel):
+    """Factored resistance of the steel girders (S6-25 Section 10), v0.9.98.
+
+    Display only: it never changes the analysis. The resistance is computed
+    at every station with the section in force there and compared with the
+    factored effects of the analysis (permanent + live loads as computed).
+    ``enabled`` draws Mr and Vr around the V and M envelopes. ``types`` gives
+    per section index how a steel girder resists: "composite" (with the slab
+    of its section properties) or "steel" (girder alone); a missing entry
+    means composite when the section has a slab, else steel alone. The
+    resistance factors are those of S6-25 (φs 0.95, φr 0.90, φc 0.75).
+    Lengths in mm.
+    """
+
+    enabled: bool = False
+    types: list[Literal["composite", "steel"]] = Field(
+        default_factory=list, max_length=20
+    )
+    stiffened: bool = True
+    stiffener_spacing: float = Field(default=3000, gt=0, le=100000)  # a, mm
+    # Unbraced length L of the compression flange (10.10.2.3, 10.10.3.3):
+    # girder alone in M+ and M−, bottom flange of composite M− (v0.9.99:
+    # classes 1-2 too).
+    unbraced_length: float = Field(default=6000, gt=0, le=200000)
+    # v0.9.99: effects compared with the resistance: permanent loads only,
+    # live load only, or both (as analysed). ``enabled`` (Mr/Vr drawn on the
+    # main diagrams in v0.9.98) is kept for old files and no longer used.
+    effects: Literal["both", "dead", "live"] = "both"
+
+    @model_validator(mode="before")
+    @classmethod
+    def drop_v0997_inputs(cls, data):
+        # v0.9.97 entered Mf, Vf, the φ factors and the bar fy here.
+        if isinstance(data, dict):
+            data = {k: v for k, v in data.items() if k not in V0997_RESISTANCE}
+        return data
+
+    def type_of(self, index: int, section: "Section") -> str:
+        """Resistance type of section ``index``: steel alone without a slab."""
+        slab = section.composite is not None and section.composite.enabled
+        kind = self.types[index] if 0 <= index < len(self.types) else None
+        if not slab:
+            return "steel"
+        return kind or "composite"
+
+
+class DeckJoint(InputModel):
+    """Deck joint at any station (v0.9.99): launching or demolition stages.
+
+    ``hinge``: moment release, the shear is transmitted. ``cut``: the deck is
+    sawn through, neither shear nor moment crosses the joint; each part must
+    be stable on its own supports. ``keep`` (cut only): both parts, or only
+    the part left or right of the cut (the other one is removed: no
+    stiffness, no load, no reaction). ``x`` in m from the left end.
+    """
+
+    enabled: bool = False
+    x: float = Field(default=10.0, gt=0, le=1400)
+    kind: Literal["hinge", "cut"] = "cut"
+    keep: Literal["both", "left", "right"] = "both"
+
+
 class ModalSettings(InputModel):
     """Free-vibration settings. The mass is not a load: it only feeds the
     eigenvalue analysis and never changes the static results."""
@@ -399,6 +500,8 @@ class Model(InputModel):
     pedestrian: Pedestrian = Field(default_factory=Pedestrian)
     thermal: ThermalLoad = Field(default_factory=ThermalLoad)
     modal: ModalSettings = Field(default_factory=ModalSettings)
+    resistance: Resistance = Field(default_factory=Resistance)
+    joint: DeckJoint = Field(default_factory=DeckJoint)
     distribution: Distribution = Field(default_factory=Distribution)
     load_mode: Literal["dead", "live", "both", "thermal"] = "both"
     subdivisions: int = Field(default=10, ge=2, le=100)
@@ -460,6 +563,15 @@ class Model(InputModel):
                 raise ValueError("model.coverage")
         if any(load.span >= len(self.spans) for load in self.dead):
             raise ValueError("load.span")
+        if self.joint.enabled:
+            # Strictly inside a span, at least 5 cm from any support.
+            ends = [0.0]
+            for span in self.spans:
+                ends.append(ends[-1] + span.length)
+            if not 0 < self.joint.x < ends[-1] or any(
+                abs(self.joint.x - e) < 0.05 for e in ends
+            ):
+                raise ValueError("joint.position")
         return self
 
 

@@ -55,6 +55,32 @@ def dispatch(raw: str) -> str:
         from .section_props import section_properties
 
         value = section_properties(Section.model_validate(data["section"]))
+    elif action == "resistance":
+        # v0.9.98: Resistance tab, display only (loaded on first use): every
+        # station of the analysis, or the calculation sheet at ``index``.
+        from .models import CompositeSlab, Resistance
+        from .resistance import resistance_all
+
+        result = _results[data["job"]]
+        if result.get("kind") == "thermal":
+            raise ValueError("thermal.resistance")
+        model = Model.model_validate(result["model"])
+        # Slabs and settings are display-only: use the current ones.
+        composites = data.get("composites")
+        if composites is not None:
+            for section, slab in zip(model.sections, composites):
+                section.composite = (
+                    None if slab is None else CompositeSlab.model_validate(slab)
+                )
+        index = data.get("index")
+        if index is not None and not 0 <= int(index) < len(result["x"]):
+            raise ValueError("resistance.request")
+        value = resistance_all(
+            model,
+            result,
+            Resistance.model_validate(data["settings"]),
+            None if index is None else int(index),
+        )
     elif action == "axle_factor":
         from .distribution import truck_fraction
 

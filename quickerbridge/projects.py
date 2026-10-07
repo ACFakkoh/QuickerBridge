@@ -10,7 +10,7 @@ from .version import APP_VERSION
 
 
 FORMAT = "QuickerBridgeProject"
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 16
 MAX_PROJECT_BYTES = 1024 * 1024
 
 
@@ -68,6 +68,17 @@ def validate_project(text: str) -> dict:
         # projects keep the depth they were saved with.
         if isinstance(model.get("thermal"), dict):
             model["thermal"].setdefault("depth_source", "manual")
+    if version < 14 and isinstance(raw.get("model"), dict):
+        model = raw["model"]
+        # v0.9.97: the pedestrian load uses the S6-25 expression only (the
+        # editable a, b, p min, p max of v0.9.96 are gone) and the lane UDL
+        # is always placed on the spans that increase each effect.
+        pedestrian = model.get("pedestrian")
+        if isinstance(pedestrian, dict):
+            for key in ("a", "b", "p_min", "p_max"):
+                pedestrian.pop(key, None)
+        if isinstance(model.get("live"), dict):
+            model["live"]["lane_extent"] = "spans"
     if isinstance(raw.get("model"), dict):
         # v0.9.5 briefly had a constant support section (support_length); it
         # overrode the non-prismatic zones and was removed in v0.9.6.
@@ -105,7 +116,7 @@ def validate_project(text: str) -> dict:
                     ):
                         raise ValueError("project.legacy_taper")
         raw["schema_version"] = SCHEMA_VERSION
-    elif version in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
+    elif version in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15):
         # v0.4 files: zones without ``plates`` keep the start-section
         # convention, which is the default. Pin/roller supports are unchanged.
         raw["schema_version"] = SCHEMA_VERSION
@@ -113,6 +124,16 @@ def validate_project(text: str) -> dict:
         # Schema 4 files have no isostatic spans (``simple`` defaults false).
         # Schema 12 and older: the lane UDL takes the new default extent
         # (loaded spans, v0.9.96) and the live load stays the vehicle.
+        # Schema 13 and older: no evaluation level (design loads) and no
+        # resistance block (defaults).
+        # Schema 14 (v0.9.97): the resistance inputs Mf, Vf, φ and bar fy are
+        # dropped (efforts from the analysis), road classes C and D become
+        # "CD", and a CL-750-QC evaluation level returns to design loads
+        # (models.Resistance / models.LiveLoad validators).
+        # Schema 15 (v0.9.98): no deck joint (disabled default); a section
+        # without composite inertia and M = 1 becomes "girder alone", a
+        # multiplier M != 1 stays as entered ("manual", legacy); the
+        # resistance compares permanent + live effects (models.Section).
     elif version != SCHEMA_VERSION:
         raise ValueError("project.version")
     return ProjectFile.model_validate(raw).model_dump(mode="json")

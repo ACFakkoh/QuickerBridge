@@ -32,6 +32,8 @@ def test_modifier_changes_only_flexural_stiffness():
     m = Model(spans=[Span(length=10)], supports=["pin", "roller"], load_mode="dead")
     before = properties(m.sections[0])
     result = analyse(m)
+    # Legacy multiplier (projects before v0.9.99 with M != 1).
+    m.sections[0].inertia_source = "manual"
     m.sections[0].inertia_modifier = 4
     after = properties(m.sections[0])
     for key in ("I", "A", "centroid"):

@@ -1,6 +1,6 @@
 # QuickerBridge — guide développeur
 
-Version 0.9.96 · Anthony Chéruel · 2026-10-04
+Version 0.9.99 · Anthony Chéruel · 2026-10-06
 
 ## Quel fichier utiliser ou envoyer ?
 
@@ -62,7 +62,7 @@ fichiers à chaque livraison, pas seulement le HTML.
 | `dist/index.html`, `dist/styles.css`, `dist/app.js` | Interface, FR/EN, SVG, projets |
 | `dist/browser-solver.js` | Worker Pyodide, chargement et échanges JSON |
 | `quickerbridge/models.py` | Entrées validées et valeurs initiales |
-| `quickerbridge/sections.py` | I acier, multiplicateur, zones de hauteur, EI |
+| `quickerbridge/sections.py` | I acier, rapport d’inertie M (poutre seule, 3n, 1n, I′), zones de hauteur, EI |
 | `quickerbridge/engine.py` | Influences, groupes d’essieux, enveloppes, cache |
 | `quickerbridge/loads.py` | Véhicules, facteurs, charge de voie et charges permanentes |
 | `quickerbridge/thermal.py` | Courbure thermique indépendante |
@@ -71,6 +71,8 @@ fichiers à chaque livraison, pas seulement le HTML.
 | `dist/comparison.js` | Comparaison de deux JSON, enveloppes et extrema sans remplacer le projet courant |
 | `quickerbridge/distribution.py` | v0.9 : fraction de charge de camion FT S6-25, pont à dalle sur poutres (tableaux 3.5, 3.6, 5.3 à 5.7, figures 5.1 et 5.2) |
 | `quickerbridge/section_props.py` | v0.9.3bis : propriétés de section acier seul, mixte 3n et 1n, effectives (affichage seulement) |
+| `quickerbridge/resistance.py` | v0.9.97–0.9.98 : résistance pondérée des poutres assemblées en acier, S6-25 chap. 10, à chaque station (`resistance_all`) : classes, Mr+ et Mr− mixtes ou acier seul (déversement, Frd), Vr, interaction V-M; affichage seulement |
+| `dist/resistance.js` | v0.9.99 : onglet « Résistance » (type par section, âme et déversement, D/C et note en bas); note de calcul flottante avec diagrammes V et M, Vr/Mr, choix permanentes / surcharge / les deux (`resistance.effects`), tableaux une valeur par ligne. v0.9.98 : ne calcul flottante avec ruban D/C |
 | `dist/sections.js` | v0.9.3bis : fenêtre « Propriétés de section », créée à la première ouverture |
 | `dist/axle.js` | v0.9 : carte FT (onglet Charges), vue « FT · S6-25 », application au facteur d’essieu ou de charge |
 | `quickerbridge/projects.py` | Schéma de projet et compatibilité |
@@ -123,7 +125,8 @@ Cela n’est pas requis pour utiliser ou partager le HTML autonome.
 Voir [NONPRISMATIC.md](NONPRISMATIC.md) pour les formules et la distinction
 entre profondeur géométrique et interpolation EI de CSI.
 
-- Les valeurs affichées de I sont brutes; EI inclut le multiplicateur.
+- Les valeurs affichées de I sont brutes; EI inclut M = I config / I poutre (v0.9.99 : jamais saisi, sauf ancien projet « manual »).
+- v0.9.99 : `engine.Structure` construit les membrures et nœuds PyCBA. Sans joint, une membrure par travée (comme avant). Rotule : nœud libre, membrure de gauche relâchée. Coupure : lien rotulé-rotulé de `JOINT_LINK` m (rigidité nulle) entre deux nœuds libres. Tronçon retiré : nœuds encastrés, aucune charge (`Structure.active`, `clip`). Les splines d’influence sont par membrure; V et M restent obtenus par l’équilibre des réactions d’appuis.
 - Les caches de rigidité appartiennent à un seul Basis immuable. Ne modifiez pas
   sa structure après création. Le cache des forces fixes est vidé par
   `Basis.solve_loads()` à chaque changement de charges; utilisez cette méthode.
@@ -153,6 +156,20 @@ entre profondeur géométrique et interpolation EI de CSI.
   s); le véhicule d’entretien optionnel (`vehicle_model`) est enveloppé, jamais
   additionné; ni FT ni facteur d’essieu (`distribution.applied`,
   `displayed_axle_factor`). Schéma de projet 13.
+  v0.9.97 : `lane_extent` n’est plus proposé dans l’interface (toujours
+  `spans`; le moteur garde `influence` et `full` pour les tests et l’API).
+  Piétons : p = 4,25 (0,5 + √(5/s)) ≤ 4,25 kPa (`pedestrian_intensity`).
+  Niveaux d’évaluation S6-25 chap. 14 (`live.evaluation`, `live.road_class`,
+  `loads.evaluation_vehicle`) : CLi-W, W = 625 ou 750 kN, charge de voie
+  80 % + q (9/8/7 kN/m); la fraction MTQ automatique est alors inactive.
+  `Model.resistance` (onglet Résistance) est exclu de `structure_key`, comme
+  `pedestrian`. Schéma de projet 14 (retire a, b, p min, p max).
+  v0.9.98 : niveaux d’évaluation pour le CL-625 seulement; classes de route
+  `A`, `B`, `CD`. `Model.resistance` : `enabled`, `types` (par indice de
+  section), `stiffened`, `stiffener_spacing`, `unbraced_length`; action du
+  worker `resistance` avec `job` (toutes les stations, ou `index` pour la note).
+  `sections.section_source` donne l’indice de la section qui fournit les
+  plaques. Schéma de projet 15.
   Le véhicule d’entretien 24 + 56 kN à 2,0 m n’a ni charge de voie ni CMD.
 
 `python tests/performance.py` mesure un modèle défini de deux travées avec quatre
