@@ -220,7 +220,7 @@ def test_schema_16_migration():
         s["inertia_source"] = "manual"
         s["inertia_modifier"] = 1
     data = validate_project(json.dumps(old))
-    assert data["schema_version"] == SCHEMA_VERSION == 16
+    assert data["schema_version"] == SCHEMA_VERSION  # 16, then 17 in v1.0
     assert data["model"]["joint"]["enabled"] is False
     assert data["model"]["resistance"]["effects"] == "both"
     assert {s["inertia_source"] for s in data["model"]["sections"]} == {"steel"}

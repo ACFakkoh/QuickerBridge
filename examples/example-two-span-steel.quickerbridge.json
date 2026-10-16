@@ -1,9 +1,9 @@
 {
   "format": "QuickerBridgeProject",
-  "schema_version": 16,
-  "app_version": "0.9.99",
+  "schema_version": 17,
+  "app_version": "1.0",
   "name": "2 travées acier 34,8 m · CL-750-QC",
-  "saved_at": "2026-10-06T00:00:00Z",
+  "saved_at": "2026-10-15T00:00:00Z",
   "model": {
     "spans": [
       {
@@ -244,6 +244,6 @@
     },
     "load_mode": "both",
     "subdivisions": 10,
-    "precision": "standard"
+    "precision": "auto"
   }
 }

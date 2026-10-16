@@ -505,7 +505,8 @@ class Model(InputModel):
     distribution: Distribution = Field(default_factory=Distribution)
     load_mode: Literal["dead", "live", "both", "thermal"] = "both"
     subdivisions: int = Field(default=10, ge=2, le=100)
-    precision: Literal["standard", "fine"] = "standard"
+    # Legacy (<= 0.9.99): the mesh is now chosen from the geometry (engine.mesh).
+    precision: Literal["auto", "standard", "fine"] = "auto"
 
     @model_validator(mode="after")
     def consistency(self):

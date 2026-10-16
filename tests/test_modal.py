@@ -217,7 +217,14 @@ def test_nonprismatic_mirror_symmetry_and_convergence():
     m = mirrored_haunch()
     r = analyse_modal(m)
     assert [mode["symmetry"] for mode in r["modes"][:4]] == ["A", "S", "A", "S"]
-    fine = analyse_modal(m.model_copy(update={"precision": "fine"}))
+    # v1.0: the mesh is automatic; convergence against twice the elements.
+    from quickerbridge import engine
+
+    engine.MESH_OVERRIDE = {"modal": 80}
+    try:
+        fine = analyse_modal(m)
+    finally:
+        engine.MESH_OVERRIDE = None
     np.testing.assert_allclose(
         [x["f"] for x in r["modes"][:8]], [x["f"] for x in fine["modes"][:8]], rtol=1e-4
     )

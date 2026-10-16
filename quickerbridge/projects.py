@@ -10,7 +10,7 @@ from .version import APP_VERSION
 
 
 FORMAT = "QuickerBridgeProject"
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 MAX_PROJECT_BYTES = 1024 * 1024
 
 
@@ -83,6 +83,8 @@ def validate_project(text: str) -> dict:
         # v0.9.5 briefly had a constant support section (support_length); it
         # overrode the non-prismatic zones and was removed in v0.9.6.
         raw["model"].pop("support_length", None)
+    if version < 17 and isinstance(raw.get("model"), dict):
+        raw["model"]["precision"] = "auto"
     if version < 5 and isinstance(raw.get("model"), dict):
         # Before v0.8.6 the girder self-weight was never added automatically;
         # older projects keep the results they were saved with.
@@ -116,7 +118,7 @@ def validate_project(text: str) -> dict:
                     ):
                         raise ValueError("project.legacy_taper")
         raw["schema_version"] = SCHEMA_VERSION
-    elif version in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15):
+    elif version in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16):
         # v0.4 files: zones without ``plates`` keep the start-section
         # convention, which is the default. Pin/roller supports are unchanged.
         raw["schema_version"] = SCHEMA_VERSION
@@ -134,6 +136,8 @@ def validate_project(text: str) -> dict:
         # without composite inertia and M = 1 becomes "girder alone", a
         # multiplier M != 1 stays as entered ("manual", legacy); the
         # resistance compares permanent + live effects (models.Section).
+        # Schema 16 (v0.9.99): "standard" / "fine" precision becomes the
+        # automatic mesh of v1.0 (engine.mesh); a hinged deck joint is kept.
     elif version != SCHEMA_VERSION:
         raise ValueError("project.version")
     return ProjectFile.model_validate(raw).model_dump(mode="json")

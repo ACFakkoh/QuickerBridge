@@ -1,4 +1,4 @@
-# QuickerBridge 0.9.99 — guide en français
+# QuickerBridge 1.0 — guide en français
 
 [English README](README.md)
 
@@ -11,7 +11,7 @@ compacte. Aucune installation de Python et aucun serveur local pour les utilisat
 ## Démarrer
 
 - **Sur le web :** https://acfakkoh.github.io/QuickerBridge/ (GitHub Pages, publié à chaque mise à jour de `main`).
-- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v0.9.99-2026-10-06.html`) dans un navigateur moderne. Si vous
+- **Fichier reçu :** ouvrez `QuickerBridge-v<version>-<date>.html` (p. ex. `QuickerBridge-v1.0-2026-10-15.html`) dans un navigateur moderne. Si vous
   recevez l’archive portable, extrayez-la avant d’ouvrir le HTML.
 - Une connexion Internet est nécessaire au démarrage pour charger Pyodide et ses
   bibliothèques. Le cache peut accélérer les ouvertures suivantes; cette édition
@@ -200,7 +200,7 @@ jusqu’à 4 fois, puis affiche l’étape bloquée, la bibliothèque et le doma
 
 Le premier démarrage télécharge le moteur. Ensuite, modifier la géométrie ou EI
 reconstruit les fonctions d’influence; modifier uniquement les charges peut les
-réutiliser. Les zones nombreuses, cinq travées et le mode Fin prennent plus de temps.
+réutiliser. Les zones nombreuses, cinq travées et les travées très courtes (pas de passage plus fin) prennent plus de temps.
 Les calculs non prismatiques de v0.4 évitent de recalculer inutilement la rigidité.
 Si le moteur ne démarre pas, vérifiez la connexion et rechargez la page. Si une
 entrée est invalide, corrigez-la avant d’utiliser les résultats grisés.
@@ -280,6 +280,14 @@ GitHub Pages, consultez [le guide développeur](README_DEVELOPER.md).
   fenêtre complète, où l’on change la station (◀ ▶, x, curseur) et le y de S3.
   Profils en trait continu depuis σ = 0, ANE en pointillés; lignes dessus /
   dessous de dalle et armature inf. retirées du tableau.
+
+## Nouveautés 1.0
+
+- **Maillage automatique, plus de réglage « Précision numérique ».** Le camion avance de Lmin/80, borné entre 0,05 et 0,25 m (Lmin = travée la plus courte), plus les positions exactes où un essieu croise une station; 48 échantillons d’influence par élément (déjà proportionnels à sa longueur) et 480 points de flèche par travée. Une étude de convergence (`tests/mesh_study.py`, six ponts de 2 × 10 m à 60-80-60 m, face à une référence à 0,02 m et 192 échantillons) montre que seul le pas de passage compte : toutes les enveloppes (M, V, flèche, réactions) restent à moins de 0,02 %, à la vitesse de l’ancien mode Standard. Les anciens projets s’ouvrent tels quels (leur choix Standard / Fin est ignoré).
+- **Coupure du tablier :** l’option rotule et le paragraphe lancement/démolition sont retirés; une coupure garde les deux tronçons, ou seulement celui de gauche ou de droite. Un projet enregistré avec une rotule la garde (signalée) jusqu’au choix « Coupure ».
+- **Mise en page 1920 × 1080 :** l’espace de travail occupe toute la largeur; l’en-tête est plus mince, sans le sous-titre « poutres continues », avec l’avertissement « valeurs préliminaires » et un lien GitHub (en haut à droite); les quatre valeurs clés tiennent sur deux lignes; la hauteur des diagrammes suit celle de la fenêtre (trois diagrammes visibles à 100 % sur un écran 1080p).
+- **Fenêtres dans l’écran :** chaque fenêtre flottante (propriétés de section, contraintes, FT, note de calcul, méthode) est limitée à la hauteur de l’écran, défile à l’intérieur et remonte quand son contenu grandit. Sur grand écran, les propriétés de section passent à trois colonnes de saisie et deux de résultats : le cas mixte tient sans défilement.
+- Schéma de projet 17.
 
 ## Nouveautés 0.9.99
 

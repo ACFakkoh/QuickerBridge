@@ -12,6 +12,7 @@ import pycba as cba
 
 from .engine import (
     Structure,
+    mesh as engine_mesh,
     split_stations,
     stations,
     support_fixity,
@@ -187,7 +188,7 @@ def analyse_thermal(model: Model) -> dict:
     for k, member in enumerate(structure.members, start=1):
         if member["active"]:  # not the cut link, not a removed part
             ba.add_ic(k, kappas[member["span"]])
-    npts = 480 if model.precision == "standard" else 960
+    npts = engine_mesh(model)["npts"]
     ba.analyze(npts=npts)
 
     owner = structure.station_members(x, sides)
@@ -287,7 +288,7 @@ def analyse_thermal(model: Model) -> dict:
             "slab_strain": imposed_strain(model),
             "equilibrium_error": max(max_force_error, max_moment_error),
             "pycba": cba.__version__,
-            "precision": model.precision,
+            "mesh": engine_mesh(model),
         },
         "model": model.model_dump(),
     }

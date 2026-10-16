@@ -42,6 +42,34 @@ from .loads import (
 )
 
 
+# v1.0: numerical mesh chosen from the geometry (no user precision setting).
+# Calibrated by tests/mesh_study.py against a 0.02 m / 192-sample reference.
+MESH_OVERRIDE = None  # dict, for convergence studies only
+
+
+def mesh(model):
+    """Travel step and influence sampling from the shortest span.
+
+    Peaks at stations are exact (axle/station crossings are added to the
+    travel grid), so the step only refines maxima between crossings, a
+    second-order error: Lmin/80 bounded to [0.05, 0.25] m. Influence
+    samples are per member (relative to its length); 48 already converge.
+    """
+    lmin = min(s.length for s in model.spans)
+    out = {
+        "step": float(min(0.25, max(0.05, lmin / 80))),
+        "samples": 48,
+        "npts": 480,
+        "grid": 161,
+        "modal": 40,
+        "taper": 33,
+        "lmin": float(lmin),
+    }
+    if MESH_OVERRIDE:
+        out.update(MESH_OVERRIDE)
+    return out
+
+
 def stations(model):
     xs, spans, sides = [], [], []
     start = 0.0
@@ -482,7 +510,7 @@ class Basis:
         beam.k_theta = lru_cache(maxsize=5)(beam.k_theta)
         beam.get_span_k = lru_cache(maxsize=5)(beam.get_span_k)
         beam.get_ref = lru_cache(maxsize=5)(beam.get_ref)
-        self.nintegrate = 480 if model.precision == "standard" else 960
+        self.nintegrate = mesh(model)["npts"]
         self.ba.npts = self.nintegrate
         self.interpolators = []
         self.eps = 1e-9
@@ -501,7 +529,7 @@ class Basis:
         return st.reactions(ba), st.deflections(ba, self.x, self.owner)
 
     def build(self):
-        samples = 48 if self.model.precision == "standard" else 96
+        samples = mesh(self.model)["samples"]
         for i, m in enumerate(self.structure.members):
             if not m["active"]:
                 # Cut link or removed part: no load is ever applied there.
@@ -681,7 +709,7 @@ class Basis:
         """Dense unit-load grid (every station +/- 1e-6 m) and its responses,
         for UDLs placed on the parts of an influence line of one sign."""
         if getattr(self, "_influence_grid", None) is None:
-            n = 161 if self.model.precision == "standard" else 321
+            n = mesh(self.model)["grid"]
             grid = np.concatenate(
                 [
                     np.linspace(a, b, n)
@@ -935,8 +963,9 @@ def structure_key(model):
         "distribution",
         "pedestrian",
         "resistance",
+        "precision",  # legacy setting, no longer used (v1.0)
     ):
-        data.pop(key)
+        data.pop(key, None)
     return json.dumps(data, sort_keys=True)
 
 
@@ -1243,7 +1272,7 @@ def analyse(model: Model):
     if vm is None:
         weights, offsets = np.zeros(0), np.zeros(0)
     variants = vehicle_variants(vehicle_live)
-    step = 0.25 if model.precision == "standard" else 0.1
+    step = mesh(model)["step"]
     steps = 0
     groups = axle_groups(vehicle_live) if vm is not None else []
     lane_w, fraction, lane_style = lane_parameters(vehicle_live)
@@ -1467,7 +1496,7 @@ def analyse(model: Model):
             "spacing_variants": len(variants),
             "equilibrium_error": basis.max_equilibrium_error,
             "pycba": cba.__version__,
-            "precision": model.precision,
+            "mesh": mesh(model),
             "timing": {k: round(v, 3) for k, v in timing.items()},
         },
         "ft": (
@@ -1667,7 +1696,7 @@ def influence(model, station, support=None, case_max=None, case_min=None):
         raise ValueError("influence.support")
     grid = np.concatenate(
         [
-            np.linspace(a, b, 161 if model.precision == "standard" else 321)
+            np.linspace(a, b, mesh(model)["grid"])
             for a, b in zip(basis.support_x[:-1], basis.support_x[1:])
         ]
     )

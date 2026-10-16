@@ -168,7 +168,7 @@ def span_ei(model: Model, index: int):
         else:
             # Geometry is interpolated first. EI is sampled into positive linear
             # pieces, avoiding polynomial overshoot for asymmetric I-girders.
-            t = np.linspace(0, 1, 33 if model.precision == "standard" else 65)
+            t = np.linspace(0, 1, 33)
             shape = profile_fraction(a, b, t, zone.profile)
             source = plate_source(zone, a, b)
             values = [

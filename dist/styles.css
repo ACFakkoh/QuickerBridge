@@ -560,3 +560,49 @@ svg.res-plot .res-label{font-size:11.5px;stroke-width:3px}
 .sp-foot{position:sticky;bottom:0;z-index:2;display:flex;align-items:center;justify-content:flex-end;gap:14px;padding:10px 16px;background:#f3f7f9;border-top:1px solid var(--line)}
 .sp-foot span{font-size:.75rem;color:var(--muted);max-width:640px}
 .sp-ok{min-width:96px;background:var(--navy);border-color:var(--navy);color:#fff}.sp-ok:hover:not(:disabled){background:#1b4157;color:#fff}
+/* v1.0 (feedback V1.0): full-width layout on 1920 × 1080, slimmer header with
+   the preliminary-values notice and a GitHub link, two-line metrics, diagrams
+   sized from the window height, windows kept inside the screen. */
+.workspace,.focus-results .workspace{max-width:none}
+.topbar{height:58px;gap:18px}
+.brand{font-size:1.38rem}.brand-mark{font-size:2.2rem}
+.top-warning{display:flex;align-items:center;gap:8px;margin:0 auto;padding:4px 12px;min-width:0;border:1px solid #3d6274;border-radius:999px;background:#163a50;color:#d3e2e9;font-size:.75rem;line-height:1.35;justify-content:flex-start}
+.top-warning>span[data-i18n]{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.top-warning .warning-symbol{flex:none;border-color:#f3c46b;color:#f3c46b;line-height:13px}
+.top-warning .metrics-flag{background:#f3c46b;border-color:#f3c46b;color:#3d2a05}
+.header-right{gap:16px}
+.github-link{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;color:#c5d8e0;transition:color .15s,background .15s}
+.github-link svg{width:22px;height:22px}
+.github-link:hover{color:#fff;background:#17384c}
+.github-link:focus-visible{outline:2px solid #20adba;outline-offset:2px}
+.metric{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:10px;align-items:baseline;padding:7px 14px 8px}
+.metric-label{grid-column:1/-1}
+.metric-value{margin-top:1px;font-size:1.35rem;line-height:1.15}
+.metric-location{margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.metrics{margin-top:10px}
+.chart-toolbar{margin-top:8px}
+.result-view{padding-top:10px}
+.display-controls{margin-bottom:6px}
+@media(min-width:801px){
+ :root{--plot-h:clamp(124px,calc((100vh - 440px) / 3),240px)}
+ .focus-results{--plot-h:clamp(140px,calc((100vh - 420px) / 3),260px)}
+ #beam{height:118px}
+ .structure-panel{padding-top:8px;padding-bottom:6px}
+ .inputs{max-height:calc(100vh - 92px)}
+}
+@media(min-width:801px) and (max-height:950px){.topbar{height:54px}.workspace{padding-top:12px}#beam{height:104px}}
+@media(max-width:1000px){.topbar{flex-wrap:wrap;height:auto;min-height:58px;padding-top:8px;padding-bottom:8px;row-gap:6px}.top-warning{order:3;flex:1 1 100%;margin:0;border-radius:7px}.top-warning>span[data-i18n]{white-space:normal}}
+@media(max-width:800px){.topbar{min-height:62px}}
+/* Every window fits the screen height; its body scrolls. */
+dialog.section-dialog,dialog.qb-float{max-height:calc(100vh - 24px)}
+/* Section properties on a wide screen: three-column inputs, results tables in
+   two columns, so the composite case fits a 1080p screen without scrolling. */
+@media(min-width:1700px){
+ .section-dialog:not(.stress-dialog):not(.method-dialog):not(.res-dialog):not(.axle-dialog){width:min(1840px,97vw)}
+ #section-dialog .sp-body{grid-template-columns:minmax(0,1.05fr) minmax(0,.8fr) minmax(0,1.7fr)}
+ #section-dialog .sp-inputs .sp-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+ #section-dialog .sp-results{column-count:2;column-gap:16px}
+ #section-dialog .sp-results>*{break-inside:avoid}
+ #section-dialog .sp-results>h3{break-after:avoid;margin-top:0}
+}
+@media(min-width:1700px){#section-dialog .sp-body{padding:10px 16px;gap:14px}#section-dialog .sp-body h3{margin:8px 0 5px}#section-dialog .sp-notes{margin-bottom:8px}}

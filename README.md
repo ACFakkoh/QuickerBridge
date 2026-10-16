@@ -9,7 +9,7 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 
 ![QuickerBridge — envelopes of a two-span girder with rotational-spring abutments](docs/screenshots/envelopes.png)
 
-*Version 0.9.99 · 2026-10-06 · Anthony Chéruel · [Guide en français](README.fr.md)*
+*Version 1.0 · 2026-10-15 · Anthony Chéruel · [Guide en français](README.fr.md)*
 
 ---
 
@@ -21,7 +21,7 @@ running locally through WebAssembly. No installation, no server, no data leaves 
 | **Influence lines** | V, M and deflection at any station, plus the reaction (and moment reaction) at the nearest support, with the governing axles drawn on the line. |
 | **Governing live load** | The arrangement (axles, loaded lane spans or pedestrian spans) of any extreme drawn on the beam, with its V, M and δ diagrams over the faint envelope. |
 | **Supports** | Pinned, roller, **fixed (integral abutment)** or **rotational spring k** with the resulting degree of fixity. Any span can be made **simple (isostatic)**, hinged at both ends *(v0.8.6)*. Uplift is flagged automatically. |
-| **Deck cut or hinge** *(v0.9.99)* | At any station, for launching or demolition stages: saw cut (V = M = 0, both parts or one part kept) or hinge (shear carried). |
+| **Deck cut** *(v0.9.99)* | At any station, for launching or demolition stages: saw cut (V = M = 0, both parts or one part kept). |
 | **Sections** | Steel I-girders from plate dimensions, standard **precast prestressed NEBT 1000–1800** girders *(v0.8.6, concrete E 28 GPa by default)* or direct EI; analysis inertia girder alone, composite 3n / 1n or cracked I′ *(v0.9.99)*, non-prismatic zones with linear or parabolic depth (steel girders; NEBT bridges stay prismatic), EI(x) diagram and stiffness-step warnings. Girder **self-weight** is added to the permanent loads by default (steel +15%, NEBT +10%, adjustable, can be switched off). |
 | **Vibration modes** *(v0.8)* | Up to 12 natural frequencies and periods in vertical bending from the same model (non-prismatic EI, integral abutments, springs), mass from the unfactored permanent loads. Animated deck, mode thumbnails, frequency spectrum with pedestrian resonance bands, modal mass. Six modes and real-time animation by default; optional slow motion. |
 | **Truck load fraction FT** *(v0.9–0.9.3)* | CSA S6-25 simplified method for slab-on-girder, solid-slab and voided-slab bridges (per metre of width for slabs, with Be; classes A/B and C/D, CL-625 / CL-750-QC): N, S, Sc, Wc, skew → n, RL, We, μ, DVE (≤ 3.0 m), Le (Figure 5.1, 0.20 (L1+L2) over piers), DT, λ, γc, γe, FT for interior/exterior girders, moment and shear, ULS/SLS1 and FLS/SLS2, with Fs. Choose the girder and limit state; when applied, the whole live load of one lane is multiplied zone by zone (M and δ by the moment FT, V and reactions by the shear FT); exterior girders also get Fs on dead-load shear. Data, definitions and compact tables in the “FT · S6-25” tab; Excel sheet. |
@@ -108,6 +108,14 @@ every push to `main`). In the repository settings, **Pages → Source** must be 
 Built on [PyCBA](https://github.com/ccaprani/pycba) by Colin Caprani (AGPL-3.0-or-later),
 vendored with local additions (CL-750-QC, non-prismatic performance); runs on
 [Pyodide](https://pyodide.org). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## What's new in 1.0
+
+- **Automatic mesh, no "Numerical precision" setting.** The truck now moves by Lmin/80, bounded to 0.05–0.25 m (Lmin = shortest span), plus the exact positions where an axle crosses a station; 48 influence samples per member (already relative to its length) and 480 deflection points per span. A convergence study (`tests/mesh_study.py`, six bridges from 2 × 10 m to 60-80-60 m, against a 0.02 m / 192-sample reference) shows that the travel step is the only parameter that matters: every envelope (M, V, deflection, reactions) stays within 0.02 %, at the speed of the former Standard mode. Older projects open unchanged (their Standard / Fine choice is ignored).
+- **Deck cut:** the hinge option and the launching/demolition paragraph are removed; a cut keeps both parts, or only the left or right one. Projects saved with a hinge keep it (flagged) until "Cut" is chosen.
+- **1920 × 1080 layout:** the workspace uses the whole width; the header is slimmer, without the "continuous beam" subtitle, with the preliminary-values notice and a GitHub link (top right); the four headline values take two lines; the diagram height follows the window height (three diagrams visible at 100 % zoom on a 1080p screen).
+- **Windows inside the screen:** every floating window (section properties, stresses, FT, calculation sheet, method) is capped to the screen height, scrolls inside and slides back up when its content grows. On a wide screen the section properties window uses three input columns and two result columns, so the composite case fits without scrolling.
+- Project schema 17.
 
 ## What's new in 0.9.99
 

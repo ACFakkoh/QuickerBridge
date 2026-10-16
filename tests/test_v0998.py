@@ -12,7 +12,7 @@ from quickerbridge.browser import dispatch
 from quickerbridge.engine import analyse, stage_moments
 from quickerbridge.loads import lane_parameters, vehicle_data
 from quickerbridge.models import LiveLoad, Model, Resistance, Section
-from quickerbridge.projects import create_project, validate_project
+from quickerbridge.projects import SCHEMA_VERSION, create_project, validate_project
 from quickerbridge.resistance import (
     classes,
     frd,
@@ -276,7 +276,7 @@ def test_schema_15_migration_of_v0997_resistance():
     }
     old["model"]["live"].update(vehicle="CL750QC", evaluation="3", road_class="D")
     data = validate_project(json.dumps(old))
-    assert data["schema_version"] == 16
+    assert data["schema_version"] == SCHEMA_VERSION  # current schema
     assert data["model"]["resistance"] == {
         "effects": "both",
         "enabled": False,

@@ -85,10 +85,10 @@ width, creep, cracking, stresses, section resistance or composite neutral axis.
 The displayed I, area and centroid remain gross steel properties. Direct constant
 EI sections already contain their effective stiffness and bypass this modifier.
 
-EI is sampled at 33 points per tapered zone (65 in Fine mode), with positive
+EI is sampled at 33 points per tapered zone, with positive
 linear interpolation between samples. True zone jumps are retained. The solver
-therefore approximates the exact geometric EI between sampling points; compare
-Standard and Fine for sensitivity. Refining the report table does not refine EI.
+therefore approximates the exact geometric EI between sampling points (see
+tests/mesh_study.py for sensitivity). Refining the report table does not refine EI.
 
 ## Earlier project files
 

@@ -30,7 +30,7 @@ import numpy as np
 from .sections import span_ei
 from .models import Model
 from .loads import self_weight_intervals
-from .engine import deck_joint, end_releases
+from .engine import deck_joint, end_releases, mesh as engine_mesh
 
 G = 9.81  # m/s2, weight (kN/m) -> mass (t/m)
 _GAUSS = (
@@ -159,7 +159,7 @@ def analyse_modal(model: Model) -> dict:
     total_mass = sum(max(0.0, min(b, hi) - max(a, lo)) * m for a, b, m in profile)
     if total_mass <= 0:
         raise ValueError("modal.no_mass")
-    per_span = 40 if model.precision == "standard" else 80
+    per_span = engine_mesh(model)["modal"]
     elements = mesh(model, profile, per_span)
     n_nodes = len(elements) + 1
     eis = [span_ei(model, i) for i in range(len(lengths))]
