@@ -22,7 +22,7 @@ jobs:
           QB_MPL_STUB: "1"
           QB_SCIPY_LITE: "1"
       - run: python build_portable.py --no-release
-      - run: node --check dist/app.js
+      - run: for f in dist/js/*.js; do node --check "$f"; done
       - run: node --check dist/modes.js
       - run: node --check dist/axle.js
       - run: node --check dist/sections.js

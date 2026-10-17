@@ -220,6 +220,8 @@ def truck_fraction(model: Model) -> dict:
     d = model.distribution
     if d.bridge_type in ("slab", "voided_slab"):
         return slab_fraction(model)
+    if d.bridge_type in DECKS:
+        return deck_fraction(model)
     N, S, Sc, Wc = d.girders, d.spacing, d.overhang, d.carriageway
     n = design_lanes(Wc)
     rl = lane_factor(n)
@@ -622,6 +624,269 @@ def slab_fraction(model: Model) -> dict:
             "per_metre": True,
             "spans": [
                 {"span": i + 1, "L": L, "Fs": fs[i]} for i, L in enumerate(lengths)
+            ],
+            "positive": [
+                {"span": k + 1, "Le": clamp_le(le), "rule": rule}
+                for k, le, rule in positive
+            ],
+            "negative": [
+                {"support": k + 1, "Le": clamp_le(le), "rule": rule, "kind": kind}
+                for k, le, rule, kind, _ in negative
+            ],
+            "minimum": minimum,
+        },
+        "rows": rows,
+        "zones": zones(model, rows, negative, fs),
+        "warnings": warnings,
+    }
+
+
+# --- v1.01: steel grid, aluminum and transverse wood decks on steel girders ----
+#
+#     FT = S / (DT γc (1 + μλ))   (5.6.7 and A5.3.4, beam analogy of 5.6.4)
+#
+# Tables 5.8 (steel grid), 5.9 to 5.11 (aluminum) and 5.12 (wood) for classes A
+# and B; Tables A5.3.4, 5.9 (λ = 0) and A5.3.5 for classes C and D. γc = 1 and
+# γe = 0 except the aluminum γc of Tables 5.10 and 5.11. Only non-skewed bridges
+# are covered (Fs = 1.0). The exterior-girder shear comes from simple statics
+# (lever rule, one truck) and is not less than the interior-girder shear.
+
+DECKS = ("steel_grid", "aluminum", "wood_laminated", "wood_plank")
+WOOD_THIN, WOOD_THICK = 140.0, 290.0  # mm, laminated wood rows of Table 5.12
+GRID_THICK = 100.0  # mm, Table 5.8 threshold
+DECK_TABLES = {
+    ("steel_grid", "AB"): "5.8",
+    ("steel_grid", "CD"): "A5.3.4",
+    ("aluminum", "AB"): "5.9, 5.10, 5.11",
+    ("aluminum", "CD"): "5.9 (λ = 0), 5.10, 5.11",
+    ("wood_laminated", "AB"): "5.12",
+    ("wood_laminated", "CD"): "A5.3.5",
+    ("wood_plank", "AB"): "5.12",
+    ("wood_plank", "CD"): "A5.3.5",
+}
+
+
+def _clamp(value, low, high):
+    return min(max(value, low), high)
+
+
+def _grid(state, effect, n, thickness, cd):
+    """Table 5.8 (A, B) or Table A5.3.4 (C, D)."""
+    multi = n >= 2
+    if thickness < GRID_THICK:
+        if state == "FLS":
+            return 2.70 if effect == "moment" else 2.40
+        if cd and multi:
+            return 2.80 if effect == "moment" else 2.50
+        return 2.70 if effect == "moment" else 2.30
+    if state == "FLS":
+        return 3.60 if effect == "moment" else 3.0
+    if effect == "shear":
+        return 3.15 if cd and multi else 3.0
+    return 3.40 if multi and not cd else 3.60
+
+
+def _aluminum_gamma_c(state, girder, effect, n, le, s):
+    """Tables 5.10 (interior moment, SLS2/FLS) and 5.11 (shear)."""
+    if effect == "shear":
+        return (s / 2.0) ** 0.25 if s < 2.0 else 1.0
+    if state == "ULS" or girder == "exterior" or n == 1 or le <= 10 or s <= 1.2:
+        return 1.0
+    # Table 5.10 stops at Le = 30 m and S = 3 m: capped (warning alu_range).
+    return 1.0 + 0.9 * (0.3 * min(s, 3.0) - 0.36) * (min(le, 30.0) - 10) / 40
+
+
+def _aluminum(state, effect, le, cd):
+    """Table 5.9: DT and λ (λ = 0 for classes C and D, A5.3.4.3)."""
+    root = math.sqrt(le)
+    if state == "ULS":
+        if effect == "moment":
+            dt, lam = max(3.8 - 4.4 / math.sqrt(le + 5), 2.55), 0.10 - 0.25 / le
+        else:
+            dt, lam = min(3.9 - 3.6 / root, 3.1), 0.0
+    elif effect == "moment":
+        dt, lam = 4.0 - 2.5 / root, 0.05
+    else:
+        dt, lam = 5.2 - 5.4 / root, 0.0
+    return dt, 0.0 if cd else lam
+
+
+def _wood_row(thick, state, effect, n, le, cd):
+    """One laminated row of Table 5.12 / A5.3.5 (140 or 290 mm): DT, λ."""
+    multi = n >= 2
+    if effect == "shear":
+        return (3.15 if cd and multi else 3.0), 0.0
+    if not thick:
+        if not multi:
+            return _clamp(3.70 - 3.0 / le, 3.0, 3.40), 0.0
+        if state == "FLS":
+            return _clamp(3.90 - 3.0 / le, 3.40, 3.75), 0.0
+        if cd:
+            return _clamp(4.65 - 74 / (le + 40), 3.15, 3.60), 0.0
+        return _clamp(4.40 - 70 / (le + 40), 3.0, 3.40), 0.0
+    if not multi:
+        return 3.50, 0.0
+    if state == "FLS":
+        return _clamp(3.90 - 3.0 / le, 3.40, 3.75), 0.10 - 0.15 / le
+    if cd:
+        return _clamp(3.05 + 0.042 * le, 3.15, 3.70), 0.10 - 0.25 / le
+    return _clamp(2.90 + 0.04 * le, 3.0, 3.50), 0.10 - 0.25 / le
+
+
+def _plank(state, n, cd):
+    """Table 5.12 / A5.3.5, wood plank deck (moment and shear alike)."""
+    if state == "FLS" or n == 1:
+        return 2.40
+    return 2.65 if cd else 2.55
+
+
+def deck_coefficients(deck, state, girder, effect, n, le, s, thickness, road_class):
+    """DT, λ and γc for one load effect of a grid, aluminum or wood deck.
+
+    ``thickness`` (mm) selects the steel grid row (< 100 mm) and interpolates
+    the laminated wood rows between 140 and 290 mm (clamped outside).
+    """
+    cd = road_class == "CD"
+    if cd:
+        n = min(n, 3)
+    if deck == "steel_grid":
+        return _grid(state, effect, n, thickness, cd), 0.0, 1.0
+    if deck == "aluminum":
+        dt, lam = _aluminum(state, effect, le, cd)
+        return dt, lam, _aluminum_gamma_c(state, girder, effect, n, le, s)
+    if deck == "wood_plank":
+        return _plank(state, n, cd), 0.0, 1.0
+    t = _clamp(thickness, WOOD_THIN, WOOD_THICK)
+    dt0, lam0 = _wood_row(False, state, effect, n, le, cd)
+    dt1, lam1 = _wood_row(True, state, effect, n, le, cd)
+    w = (t - WOOD_THIN) / (WOOD_THICK - WOOD_THIN)
+    if w == 0:
+        return dt0, lam0, 1.0
+    if w == 1:
+        return dt1, lam1, 1.0
+    return dt0 + w * (dt1 - dt0), lam0 + w * (lam1 - lam0), 1.0
+
+
+def lever_positions(N, S, Sc, Wc, wheel_edge):
+    """Wheel lines (m from the deck edge) of the lever-rule truck."""
+    B = (N - 1) * S + 2 * Sc
+    first = (B - Wc) / 2 + wheel_edge
+    return first, first + WHEEL_GAUGE
+
+
+def lever_exterior(N, S, Sc, Wc, wheel_edge):
+    """Share of one truck carried by the exterior girder (lever rule).
+
+    The deck is a simple beam between the exterior girder (at Sc from the deck
+    edge) and the first interior girder, with a cantilever over the overhang;
+    each wheel line carries half the truck.
+    """
+    if N < 2:
+        return 1.0
+    total = 0.0
+    for x in lever_positions(N, S, Sc, Wc, wheel_edge):
+        d = x - Sc  # positive towards the first interior girder
+        if d < S:
+            total += 0.5 * (1 - d / S)
+    return total
+
+
+def deck_fraction(model: Model) -> dict:
+    d = model.distribution
+    deck = d.bridge_type
+    N, S, Sc, Wc = d.girders, d.spacing, d.overhang, d.carriageway
+    n = design_lanes(Wc)
+    rl = lane_factor(n)
+    We = Wc / n
+    mu = min((We - 3.3) / 0.6, 1.0)
+    B = (N - 1) * S + 2 * Sc
+    curb = (B - Wc) / 2
+    lever = lever_exterior(N, S, Sc, Wc, d.wheel_edge)
+    warnings = []
+    if model.live.vehicle not in ("CL625", "CL750QC"):
+        warnings.append("vehicle")
+    if Sc > 0.6 * S:
+        warnings.append("overhang")
+    if curb < 0:
+        warnings.append("width")
+    if d.road_class == "CD" and n > 3:
+        warnings.append("cd_lanes")
+    if deck == "wood_laminated" and not WOOD_THIN <= d.deck_thickness <= WOOD_THICK:
+        warnings.append("wood_thickness")
+    positive, negative = effective_spans(model, d.h_left, d.h_right)
+    les = [clamp_le(le) for _, le, *_ in positive + negative]
+    if any(not 3 <= le <= 60 for _, le, *_ in positive + negative):
+        warnings.append("le_clamped")
+    if deck == "aluminum" and N > 1 and (S > 3.0 or any(le > 30 for le in les)):
+        warnings.append("alu_range")
+    lengths = [s.length for s in model.spans]
+    fs = [1.0] * len(lengths)
+    minimum = {"ULS": 1.05 * n * rl / N, "FLS": 1.05 / N}
+    rows = []
+
+    def add(state, girder, effect, sign, where, le, rule):
+        dt, lam, gc = deck_coefficients(
+            deck, state, girder, effect, n, le, S, d.deck_thickness, d.road_class
+        )
+        calc = S / (dt * gc * (1 + mu * lam))
+        ft = max(calc, minimum[state])
+        row = {
+            "state": state,
+            "girder": girder,
+            "effect": effect,
+            "sign": sign,
+            "where": where,
+            "Le": le,
+            "Le_rule": rule,
+            "DT": dt,
+            "lambda": lam,
+            "gamma_c": gc,
+            "gamma_e": 0.0,
+            "FT_calc": calc,
+            "FT_min": minimum[state],
+            "FT": ft,
+            "minimum_governs": calc < minimum[state],
+            "Fs": 1.0,
+            "FT_Fs": ft,
+        }
+        if girder == "exterior" and effect == "shear":
+            # Simple statics, not less than the interior-girder shear.
+            row["lever"] = lever
+            row["method"] = "lever" if lever > ft else "interior"
+            row["FT"] = row["FT_Fs"] = max(lever, ft)
+            row["minimum_governs"] = row["method"] == "interior" and calc < ft
+        rows.append(row)
+
+    for state in STATES:
+        for girder in ("interior", "exterior"):
+            for k, le, rule in positive:
+                add(state, girder, "moment", "+", f"span:{k + 1}", clamp_le(le), rule)
+            for k, le, rule, kind, _ in negative:
+                where = f"support:{k + 1}"
+                add(state, girder, "moment", "-", where, clamp_le(le), rule)
+            for k, le, rule in positive:
+                add(state, girder, "shear", "+", f"span:{k + 1}", clamp_le(le), rule)
+            for k, le, rule, kind, _ in negative:
+                if kind == "pier":
+                    where = f"support:{k + 1}"
+                    add(state, girder, "shear", "-", where, clamp_le(le), rule)
+    return {
+        "kind": deck,
+        "inputs": d.model_dump(),
+        "derived": {
+            "n": n,
+            "RL": rl,
+            "We": We,
+            "mu": mu,
+            "B": B,
+            "curb": curb,
+            "deck": deck,
+            "table": DECK_TABLES[(deck, d.road_class)],
+            "thickness": d.deck_thickness,
+            "lever": lever,
+            "wheels": list(lever_positions(N, S, Sc, Wc, d.wheel_edge)),
+            "spans": [
+                {"span": i + 1, "L": L, "Fs": 1.0} for i, L in enumerate(lengths)
             ],
             "positive": [
                 {"span": k + 1, "Le": clamp_le(le), "rule": rule}

@@ -16,7 +16,7 @@ function axleIntegral(){const s=model.supports,n=model.spans.length;return [['fi
 function axleWhere(where){const [kind,k]=where.split(':');return `${t(kind==='span'?'axleSpan':'axleSupport')} ${k}`;}
 function axleChoice(){
  const d=axleSettings();
- return `<div class="field-row">${select(axleSlab()?'portionType':'girderType','distribution.girder',d.girder,[['interior',t('interiorGirder')],['exterior',t('exteriorGirder')]])}${select('limitState','distribution.state',d.state,[['ULS',t('ulsState')],['FLS',t('flsState')]])}</div>${d.girder==='exterior'?`<label class="toggle-row"><input type="checkbox" data-path="distribution.fs_dead" ${d.fs_dead!==false?'checked':''}>${t('fsDead')}</label>`:''}`;
+ return `<div class="field-row">${select(axleSlab()?'portionType':'girderType','distribution.girder',d.girder,[['interior',t('interiorGirder')],['exterior',t('exteriorGirder')]])}${select('limitState','distribution.state',d.state,[['ULS',t('ulsState')],['FLS',t('flsState')]])}</div>${d.girder==='exterior'&&!axleDeck()?`<label class="toggle-row"><input type="checkbox" data-path="distribution.fs_dead" ${d.fs_dead!==false?'checked':''}>${t('fsDead')}</label>`:''}`;
 }
 // Left panel: switch, the two choices and a link; the deck data live in the tab.
 function axleGroupMeta(){
@@ -40,6 +40,7 @@ function axleMiniHtml(){
 function axleDerivedHtml(){
  if(!axleData)return `<span>${t('axleComputing')}</span>`;
  const v=axleData.derived,slabType=v.Be!==undefined;
+ if(v.deck)return [[`${t('overallWidth')} B = (N−1)·S + 2·Sc`,fmt(v.B,2)+' m','hl'],[t('curbWidth'),fmt(v.curb,2)+' m'],['n',v.n],['RL',fmt(v.RL,2)],['We',fmt(v.We,2)+' m'],['μ',fmt(v.mu,3)],[t('axleTables'),v.table],[t('axleWheels'),v.wheels.map(x=>fmt(x,2)).join(' / ')+' m'],[t('axleLever'),fmt(v.lever,3)],['Fs','1,0']].map(([k,x,cls])=>`<span${cls?' class="axle-hl"':''}>${k} <b>${x}</b></span>`).join('');
  const items=slabType?[['B',fmt(v.B,2)+' m'],['Be',fmt(v.Be,2)+' m'],['n',v.n],['RL',fmt(v.RL,2)],['We',fmt(v.We,2)+' m'],['μ',fmt(v.mu,3)],['Fs',v.spans.map(s=>fmt(s.Fs,3)).join(' / ')],[t('perMetre'),'✓']]:[[`${t('overallWidth')} B = (N−1)·S + 2·Sc`,fmt(v.B,2)+' m','hl'],[t('curbWidth'),fmt(v.curb,2)+' m'],['n',v.n],['RL',fmt(v.RL,2)],['We',fmt(v.We,2)+' m'],['μ',fmt(v.mu,3)],['DVE',fmt(v.DVE,3)+' m'],['Fs',v.spans.map(s=>fmt(s.Fs,3)).join(' / ')]];
  return items.map(([k,x,cls])=>`<span${cls?' class="axle-hl"':''}>${k} <b>${x}</b></span>`).join('');
 }
@@ -64,16 +65,22 @@ function axleChanged(){
 }
 // Tab: the inputs are drawn once (typing keeps the focus); results refresh below.
 function renderAxleView(){
+ if(typeof axleDialogHead==='function')axleDialogHead();
  const host=$('#axle-body');if(!host)return;const d=axleSettings(),[left,right]=axleIntegral();
  // Bridge type first: slab-on-girder now, slab / voided slab prepared (5.6.5).
- const type=select('bridgeType','distribution.bridge_type',d.bridge_type,[['slab_on_girder',t('slabOnGirder')],['slab',t('slabSolid')],['voided_slab',t('slabVoided')]]);
+ const type=select('bridgeType','distribution.bridge_type',d.bridge_type,[['slab_on_girder',t('slabOnGirder')],['slab',t('slabSolid')],['voided_slab',t('slabVoided')],...AXLE_DECKS.map(k=>[k,t('deck_'+k)])]);
  const cls=select('roadClass','distribution.road_class',d.road_class,[['AB',t('classAB')],['CD',t('classCD')]]);
  const common=[field('carriagewayWc','distribution.carriageway',d.carriageway,'',{min:1.01,max:60}),field('skewPsi','distribution.skew',d.skew,'',{min:0,max:45})];
  // Slab bridges: B and the equivalent width Be (5.5.2, B by default); voided slabs also S.
  const inputs=axleSlab()?[type,cls,field('slabWidthB','distribution.slab_width',d.slab_width,'',{min:1.01,max:60}),field('equivalentWidthBe','distribution.equivalent_width',d.equivalent_width??d.slab_width,'',{min:1.01,max:60}),...(d.bridge_type==='voided_slab'?[field('voidSpacingS','distribution.spacing',d.spacing,'',{min:.31,max:10})]:[]),...common]:[type,cls,field('girdersN','distribution.girders',d.girders,'',{min:1,max:40,step:1}),field('spacingS','distribution.spacing',d.spacing,'',{min:.31,max:10}),field('overhangSc','distribution.overhang',d.overhang,'',{min:0,max:6}),...common];
+ // v1.01: grid, aluminum and wood decks on steel girders: no skew (Fs = 1),
+ // deck thickness (grid, laminated wood) and the lever-rule wheel distance.
+ if(axleDeck()){inputs.splice(inputs.indexOf(common[1]),1);
+  if(['steel_grid','wood_laminated'].includes(d.bridge_type))inputs.push(field('deckThickness','distribution.deck_thickness',d.deck_thickness??150,'',{min:10,max:600}));
+  inputs.push(field('wheelEdge','distribution.wheel_edge',d.wheel_edge??0.6,'',{min:0,max:3}));}
  if(left)inputs.push(field('hLeft','distribution.h_left',d.h_left,'',{min:0,max:30}));
  if(right)inputs.push(field('hRight','distribution.h_right',d.h_right,'',{min:0,max:30}));
- host.innerHTML=`<div class="axle-view"><div class="axle-inputs"><div class="axle-grid">${inputs.join('')}</div><div class="axle-choice">${axleChoice()}</div></div><div id="axle-results"></div><details class="axle-notes"><summary>${t('axleNotes')}</summary><div class="method-content"><h3>${t('axleDefsTitle')}</h3><dl class="axle-defs">${axleDefinitions().map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl><h3>${t('axleMethod')}</h3><p>${t('axleMethodBody')}</p>${axleSlab()?`<p>${t('axleSlabNote')}</p>`:''}<h3>${t('axleInterpret')}</h3><p>${t('axleInterpretBody')}</p><p>${t('axleApplyBody')}</p></div></details></div>`;
+ host.innerHTML=`<div class="axle-view"><div class="axle-inputs"><div class="axle-grid">${inputs.join('')}</div><div class="axle-choice">${axleChoice()}</div></div><div id="axle-results"></div><details class="axle-notes"><summary>${t('axleNotes')}</summary><div class="method-content"><h3>${t('axleDefsTitle')}</h3><dl class="axle-defs">${axleDefinitions().map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl><h3>${t('axleMethod')}</h3><p>${t('axleMethodBody')}</p>${axleSlab()?`<p>${t('axleSlabNote')}</p>`:''}${axleDeck()?`<p>${t('axleDeckNote')}</p>`:''}<h3>${t('axleInterpret')}</h3><p>${t('axleInterpretBody')}</p><p>${t('axleApplyBody')}</p></div></details></div>`;
  renderAxleResults();
 }
 function renderAxleResults(){
@@ -101,6 +108,11 @@ function renderAxleResults(){
   if(dv.Be!==undefined){
    h+=group(t('axleMoment'))+row('DT',c=>cell(state,'interior','moment',c,'DT'))+row('λ',c=>cell(state,'interior','moment',c,'lambda'))+row('FT',c=>cell(state,'interior','moment',c,'FT'),'axle-ftrow');
    h+=group(t('axleShear'))+row('DT',c=>cell(state,'interior','shear',c,'DT'))+row(t('axleSlabShearInt'),c=>cell(state,'interior','shear',c,'FT'),'axle-ftrow')+row(t('axleSlabShearExtRaw'),c=>cell(state,'exterior','shear',c,'FT'))+row(t('axleSlabShearExt'),c=>cell(state,'exterior','shear',c,'FT_Fs'),'axle-ftrow');
+   return h+`</tbody></table>`;
+  }
+  if(dv.deck){
+   for(const girder of ['interior','exterior'])h+=group(t(girder==='interior'?'axleMomInt':'axleMomExt'))+row('DT',c=>cell(state,girder,'moment',c,'DT'))+row('λ',c=>cell(state,girder,'moment',c,'lambda'))+row('γc',c=>cell(state,girder,'moment',c,'gamma_c'))+row('FT',c=>cell(state,girder,'moment',c,'FT'),'axle-ftrow');
+   h+=group(t('axleShear'))+row('DT',c=>cell(state,'interior','shear',c,'DT'))+row('γc',c=>cell(state,'interior','shear',c,'gamma_c'))+row(t('axleShearInt'),c=>cell(state,'interior','shear',c,'FT'),'axle-ftrow')+row(t('axleLever'),c=>cell(state,'exterior','shear',c,'lever'))+row(t('axleShearExtDeck'),c=>cell(state,'exterior','shear',c,'FT'),'axle-ftrow');
    return h+`</tbody></table>`;
   }
   h+=group(t('axleMomInt'))+row('DT',c=>cell(state,'interior','moment',c,'DT'))+row('λ',c=>cell(state,'interior','moment',c,'lambda'))+row('γc',c=>cell(state,'interior','moment',c,'gamma_c'))+row('FT',c=>cell(state,'interior','moment',c,'FT'),'axle-ftrow');
@@ -207,7 +219,7 @@ Object.assign(words.en,{overallWidth:'Overall width',curbWidth:'Curb (B − Wc)/
 Object.assign(words.fr,{axleApplySwitch:'Appliquer le FT S6-25 aux enveloppes',axleSettingsOpen:'Régler le FT…',axleWindowTitle:'Facteur d’essieu FT · S6-25'});
 Object.assign(words.en,{axleApplySwitch:'Apply S6-25 FT to the envelopes',axleSettingsOpen:'Set FT…',axleWindowTitle:'Truck load fraction FT · S6-25'});
 function axleDialogOpen(){return !!$('#axle-dialog')?.open;}
-function axleDialogHead(){const dlg=$('#axle-dialog');if(!dlg)return;const h=dlg.querySelector('.sp-head');if(h)h.innerHTML=`<div><b>${t('axleWindowTitle')}</b><small>${t('axleSub')}</small></div><button type="button" class="icon-button sp-close" data-axle-close title="${t('spClose')}">×</button>`;}
+function axleDialogHead(){const dlg=$('#axle-dialog');if(!dlg)return;const h=dlg.querySelector('.sp-head');if(h)h.innerHTML=`<div><b>${t('axleWindowTitle')}</b><small>${t(axleDeck()?'axleSubDeck':'axleSub')}</small></div><button type="button" class="icon-button sp-close" data-axle-close title="${t('spClose')}">×</button>`;}
 function axleOpenWindow(){
  if(!model)return;let dlg=$('#axle-dialog');
  if(!dlg){dlg=document.createElement('dialog');dlg.id='axle-dialog';dlg.className='section-dialog axle-dialog';dlg.innerHTML='<div class="sp-head"></div><div id="axle-body"></div>';document.body.appendChild(dlg);dlg.addEventListener('close',()=>{if(!axleApplied())axleData=null;});}
@@ -240,3 +252,28 @@ function axleLeApplied(c){
  else if(rule.includes('+ h')){const left=k===1,l=left?L[0]:L.at(-1),h=left?d.h_left:d.h_right;expr=`${fmt(coef,2)} × ${f(l)} + ${f(h)}`;}
  return `${expr?expr+' = ':''}<b>${fmt(c.Le,3)}</b>`;
 }
+
+// ---- v1.01: steel grid, aluminum and transverse wood decks on steel girders ----
+// (S6-25 5.6.7, Tables 5.8 to 5.12; classes C and D: A5.3.4, Tables A5.3.4,
+// 5.9 and A5.3.5). Non-skewed bridges only (Fs = 1.0); exterior-girder shear by
+// the lever rule, never below the interior-girder shear.
+const AXLE_DECKS=['steel_grid','aluminum','wood_laminated','wood_plank'];
+function axleDeck(){return AXLE_DECKS.includes(axleSettings().bridge_type);}
+Object.assign(words.fr,{deck_steel_grid:'Grille d’acier sur poutres d’acier',deck_aluminum:'Aluminium sur poutres d’acier',deck_wood_laminated:'Bois lamellé transversal sur poutres d’acier',deck_wood_plank:'Madriers de bois sur poutres d’acier',deckThickness:'Épaisseur du tablier (mm)',axleSubDeck:'Tablier sur poutres d’acier · CSA S6-25, art. 5.6.7',wheelEdge:'Roue–chasse-roue (m)',axleLever:'R levier',axleShearExtDeck:'FT poutre ext.',axleTables:'Tableaux S6',axleWheels:'Roues (m du bord)',
+ axleDeckNote:'Grille d’acier, aluminium ou bois sur poutres d’acier (art. 5.6.7; classes C et D : A5.3.4) : FT = S / (DT γc (1 + μλ)), DT et λ des tableaux 5.8 à 5.12 (A5.3.4 et A5.3.5 pour C et D), γc = 1 sauf l’aluminium (tableaux 5.10 et 5.11), sans γe. Grille : la ligne « moins de 100 mm » s’applique sous 100 mm. Bois lamellé : interpolation linéaire entre 140 et 290 mm. Ponts sans biais seulement (Fs = 1,0). Cisaillement de la poutre extérieure : statique simple, le tablier étant une poutre simple entre la poutre de rive et la première poutre intérieure (porte-à-faux inclus); un camion, deux lignes de roues de 1,8 m, roue extérieure à la distance saisie du chasse-roue; jamais moins que le cisaillement de la poutre intérieure.',
+ axleWarn_wood_thickness:'Bois lamellé : épaisseur hors de 140–290 mm; la valeur limite du tableau 5.12 est utilisée.',axleWarn_alu_range:'Aluminium : le tableau 5.10 s’arrête à Le = 30 m et S = 3 m; γc est calculé avec ces limites.'});
+Object.assign(words.en,{deck_steel_grid:'Steel grid deck on steel girders',deck_aluminum:'Aluminum deck on steel girders',deck_wood_laminated:'Transverse laminated wood deck on steel girders',deck_wood_plank:'Wood plank deck on steel girders',deckThickness:'Deck thickness (mm)',axleSubDeck:'Deck on steel girders · CSA S6-25, cl. 5.6.7',wheelEdge:'Wheel to curb (m)',axleLever:'Lever R',axleShearExtDeck:'FT ext. girder',axleTables:'S6 tables',axleWheels:'Wheels (m from edge)',
+ axleDeckNote:'Steel grid, aluminum or wood deck on steel girders (cl. 5.6.7; classes C and D: A5.3.4): FT = S / (DT γc (1 + μλ)), DT and λ from Tables 5.8 to 5.12 (A5.3.4 and A5.3.5 for C and D), γc = 1 except aluminum (Tables 5.10 and 5.11), no γe. Grid: the “thinner than 100 mm” row applies below 100 mm. Laminated wood: linear interpolation between 140 and 290 mm. Non-skewed bridges only (Fs = 1.0). Exterior-girder shear: simple statics, the deck acting as a simple beam between the exterior girder and the first interior girder (overhang included); one truck, two wheel lines 1.8 m apart, outer wheel at the entered distance from the curb; never less than the interior-girder shear.',
+ axleWarn_wood_thickness:'Laminated wood: thickness outside 140–290 mm; the Table 5.12 limit is used.',axleWarn_alu_range:'Aluminum: Table 5.10 stops at Le = 30 m and S = 3 m; γc uses these limits.'});
+// Definitions of a deck: the lever-rule terms replace DVE, γe, ψ and Fs.
+(function(){
+ const base=axleDefinitions;
+ axleDefinitions=function(){
+  const list=base(),fr=lang==='fr';
+  if(!axleDeck())return list;
+  return [...list.filter(([k])=>!['DVE','γe','ψ','Fs'].includes(k)),
+   [fr?'Épaisseur':'Thickness',fr?'Épaisseur du tablier : seuil de 100 mm pour la grille d’acier, interpolation entre 140 et 290 mm pour le bois lamellé.':'Deck thickness: 100 mm threshold for steel grids, interpolation between 140 and 290 mm for laminated wood.'],
+   [fr?'Roue–chasse-roue':'Wheel to curb',fr?'Distance entre la face du chasse-roue (ou de la glissière) et la ligne de roues extérieure du camion de la règle du levier.':'Distance from the curb (or barrier) face to the outer wheel line of the lever-rule truck.'],
+   [fr?'R levier':'Lever R',fr?'Part d’un camion reprise par la poutre extérieure par la statique (règle du levier).':'Share of one truck carried by the exterior girder by statics (lever rule).']];
+ };
+})();

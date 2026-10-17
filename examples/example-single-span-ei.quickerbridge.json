@@ -1,9 +1,9 @@
 {
   "format": "QuickerBridgeProject",
   "schema_version": 17,
-  "app_version": "1.0",
+  "app_version": "1.01",
   "name": "1 travée 17 m · EI direct · CL-625",
-  "saved_at": "2026-10-15T00:00:00Z",
+  "saved_at": "2026-10-17T00:00:00Z",
   "model": {
     "spans": [
       {
@@ -129,6 +129,8 @@
       "enabled": false,
       "apply": false,
       "bridge_type": "slab",
+      "deck_thickness": 150.0,
+      "wheel_edge": 0.6,
       "slab_width": 9.0,
       "equivalent_width": null,
       "girders": 5,

@@ -1,0 +1,199 @@
+@charset "UTF-8";
+/* QuickerUnits inputs, project bar, menus, accessibility, finish passes (v0.9.8 to v0.9.97). */
+/* ---- v0.9.8 ---------------------------------------------------------------- */
+/* Inputs in the QuickerUnits style: right-aligned numbers, clear focus, errors */
+input:not([type=checkbox]):not([type=range]):not([type=file]),select{border-radius:7px;transition:border-color .25s,box-shadow .25s,background .25s,color .25s}
+input:not([type=checkbox]):not([type=range]):not(:disabled):hover,select:not(:disabled):hover{border-color:#a9c0cc}
+input:not([type=checkbox]):not([type=range]):focus,select:focus{outline:none;border-color:#20adba;box-shadow:0 0 0 3px #20adba2e;background:#fbfffd}
+input.qb-num{text-align:right;font-variant-numeric:tabular-nums;letter-spacing:.1px}
+input.qb-num:focus{color:#00564f;font-weight:600}
+input.num-err,input.qb-num:invalid{border-color:#d0675a;background:#fff6f4;color:#a33329}
+input.num-err:focus{box-shadow:0 0 0 3px #d0675a2e}
+input.num-flash{animation:qbNumFlash .8s ease}
+@keyframes qbNumFlash{0%{background:#d9f5eb;box-shadow:0 0 0 4px #00837840}100%{background:#fff}}
+input:disabled{background:#f2f5f7;color:#7d929e;cursor:not-allowed}
+.field:focus-within>span{color:var(--teal)}
+/* Inputs of a row line up even when one label wraps */
+.field-row{align-items:end}
+.field-row>.field{display:flex;flex-direction:column;justify-content:flex-end}
+.field-grid{grid-template-columns:1fr 1fr}
+.computed-field output{display:flex;align-items:center;justify-content:flex-end;min-height:36px;padding:6px 10px;border-radius:7px;background:#eef6f4;border:1px dashed #9fcfc4;color:#00564f;font-weight:650;font-variant-numeric:tabular-nums;font-size:.875rem}
+.creep-source{font-size:.75rem;color:var(--muted)}
+/* Project bar: model name in evidence, File and Examples menus */
+.project-bar{flex-direction:column;align-items:stretch;gap:10px;padding:2px 18px 14px}
+.project-name-field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.pn-label{font-size:.75rem;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);font-weight:650}
+.pn-wrap{position:relative;display:block}
+.pn-wrap input{min-height:40px;padding:7px 34px 7px 11px;font-size:1.02rem;font-weight:700;color:var(--navy);background:#f7fafb;border:1px solid #cfdde5;border-radius:9px}
+.pn-wrap input:hover{border-color:#9fbccb}
+.pn-pencil{position:absolute;right:11px;top:50%;width:16px;height:16px;transform:translateY(-50%);color:var(--axis);pointer-events:none}
+.pn-wrap:focus-within .pn-pencil{color:var(--teal)}
+#dirty-state{font-size:.75rem;color:#8a4f0c;min-height:1em}
+.project-actions{display:flex;gap:8px;flex-wrap:wrap}
+.qb-menu{position:relative}
+.menu-button{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border:1px solid #c9d8e1;border-radius:8px;background:#fff;color:var(--navy);font-size:.8125rem;font-weight:650;box-shadow:0 1px 2px #15354a0d}
+.menu-button:hover{border-color:#8fb2c2;background:#f6fafb}
+.qb-menu.open>.menu-button{border-color:var(--teal);background:#eefaf6;color:#00564f}
+.menu-button .caret{font-size:.7rem;color:var(--axis);transition:transform .15s}
+.qb-menu.open .caret{transform:rotate(180deg)}
+.mi-ico{width:18px;height:18px;flex:none;color:currentColor}
+.menu-pop{display:none;position:absolute;z-index:40;left:0;top:calc(100% + 6px);min-width:290px;padding:6px;background:#fff;border:1px solid #d3e0e7;border-radius:11px;box-shadow:0 6px 12px #0b1e2b1f}
+.qb-menu.open>.menu-pop{display:block;animation:qbMenuIn .14s ease-out}
+@keyframes qbMenuIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.menu-pop button,.menu-pop a.excel-file{display:flex;align-items:center;gap:11px;width:100%;padding:8px 10px;border:0;border-radius:8px;background:none;color:var(--ink);text-align:left;font-size:.8125rem;text-decoration:none}
+.menu-pop button:hover:not(:disabled),.menu-pop button:focus-visible{background:#eef6f8;outline:none}
+.menu-pop button .mi-ico{color:var(--teal)}
+.mi-text{display:flex;flex-direction:column;min-width:0;flex:1}
+.mi-text b{font-weight:650}
+.mi-text small{color:var(--muted);font-size:.7rem}
+.menu-pop kbd{font:600 .6875rem "Segoe UI",Arial,sans-serif;color:var(--axis);border:1px solid #dbe5eb;border-radius:4px;padding:1px 5px;background:#f7fafb}
+.menu-sep{height:1px;margin:5px 6px;background:var(--line)}
+.menu-head{padding:6px 10px 4px;font-size:.66rem;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);font-weight:700}
+.menu-foot{padding:6px 10px 3px;font-size:.68rem;color:var(--muted);border-top:1px solid var(--line);margin-top:4px}
+.menu-examples{min-width:340px}
+.ex-dot{width:9px;height:9px;flex:none;border-radius:50%;background:var(--teal);box-shadow:0 0 0 3px #d9f5eb}
+.menu-pop a.excel-file{color:var(--teal);font-weight:650}
+/* Model name in the beam frame */
+.structure-right{display:flex;align-items:baseline;gap:12px;min-width:0}
+#structure-name{color:#e8fff8;font-size:.8rem;font-weight:650;letter-spacing:.2px;text-transform:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42vw}
+#structure-name+#model-summary::before{content:"·";margin-right:12px;color:#5d8aa0}
+/* Section properties: a clear call to action */
+.sp-open-main{display:flex;align-items:center;gap:10px;width:100%;margin:4px 0 12px;padding:9px 12px;border:1px solid #9fd6c8;border-radius:9px;background:#eef8f4;color:#00564f;text-align:left}
+.sp-open-main:hover{border-color:var(--teal);background:#e2f3ec}
+.sp-ico{display:grid;place-items:center;width:30px;height:30px;flex:none;border-radius:7px;background:var(--teal);color:#fff;font-size:1.05rem;font-weight:700}
+.sp-txt{display:flex;flex-direction:column;flex:1;min-width:0}
+.sp-txt b{font-size:.85rem}
+.sp-txt small{font-size:.7rem;color:#3f7d73}
+.sp-go{font-weight:700;color:var(--teal)}
+.inertia-source{margin:2px 0 12px;padding:8px 10px 2px;border-radius:8px;border:1px solid var(--line);background:#fbfcfd}
+.inertia-source.on{border-color:#9fd6c8;background:#f2fbf8}
+.inertia-source .help{margin-top:-4px}
+.sp-auto-note{margin-top:10px}
+/* Beam frame: section names along the girder */
+.zone-label{font-size:11px;fill:#d7fff2;font-weight:600;letter-spacing:.2px;pointer-events:none}
+.zone-label.simple{fill:#ffd49a}
+/* FT: overall width */
+.axle-hl{background:#e3f5ef;border-radius:6px;padding:1px 6px;color:#00564f}
+#error{cursor:pointer}
+.span-row input.qb-num{min-width:70px}
+.span-row:has(.simple-toggle){grid-template-columns:auto minmax(70px,1fr) 18px auto;gap:8px}
+/* v0.9.9: restore strip, inline number error, Excel availability */
+#restore-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:12px 18px 0;padding:9px 10px 9px 12px;background:#eef6f8;border:1px solid #cfe0e7;border-radius:8px;color:var(--ink)}
+#restore-bar .rb-text{display:flex;flex-direction:column;min-width:0;gap:1px}
+#restore-bar b{font-size:.8125rem;font-weight:650}
+#restore-bar small{font-size:.75rem;color:#4f6774;overflow-wrap:anywhere}
+#restore-bar .rb-actions{display:flex;gap:6px;flex-shrink:0}
+#restore-bar button{padding:5px 11px;font-size:.8125rem}
+#qb-num-tip{position:fixed;z-index:200;padding:5px 9px;border-radius:6px;background:#a33329;color:#fff;font-size:.75rem;font-weight:600;line-height:1.35;box-shadow:0 3px 10px #0b1e2b29;pointer-events:none}
+#qb-num-tip[hidden]{display:none}
+#excel.mi-waiting:disabled{opacity:1}
+#excel.mi-waiting:disabled .mi-ico,#excel.mi-waiting:disabled b{opacity:.45}
+#excel.mi-waiting small{color:#4f6774;font-style:italic}
+#restore-bar .text-button{margin:0;color:var(--ink);background:#fff;border:1px solid #cfe0e7;border-radius:6px;font-weight:600}
+#restore-bar .text-button:hover{background:#f6fafb}
+/* v0.9.95 (feedback 0.9.9) ---------------------------------------------- */
+/* The five analysis cases as one band on top of the beam panel. */
+.result-toolbar{display:flex;flex-wrap:nowrap;align-items:stretch;gap:0;margin-bottom:0;background:var(--navy);border-radius:9px 9px 0 0;padding:6px 8px 0}
+.result-toolbar #status{flex:1 1 140px;align-self:center;padding:0 10px 4px;color:#9fb9c6;font-size:.75rem;text-align:right;min-width:0}
+.case-band{display:flex;align-items:stretch;min-width:0;flex-wrap:wrap}
+.case-band .cb-cases{display:flex;flex-wrap:wrap}
+.case-band button{border:0;border-radius:7px 7px 0 0;background:transparent;color:#bdd0da;padding:10px 16px 11px;font-size:.875rem;font-weight:600;white-space:nowrap;position:relative;transition:background .15s,color .15s}
+.case-band button:hover:not(:disabled){background:#1b4157;color:#fff}
+.case-band button.active{background:#1f4a62;color:#fff}
+.case-band button.active::after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:3px;border-radius:3px 3px 0 0;background:#73d8bd}
+.case-band .cb-rule{width:1px;margin:9px 8px 12px;background:#3d6274}
+.case-band .cb-modes.active::after{background:#ffd49a}
+.result-toolbar+#error{margin-top:10px}
+.structure-panel{border-radius:0 0 9px 9px}
+.structure-heading{justify-content:flex-end;min-height:16px}
+.structure-heading .structure-right b{font-size:.75rem;letter-spacing:.2px;color:#d7e6ec;font-weight:600}
+.modal-mode #load-mode{display:flex}
+.modal-mode .result-toolbar .as-rule{display:none}
+@media(max-width:1180px){
+  .result-toolbar{display:flex;flex-wrap:wrap}
+  .result-toolbar #status{flex-basis:100%;text-align:left;padding:2px 10px 6px;order:2}
+  .case-band{order:1}
+}
+@media(max-width:650px){
+  .case-band,.case-band .cb-cases{width:100%}
+  .case-band .cb-cases{display:grid;grid-template-columns:1fr 1fr}
+  .case-band button{white-space:normal;padding:9px 10px;font-size:.8125rem}
+  .case-band .cb-rule{display:none}
+  .case-band .cb-modes{width:100%}
+}
+/* Display tabs: Δ ranges is a tab; no truck-position row, no legend. */
+#display-mode [data-display].hidden{display:none}
+.position-controls,#legend{display:none!important}
+/* Input panel collapse arrow (replaces "Focus diagrams"). */
+.inputs{position:sticky;z-index:3}
+.inputs:has(.qb-menu.open){z-index:1000}
+.panel-toggle{position:absolute;top:20px;right:-14px;z-index:4;width:28px;height:28px;padding:0;display:grid;place-items:center;border-radius:50%;border:1px solid #cfdde5;background:#fff;color:var(--ink);box-shadow:0 2px 6px #0b1e2b1f}
+.panel-toggle svg{width:14px;height:14px;transition:transform .2s ease-out}
+.panel-toggle:hover:not(:disabled){background:#eef6f8;color:var(--teal)}
+.focus-results .workspace{grid-template-columns:0 minmax(0,1fr);max-width:1900px}
+.focus-results .inputs{display:flex;border:0;box-shadow:none;background:none;min-height:60px}
+.focus-results .inputs>:not(.panel-toggle){display:none}
+.focus-results .panel-toggle{right:-6px}
+.focus-results .panel-toggle svg{transform:rotate(180deg)}
+@media(max-width:800px){
+  .panel-toggle{display:none}
+}
+/* Examples menu above every window; titles only. */
+.menu-examples{min-width:300px}
+.menu-examples button{padding:9px 10px}
+/* Stress hover preview: off by default, a box next to the button. */
+.st-peek-toggle{display:inline-flex;align-items:center;gap:6px;font-size:.8125rem;color:var(--ink);white-space:nowrap;cursor:pointer}
+/* FT window and its Fs row. */
+.axle-dialog{width:min(1180px,96vw)}
+#axle-body{padding:14px 18px 18px}
+.axle-fsrow th,.axle-fsrow td{color:#7a4f12}
+.axle-switch{font-weight:600}
+/* Narrow screens: the four display tabs wrap; the header keeps inside the page. */
+@media(max-width:650px){
+  .display-left{flex-wrap:wrap;min-width:0}
+  #display-mode{display:grid;grid-template-columns:1fr 1fr;width:100%}
+  #display-mode button{white-space:normal}
+}
+@media(max-width:480px){
+  .header-right .release-info{display:none}
+  .topbar{gap:8px}
+}
+/* Impeccable passes (0.9.95): focus on navy surfaces, menu item focus, plots. */
+.topbar :focus-visible,.result-toolbar :focus-visible,.structure-panel :focus-visible{outline-color:#20adba}
+.menu-pop button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px;background:#eef6f8}
+input:not([type=checkbox]):not([type=range]):focus-visible,select:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+svg.plot:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
+.warning-symbol{font-size:.6875rem}
+@media(max-width:800px){
+  .metric-value small,.metric-location{font-size:.6875rem}
+  .brand small{font-size:.625rem}
+}
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.qb-float .sp-head{touch-action:none}
+.results>.warning{margin:8px 0 2px;padding:0 2px;justify-content:flex-start;color:#4f5b57}
+.metrics{position:relative}
+.metrics-flag{margin-left:auto;flex:none;white-space:nowrap;padding:1px 8px;border-radius:999px;background:#fff8e8;border:1px solid #e6cf97;color:#7a5410;font-size:.6875rem;font-weight:600}
+@media(pointer:coarse){
+  #case-band button,#display-mode button,.menu-button,.view-tabs button,.input-tabs button,.st-cta,#en,#fr,[data-spans],#collapse-inputs{min-height:40px}
+}
+.panel-heading h1{font-size:1.25rem;letter-spacing:-.005em}
+.chart-label small small{font-size:1em}
+.language button:hover:not(:disabled):not(.selected){background:#17384c;color:#fff}
+/* Finish (critique evidence): 11 px floor, readable notes, hover contrast. */
+.chart-label small+small{font-size:.6875rem}
+.sp-head small{font-size:.75rem}
+.brand small{font-size:.6875rem;letter-spacing:1.2px}
+.axle-notes .method-content p,.axle-notes .method-content dd{max-width:75ch}
+button:hover:not(:disabled){background:#f2f7f9}
+.primary:hover:not(:disabled){background:#1b4157;color:#fff;border-color:#1b4157}
+.axle-dialog{width:min(980px,calc(100vw - 380px))}
+@media(max-width:1100px){
+  .axle-dialog{width:min(980px,96vw)}
+}
+#governing .gov-effect{font-weight:650;color:var(--ink)}
+/* v0.9.97: pedestrian formula, governing-load tip, Résistance tab */
+.ped-formula{margin:8px 0 2px;font-size:.875rem;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.gov-tip{display:flex;align-items:center;gap:9px;margin:0 0 7px;padding:7px 8px 7px 11px;border:1px dashed #9ccfc2;border-radius:6px;background:#f6fbf9;color:#2d6457;font-size:.78rem;line-height:1.45}
+.gov-tip>span:nth-child(2){flex:1}
+.gov-tip .icon-button{border:0;background:none;padding:0 6px;font-size:1.05rem;line-height:1}
+.gov-tip-mark{flex:none;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--teal);color:#fff;font-size:.72rem;font-weight:700}

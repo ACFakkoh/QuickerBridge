@@ -25,6 +25,33 @@ release_day = date.fromisoformat(RELEASE_DATE)
 PORTABLE_NAME = f"QuickerBridge-v{VERSION}-{RELEASE_DATE}.html"
 ZIP_TIME = (release_day.year, release_day.month, release_day.day, 0, 0, 0)
 
+# v1.01: the interface is split by responsibility; index.html loads these files
+# in this order and the portable HTML inlines them in the same order.
+STYLES = (
+    "css/base.css",
+    "css/components.css",
+    "css/features.css",
+    "css/refinements.css",
+    "css/resistance.css",
+    "css/layout.css",
+)
+APP_SCRIPTS = (
+    "js/i18n.js",
+    "js/core.js",
+    "js/project.js",
+    "js/inputs.js",
+    "js/section-ui.js",
+    "js/beam.js",
+    "js/charts.js",
+    "js/influence.js",
+    "js/results.js",
+    "js/boot.js",
+    "js/extensions.js",
+)
+MODULES = ("modes.js", "comparison.js", "axle.js", "sections.js", "resistance.js")
+GENERATED = ("version.js", "default-result.js", "examples.js", "solver-bundle.js")
+SCRIPTS = GENERATED + ("browser-solver.js",) + APP_SCRIPTS + MODULES
+
 
 def project_schema_version():
     # One project schema for Python and the browser (audit 2026-10-01).
@@ -62,7 +89,7 @@ def source_entries():
     root_files = (
         ".gitignore",
         "README.md",
-        "README.fr.md",
+        "CHANGELOG.md",
         "README_DEVELOPER.md",
         "NONPRISMATIC.md",
         "THIRD_PARTY_NOTICES.md",
@@ -87,21 +114,7 @@ def source_entries():
         entries.extend(
             (path, path.relative_to(ROOT).as_posix()) for path in ROOT.glob(pattern)
         )
-    for name in (
-        "index.html",
-        "styles.css",
-        "app.js",
-        "modes.js",
-        "comparison.js",
-        "axle.js",
-        "sections.js",
-        "resistance.js",
-        "browser-solver.js",
-        "version.js",
-        "default-result.js",
-        "examples.js",
-        "solver-bundle.js",
-    ):
+    for name in ("index.html",) + STYLES + SCRIPTS:
         entries.append((DIST / name, f"dist/{name}"))
     vendor_root = ROOT / "vendor/pycba"
     for path in (vendor_root / "src/pycba").rglob("*.py"):
@@ -210,28 +223,17 @@ def build_browser_assets() -> None:
     (DIST / ".nojekyll").touch()
 
     html = (DIST / "index.html").read_text(encoding="utf-8")
+    styles = "\n".join((DIST / name).read_text(encoding="utf-8") for name in STYLES)
     html = html.replace(
-        '<link rel="stylesheet" href="./styles.css">',
-        "<style>" + (DIST / "styles.css").read_text(encoding="utf-8") + "</style>",
+        f'<link rel="stylesheet" href="./{STYLES[0]}">', f"<style>{styles}</style>"
     )
-    script_names = (
-        "version.js",
-        "default-result.js",
-        "examples.js",
-        "solver-bundle.js",
-        "browser-solver.js",
-        "app.js",
-        "modes.js",
-        "comparison.js",
-        "axle.js",
-        "sections.js",
-        "resistance.js",
-    )
-    for filename in script_names:
+    for name in STYLES[1:]:
+        html = html.replace(f'<link rel="stylesheet" href="./{name}">', "")
+    for filename in SCRIPTS:
         html = html.replace(f'<script src="./{filename}" defer></script>', "")
     html = "\n".join("" if not line.strip() else line for line in html.split("\n"))
     scripts = "\n".join(
-        (DIST / filename).read_text(encoding="utf-8") for filename in script_names
+        (DIST / filename).read_text(encoding="utf-8") for filename in SCRIPTS
     )
     html = html.replace(
         "</body>",
@@ -276,23 +278,10 @@ def build_release() -> None:
     shutil.copy2(source_zip, release_source)
     pages_entries = [
         (DIST / name, name)
-        for name in (
-            "index.html",
-            "styles.css",
-            "app.js",
-            "modes.js",
-            "comparison.js",
-            "axle.js",
-            "sections.js",
-            "resistance.js",
-            "browser-solver.js",
-            "version.js",
-            "default-result.js",
-            "examples.js",
-            "solver-bundle.js",
-            "QuickerBridge-source.zip",
-            ".nojekyll",
-        )
+        for name in ("index.html",)
+        + STYLES
+        + SCRIPTS
+        + ("QuickerBridge-source.zip", ".nojekyll")
     ]
     pages_zip = RELEASE / f"QuickerBridge-v{VERSION}-pages.zip"
     write_zip(pages_zip, pages_entries)
@@ -300,7 +289,7 @@ def build_release() -> None:
         (ROOT / PORTABLE_NAME, PORTABLE_NAME),
         (ROOT / "QuickerBridge.cmd", "QuickerBridge.cmd"),
         (ROOT / "README.md", "README.md"),
-        (ROOT / "README.fr.md", "README.fr.md"),
+        (ROOT / "CHANGELOG.md", "CHANGELOG.md"),
         (ROOT / "README_DEVELOPER.md", "README_DEVELOPER.md"),
         (ROOT / "NONPRISMATIC.md", "NONPRISMATIC.md"),
         (ROOT / "VALIDATION.md", "VALIDATION.md"),

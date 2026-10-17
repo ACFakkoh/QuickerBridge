@@ -375,7 +375,22 @@ class Distribution(InputModel):
     enabled: bool = False
     apply: bool = False
     # Slab and voided-slab bridges (5.6.4.2, 5.6.5): effects per metre of width.
-    bridge_type: Literal["slab_on_girder", "slab", "voided_slab"] = "slab_on_girder"
+    bridge_type: Literal[
+        "slab_on_girder",
+        "slab",
+        "voided_slab",
+        # v1.01: decks on steel girders (5.6.7, A5.3.4).
+        "steel_grid",
+        "aluminum",
+        "wood_laminated",
+        "wood_plank",
+    ] = "slab_on_girder"
+    # v1.01: steel grid thickness (< 100 mm or not) and transversely laminated
+    # wood thickness (interpolated between 140 and 290 mm), mm.
+    deck_thickness: float = Field(default=150.0, ge=10, le=600)
+    # v1.01: lever rule for the exterior-girder shear of these decks: distance
+    # from the curb or barrier face to the outer wheel line, m.
+    wheel_edge: float = Field(default=0.6, ge=0, le=3)
     slab_width: float = Field(default=12.0, gt=1, le=60)  # B, m (slab bridges)
     # Be, m: equivalent width of a slab with tapered free edges (5.5.2); B if None.
     equivalent_width: float | None = Field(default=None, gt=1, le=60)

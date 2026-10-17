@@ -213,7 +213,42 @@ def distribution_sheet(wb, model, language):
             ("S (m)", inputs["spacing"]),
             ("Sc (m)", inputs["overhang"]),
             ("B (m)", d["B"]),
-            ("DVE (m)", d["DVE"]),
+        ]
+        if "DVE" in d:
+            items.append(("DVE (m)", d["DVE"]))
+    if "deck" in d:  # v1.01: grid, aluminum or wood deck on steel girders
+        decks = {
+            "steel_grid": "grille d’acier" if fr else "steel grid",
+            "aluminum": "aluminium" if fr else "aluminum",
+            "wood_laminated": "bois lamellé transversal"
+            if fr
+            else "transversely laminated wood",
+            "wood_plank": "bois en madriers" if fr else "wood plank",
+        }
+        items += [
+            ("Tablier / Deck", decks[d["deck"]]),
+            ("Tableaux S6 / S6 tables", d["table"]),
+        ]
+        if d["deck"] in ("steel_grid", "wood_laminated"):
+            items.append(
+                (
+                    "Épaisseur du tablier (mm)" if fr else "Deck thickness (mm)",
+                    d["thickness"],
+                )
+            )
+        items += [
+            (
+                "Distance roue–bord (m)" if fr else "Wheel–curb distance (m)",
+                inputs["wheel_edge"],
+            ),
+            (
+                "Roues levier (m du bord)" if fr else "Lever wheels (m from edge)",
+                " / ".join(f"{x:.3f}" for x in d["wheels"]),
+            ),
+            (
+                "V poutre ext. : levier R" if fr else "Exterior V: lever R",
+                d["lever"],
+            ),
         ]
     items += [
         ("Wc (m)", inputs["carriageway"]),

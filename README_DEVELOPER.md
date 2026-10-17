@@ -49,7 +49,7 @@ nécessaire. Cette tâche prépare les fichiers; elle ne crée ni ne publie le d
 
 Option simple sans Actions : extrayez l’archive `pages.zip` et mettez son **contenu**
 à la racine d’un dépôt dédié. Choisissez une publication Pages depuis la branche
-et le dossier racine. Conservez `index.html`, les quatre scripts, `styles.css`,
+et le dossier racine. Conservez `index.html`, les scripts, les dossiers `js/` et `css/`,
 `.nojekyll` et l’archive source ensemble. Pour cette option, mettez à jour tous ces
 fichiers à chaque livraison, pas seulement le HTML.
 
@@ -59,7 +59,18 @@ fichiers à chaque livraison, pas seulement le HTML.
 
 | Fichier | Responsabilité |
 | --- | --- |
-| `dist/index.html`, `dist/styles.css`, `dist/app.js` | Interface, FR/EN, SVG, projets |
+| `dist/index.html` | Page; charge `css/*.css` puis les scripts dans l’ordre de `STYLES` / `SCRIPTS` de `build_portable.py` (v1.01) |
+| `dist/js/i18n.js` | Textes FR/EN : table de base puis ajouts de chaque version |
+| `dist/js/core.js` | Saisie des nombres (style QuickerUnits), fenêtres flottantes, menus, accessibilité |
+| `dist/js/project.js` | Projet JSON, exemples, réinitialisation, annuler/rétablir, sauvegarde auto, Excel |
+| `dist/js/inputs.js` | Panneau de gauche : champs, véhicule, appuis, piétons, déformation imposée, coupure |
+| `dist/js/section-ui.js` | Cartes de section, inertie, poids propre, tableau des zones par travée (v1.01) |
+| `dist/js/beam.js` | Croquis de la poutre (aligné sur les diagrammes, `beamX`) et encart de section |
+| `dist/js/charts.js` | Diagrammes V, M, δ, réactions, EI : géométrie, étiquettes, survol |
+| `dist/js/influence.js` | Lignes d’influence et animation du passage du camion |
+| `dist/js/results.js` | Calcul, vues de résultats, tableau des stations, démarrage |
+| `dist/js/boot.js`, `dist/js/extensions.js` | État global, branchement des événements et enveloppes successives des fonctions (exécutés dans cet ordre, après les fichiers de fonctions) |
+| `dist/css/*.css` | Styles dans l’ordre de la cascade : base, composants, fonctions v0.9–0.9.7, finitions, résistance, mise en page |
 | `dist/browser-solver.js` | Worker Pyodide, chargement et échanges JSON |
 | `quickerbridge/models.py` | Entrées validées et valeurs initiales |
 | `quickerbridge/sections.py` | I acier, rapport d’inertie M (poutre seule, 3n, 1n, I′), zones de hauteur, EI |
@@ -69,7 +80,7 @@ fichiers à chaque livraison, pas seulement le HTML.
 | `quickerbridge/modal.py` | Modes propres (v0.8) : fréquences, périodes, formes, masse modale |
 | `dist/modes.js` | Vue « Modes propres » : animation, spectre, six modes et temps réel par défaut |
 | `dist/comparison.js` | Comparaison de deux JSON, enveloppes et extrema sans remplacer le projet courant |
-| `quickerbridge/distribution.py` | v0.9 : fraction de charge de camion FT S6-25, pont à dalle sur poutres (tableaux 3.5, 3.6, 5.3 à 5.7, figures 5.1 et 5.2) |
+| `quickerbridge/distribution.py` | v0.9 : fraction de charge de camion FT S6-25, pont à dalle sur poutres (tableaux 3.5, 3.6, 5.3 à 5.7, figures 5.1 et 5.2); v1.01 : tabliers en grille d’acier, aluminium et bois sur poutres d’acier (5.6.7, tableaux 5.8 à 5.12, A5.3.4, A5.3.5, règle du levier) |
 | `quickerbridge/section_props.py` | v0.9.3bis : propriétés de section acier seul, mixte 3n et 1n, effectives (affichage seulement) |
 | `quickerbridge/resistance.py` | v0.9.97–0.9.98 : résistance pondérée des poutres assemblées en acier, S6-25 chap. 10, à chaque station (`resistance_all`) : classes, Mr+ et Mr− mixtes ou acier seul (déversement, Frd), Vr, interaction V-M; affichage seulement |
 | `dist/resistance.js` | v0.9.99 : onglet « Résistance » (type par section, âme et déversement, D/C et note en bas); note de calcul flottante avec diagrammes V et M, Vr/Mr, choix permanentes / surcharge / les deux (`resistance.effects`), tableaux une valeur par ligne. v0.9.98 : ne calcul flottante avec ruban D/C |

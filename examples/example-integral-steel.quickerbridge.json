@@ -1,9 +1,9 @@
 {
   "format": "QuickerBridgeProject",
   "schema_version": 17,
-  "app_version": "1.0",
+  "app_version": "1.01",
   "name": "Pont intégral 25 m · acier 1400 · encastrement ≈ 75 %",
-  "saved_at": "2026-10-15T00:00:00Z",
+  "saved_at": "2026-10-17T00:00:00Z",
   "model": {
     "spans": [
       {
@@ -132,6 +132,8 @@
       "enabled": false,
       "apply": false,
       "bridge_type": "slab_on_girder",
+      "deck_thickness": 150.0,
+      "wheel_edge": 0.6,
       "slab_width": 12.0,
       "equivalent_width": null,
       "girders": 5,

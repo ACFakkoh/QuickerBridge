@@ -2,6 +2,7 @@
 option in the interface, header and layout changes."""
 
 from pathlib import Path
+import runpy
 
 import numpy as np
 import pytest
@@ -11,6 +12,7 @@ from quickerbridge.engine import analyse, mesh, structure_key
 from quickerbridge.models import Model, Span
 
 DIST = Path(__file__).resolve().parents[1] / "dist"
+BUILD = runpy.run_path(str(DIST.parent / "build_portable.py"))
 
 
 @pytest.mark.parametrize(
@@ -56,7 +58,9 @@ def test_auto_mesh_is_close_to_a_much_finer_mesh():
 
 def test_interface_v10():
     html = (DIST / "index.html").read_text(encoding="utf-8")
-    app = (DIST / "app.js").read_text(encoding="utf-8")
+    app = "\n".join(
+        (DIST / name).read_text(encoding="utf-8") for name in BUILD["APP_SCRIPTS"]
+    )
     header = html[html.index('<header class="topbar">') : html.index("</header>")]
     assert 'data-i18n="brandSub"' not in header  # no "continuous beams" subtitle
     assert "https://github.com/ACFakkoh/QuickerBridge" in header
