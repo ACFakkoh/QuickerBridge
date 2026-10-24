@@ -6,7 +6,7 @@ fraction FT for girders of up to 7 spans — powered by
 [PyCBA](https://ccaprani.github.io/pycba/) running locally through WebAssembly.
 No installation, no server, no data leaves your computer.
 
-**▶ Open the app: https://acfakkoh.github.io/QuickerBridge/**
+**▶ Open the app: https://acheruel.github.io/QuickerBridge/**
 
 ![QuickerBridge — envelopes of a two-span steel girder under CL-750-QC](docs/screenshots/envelopes.png)
 

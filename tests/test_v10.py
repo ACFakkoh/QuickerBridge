@@ -63,7 +63,7 @@ def test_interface_v10():
     )
     header = html[html.index('<header class="topbar">') : html.index("</header>")]
     assert 'data-i18n="brandSub"' not in header  # no "continuous beams" subtitle
-    assert "https://github.com/ACFakkoh/QuickerBridge" in header
+    assert "https://github.com/acheruel/QuickerBridge" in header
     assert 'class="warning top-warning"' in header  # notice in the top band
     results = html[html.index('<section class="results"') :]
     assert 'class="warning"' not in results
